@@ -80,7 +80,7 @@ const NORMS = (devout: boolean, honesty: number) => [
   { normId: 'theft', standing: 'forbidden' as const, conviction: 0.6 + 0.35 * honesty },
   { normId: 'salah', standing: 'obligatory' as const, conviction: devout ? 0.85 : 0.35 },
   // Engineering assumption: the share is an agreed obligation (fulfilling contracts), held as each person understands it.
-  { normId: 'dues', standing: 'obligatory' as const, conviction: 0.35 + 0.45 * honesty },
+  { normId: 'dues', standing: 'obligatory' as const, conviction: 0.1 + 0.5 * honesty },
 ];
 
 export function makePerson(w: Who, seed: number, now: number, household: string): Person {

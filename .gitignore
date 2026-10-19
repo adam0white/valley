@@ -2,3 +2,4 @@ node_modules
 dist
 .wrangler
 scratch
+public/release.json

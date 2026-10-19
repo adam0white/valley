@@ -96,6 +96,8 @@ export function weatherOf(seed: number, day: number): { sky: Sky; cold: number }
       ? 0.3
       : 0;
   if (day === 2) return { sky: 'storm', cold: 0 };
+  // The two days before the first storm: cloud building over the ridge, as the letter says.
+  if (day === 0 || day === 1) return { sky: 'cloud', cold: 0 };
   if (s === 'harvest' || s === 'summer') {
     if (u < 0.035) return { sky: 'storm', cold };
     if (u < 0.12) return { sky: 'rain', cold };

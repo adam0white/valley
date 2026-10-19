@@ -39,6 +39,7 @@ import {
   type Percept,
   type Person,
   perceive,
+  predictAs,
   pregnancyDue,
   promise,
   readBody,
@@ -80,6 +81,8 @@ export const V = {
   overripeLoss: 0.04,
   /** The agha's own field, kile of a good year. */
   aghaField: 360,
+  /** How hard a crier's call pulls (HF suggestion strength); tuned against the refusal band. */
+  callStrength: Number(globalThis.process?.env?.CALL ?? 0.6),
   /** Seed per field, as a fraction of a full field's yield. */
   seed: 0.12,
   /** The granary at the start (the last kahya's carry-over). */
@@ -198,6 +201,8 @@ export interface KahyaState {
   visit?: { house: string; arrive: number; leave: number; back: number };
   /** Visit log: house to last minute visited. */
   seen: Record<string, number>;
+  /** The kahya's read of each house's jars, as of the last visit (days of bread, world truth at that minute). */
+  guess?: Record<string, { at: number; bread: number }>;
 }
 
 export interface Flags {
@@ -281,7 +286,21 @@ export function newValley(seed: number): ValleyState {
     stats: { asks: 0, verdicts: {}, harvestVerdicts: {} },
   };
   s.agha.due = dueFor(s);
-  // The kahya has known the reeve a little, from the agha's house in the city.
+  // The reeve has lived among the lower lanes all his life: he has an impression of everyone there (clearest of kin).
+  const osman = personOf(s, 'osman');
+  if (osman) {
+    for (const h of s.households) {
+      if (h.hamlet !== 'lower') continue;
+      for (const m of h.members) {
+        const p = personOf(s, m);
+        if (!p || p === osman) continue;
+        for (let k = 0; k < 4; k++)
+          glimpseOf(osman, p, -k * 30 * DAY, h.id === 'kavak' || h.id === 'ak' ? 0.9 : 0.6);
+      }
+    }
+  }
+  // The kahya has met the reeve once, at the agha's house in the city.
+  if (osman) glimpseOf(s.kahya, osman, -60 * DAY, 0.5);
   ownFieldDuties(s, 0);
   chooseModes(s, 0);
   advanceTo(s, START_MINUTE);
@@ -362,7 +381,7 @@ function suggestionFor(s: ValleyState, p: Person, at: number): Suggestion | unde
   return {
     voiceId: KAHYA,
     action: a.job,
-    strength: a.job === 'bring-share' ? 0.6 : 0.55,
+    strength: a.job === 'bring-share' ? 0.6 : V.callStrength,
     appeal: a.wage ? 'security' : 'duty',
     insist: a.insisted.includes(p.id),
     since: a.from,
@@ -388,18 +407,24 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
   const season = seasonOf(doy);
   const sky = weatherOf(s.seed, day).sky;
   const home = h ? `house:${h.id}` : place(p);
+  // Bed is for the dark, or for someone who can no longer keep their eyes open; a tired day-worker rests instead.
+  const sleepy = !light || p.body.sleepPressure > 0.65 || p.body.sleepDebt > 0.5 || p.body.health < 0.5;
   const out: Affordance[] = [
-    {
-      id: 'sleep',
-      action: 'sleep',
-      label: 'sleep',
-      placeId: home,
-      duration: 420,
-      effort: 0,
-      mode: 'sleep',
-      advertises: { sleep: 0.8, rest: 0.4 },
-      tags: ['sleep'],
-    },
+    ...(sleepy
+      ? [
+          {
+            id: 'sleep',
+            action: 'sleep',
+            label: 'sleep',
+            placeId: home,
+            duration: light ? 120 : Math.max(60, Math.min(480, ((rise + DAY - mod) % DAY) + 20)),
+            effort: 0,
+            mode: 'sleep' as const,
+            advertises: { sleep: 0.8, rest: 0.4 },
+            tags: ['sleep'],
+          },
+        ]
+      : []),
     {
       id: 'rest',
       action: 'rest',
@@ -448,16 +473,20 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
       advertises: { competence: 0.04, safety: 0.03 },
       tags: ['work'],
     });
-    out.push({
-      id: 'chat',
-      action: 'chat',
-      label: p.life.sex === 'male' ? 'sit at the coffeehouse' : 'talk at the spring',
-      placeId: p.life.sex === 'male' ? 'coffeehouse' : 'spring',
-      duration: 60,
-      effort: 0.05,
-      advertises: { belonging: 0.25, leisure: 0.15 },
-      tags: ['social', 'leisure'],
-    });
+    // In the busy months the coffeehouse and the spring are for the noon break and the evening.
+    const busyMonths = season === 'harvest' || season === 'threshing' || season === 'sowing';
+    const breakTime = (mod >= 12 * HOUR && mod < 13 * HOUR) || mod >= set - 120;
+    if (!busyMonths || breakTime)
+      out.push({
+        id: 'chat',
+        action: 'chat',
+        label: p.life.sex === 'male' ? 'sit at the coffeehouse' : 'talk at the spring',
+        placeId: p.life.sex === 'male' ? 'coffeehouse' : 'spring',
+        duration: 60,
+        effort: 0.05,
+        advertises: { belonging: 0.25, leisure: 0.15 },
+        tags: ['social', 'leisure'],
+      });
   }
   // Own field.
   if (light && !weak && (season === 'harvest' || season === 'threshing') && h.field.standing > 0.5) {
@@ -1361,7 +1390,7 @@ export function ownFieldDuties(s: ValleyState, day: number) {
   const season = seasonOf(doy);
   if (season !== 'harvest' && season !== 'threshing') return;
   const { rise, set } = daylight(doy);
-  const stormNext = weatherOf(s.seed, day + 1).sky === 'storm' || weatherOf(s.seed, day).sky === 'storm';
+  const stormNext = [0, 1, 2].some((k) => weatherOf(s.seed, day + k).sky === 'storm');
   for (const h of s.households) {
     if (h.field.standing < 1) continue;
     const frac = Math.min(1, h.field.standing / Math.max(1, h.field.size));
@@ -1378,7 +1407,7 @@ export function ownFieldDuties(s: ValleyState, day: number) {
         actions: ['reap'],
         from: day * DAY + rise,
         until: day * DAY + set - 60,
-        importance: Math.min(0.95, 0.3 + 0.45 * frac + (stormNext ? 0.2 : 0)),
+        importance: Math.min(0.95, 0.3 + 0.45 * frac + (stormNext ? 0.25 : 0)),
       });
     }
   }
@@ -1764,6 +1793,9 @@ export function visit(s: ValleyState, hid: string, why: Knock['what'] | 'call' =
   const leave = arrive + stay;
   ks.visit = { house: hid, arrive, leave, back: leave + walk };
   ks.seen[hid] = arrive;
+  // What the kahya will remember of their jars: the read is as old as the visit.
+  ks.guess ??= {};
+  ks.guess[hid] = { at: arrive, bread: Math.round(daysOfBread(s, h)) };
   for (const m of h.members) {
     promote(s, m);
     const p = personOf(s, m);
@@ -1801,6 +1833,54 @@ export function visit(s: ValleyState, hid: string, why: Knock['what'] | 'call' =
 }
 
 /** The kahya's walk to a house and back, with the sitting. */
+/** A guess, in the observer's own head, at how a person would answer an ask (HF `predictAs`; pure). */
+export interface Hunch {
+  verdict: SuggestionResolution['verdict'];
+  reason: string;
+  confidence: number;
+}
+
+export function hunchOf(
+  s: ValleyState,
+  observer: Person,
+  target: Person,
+  job: Job,
+  wage = false,
+): Hunch | undefined {
+  const h = houseOfPerson(s, target.id);
+  if (!h || !target.body.alive) return undefined;
+  const dayStart = dayOfMinute(s.minute) * DAY;
+  const { rise, set } = daylight(doyOf(dayOfMinute(s.minute)));
+  // Asked now, they would weigh it at their next waking hour.
+  let at = Math.max(s.minute, dayStart + rise + HOUR);
+  if (at > dayStart + set - 2 * HOUR) at = dayStart + DAY + rise + 2 * HOUR;
+  const ask: Ask = {
+    id: 'hunch',
+    job,
+    personIds: [target.id],
+    houses: [h.id],
+    from: at,
+    until: at + DAY,
+    wage,
+    insisted: [],
+    replies: {},
+    hours: {},
+  };
+  s.asks.push(ask);
+  try {
+    const offers = offersFor(s, target, at);
+    const sug = suggestionFor(s, target, at);
+    if (!sug) return undefined;
+    const r = predictAs(observer, target, offers, sug, {
+      now: Math.max(observer.now, s.minute),
+      scarcity: scarcityOf(s, h),
+    });
+    return { verdict: r.resolution.verdict, reason: r.resolution.reason, confidence: r.confidence };
+  } finally {
+    s.asks.pop();
+  }
+}
+
 export function walkOffer(h: Household, walk: number, stay: number): Affordance {
   return {
     id: `walk:${h.id}`,
