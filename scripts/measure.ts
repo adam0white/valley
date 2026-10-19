@@ -12,70 +12,92 @@ const s = g.valley;
 const ms: Record<string, number> = {};
 const dayCount: Record<string, number> = {};
 const houses = () => s.households.filter((h) => underSeal(s, h)).map((h) => h.id);
+const BOT = process.env.BOT ?? 'plain';
+const idle = BOT === 'idle';
+// Edge bots: 'iron' seizes from every unpaid house and turns every hungry knock away; 'open' gives to every
+// knock while the granary lasts and eases every house.
+const iron = BOT === 'iron';
+const openHand = BOT === 'open';
 const t0 = performance.now();
 for (let d = 0; d < days && !s.flags.ended; d++) {
   const doy = doyOf(d);
   const season = seasonOf(doy);
   // Morning decisions at 07:30.
   step(g, d * DAY + 7 * 60 + 30);
-  if (
-    season === 'harvest' &&
-    s.agha.standing > 5 &&
-    !s.asks.some((a) => a.job === 'reap-agha' && !a.closed && a.until > s.minute)
-  ) {
-    act(g, { verb: 'call', job: 'reap-agha', houses: houses(), wage: yearOf(d) > 1 });
-  }
-  // Insist with one who put it off yesterday.
-  const open = s.asks.filter((a) => !a.closed && a.until > s.minute && a.job !== 'bring-share');
-  for (const a of open) {
-    const off = Object.entries(a.replies).find(
-      ([pid, r]) => r.verdict === 'deferred' && !a.insisted.includes(pid),
+  if (doy === 174)
+    console.log(
+      `  sown before the crop y${yearOf(d) + 1}: ` +
+        s.households
+          .map((h) => `${h.short} ${h.field.sown.toFixed(2)} store ${Math.round(h.store)}`)
+          .join(', '),
     );
-    if (off && d % 2 === 0) act(g, { verb: 'insist', ask: a.id, pid: off[0] });
-  }
-  if (
-    s.flags.verbs.includes('take') &&
-    doy >= 216 &&
-    doy < 262 &&
-    !s.asks.some((a) => a.job === 'bring-share' && a.from > s.minute - 300 * DAY)
-  ) {
-    act(g, { verb: 'call', job: 'bring-share', houses: houses() });
-  }
-  // Ten days before the rider, ease the hungriest unpaid house and seize from the richest.
-  if (d === s.agha.dueDay - 10) {
-    const unpaid = s.households.filter((h) => underSeal(s, h) && h.paid < h.share - 0.5);
-    const hungry = unpaid.sort((a, b) => daysOfBread(s, a) - daysOfBread(s, b))[0];
-    if (hungry) act(g, { verb: 'ease', house: hungry.id });
-    const rich = unpaid.sort((a, b) => daysOfBread(s, b) - daysOfBread(s, a))[0];
-    if (rich && rich !== hungry) act(g, { verb: 'seize', house: rich.id });
-  }
-  if (
-    s.agha.millOpen &&
-    s.agha.mill < 600 &&
-    doy > 100 &&
-    doy < 170 &&
-    !s.asks.some((a) => a.job === 'build-mill' && !a.closed && a.until > s.minute)
-  ) {
-    act(g, { verb: 'call', job: 'build-mill', houses: houses().slice(0, 6), wage: true });
-  }
-  if (
-    s.flags.verbs.includes('borrow') &&
-    s.agha.granary < 30 &&
-    (!s.agha.loan || s.minute - s.agha.loan.asked > 300 * DAY)
-  )
-    act(g, { verb: 'borrow', kile: 80 });
-  for (const k of s.knocks) {
-    if (k.answered || k.until < s.minute) continue;
-    if (k.what === 'grain')
-      act(
-        g,
-        s.agha.granary > 10 ? { verb: 'give', house: k.house, kile: 6 } : { verb: 'turn-away', knock: k.id },
+  if (!idle) {
+    if (
+      season === 'harvest' &&
+      s.agha.standing > 5 &&
+      !s.asks.some((a) => a.job === 'reap-agha' && !a.closed && a.until > s.minute)
+    ) {
+      act(g, { verb: 'call', job: 'reap-agha', houses: houses(), wage: yearOf(d) > 1 });
+    }
+    // Insist with one who put it off yesterday.
+    const open = s.asks.filter((a) => !a.closed && a.until > s.minute && a.job !== 'bring-share');
+    for (const a of open) {
+      const off = Object.entries(a.replies).find(
+        ([pid, r]) => r.verdict === 'deferred' && !a.insisted.includes(pid),
       );
-    else act(g, { verb: 'visit', house: k.house, why: k.what });
-  }
-  if (d % 9 === 3) {
-    const hs = houses();
-    act(g, { verb: 'visit', house: hs[d % hs.length] ?? 'ak' });
+      if (off && d % 2 === 0) act(g, { verb: 'insist', ask: a.id, pid: off[0] });
+    }
+    if (
+      s.flags.verbs.includes('take') &&
+      doy >= 216 &&
+      doy < 262 &&
+      !s.asks.some((a) => a.job === 'bring-share' && a.from > s.minute - 300 * DAY)
+    ) {
+      act(g, { verb: 'call', job: 'bring-share', houses: houses() });
+    }
+    // Ten days before the rider, ease the hungriest unpaid house and seize from the richest.
+    if (d === s.agha.dueDay - 10 && (iron || openHand)) {
+      for (const h of s.households.filter(
+        (h) => underSeal(s, h) && h.members.length && h.paid < h.share - 0.5,
+      ))
+        act(g, iron ? { verb: 'seize', house: h.id } : { verb: 'ease', house: h.id });
+    } else if (d === s.agha.dueDay - 10) {
+      const unpaid = s.households.filter((h) => underSeal(s, h) && h.paid < h.share - 0.5);
+      const hungry = unpaid.sort((a, b) => daysOfBread(s, a) - daysOfBread(s, b))[0];
+      if (hungry) act(g, { verb: 'ease', house: hungry.id });
+      const rich = unpaid.sort((a, b) => daysOfBread(s, b) - daysOfBread(s, a))[0];
+      if (rich && rich !== hungry) act(g, { verb: 'seize', house: rich.id });
+    }
+    if (
+      s.agha.millOpen &&
+      s.agha.mill < 600 &&
+      doy > 100 &&
+      doy < 170 &&
+      !s.asks.some((a) => a.job === 'build-mill' && !a.closed && a.until > s.minute)
+    ) {
+      act(g, { verb: 'call', job: 'build-mill', houses: houses().slice(0, 6), wage: true });
+    }
+    if (
+      s.flags.verbs.includes('borrow') &&
+      s.agha.granary < 30 &&
+      (!s.agha.loan || s.minute - s.agha.loan.asked > 300 * DAY)
+    )
+      act(g, { verb: 'borrow', kile: 80 });
+    for (const k of s.knocks) {
+      if (k.answered || k.until < s.minute) continue;
+      if (k.what === 'grain')
+        act(
+          g,
+          !iron && s.agha.granary > (openHand ? 2 : 10)
+            ? { verb: 'give', house: k.house, kile: openHand ? 15 : 6 }
+            : { verb: 'turn-away', knock: k.id },
+        );
+      else act(g, { verb: 'visit', house: k.house, why: k.what });
+    }
+    if (d % 9 === 3) {
+      const hs = houses();
+      act(g, { verb: 'visit', house: hs[d % hs.length] ?? 'ak' });
+    }
   }
   if (d === s.agha.dueDay - 1) {
     console.log(
@@ -162,9 +184,19 @@ console.log(
   'min',
   Math.min(...trusts).toFixed(2),
 );
-if (s.flags.ended) for (const e of gathering(g).elders) console.log(`  ${e.name} (${e.house}): ${e.words}`);
+if (s.flags.ended) {
+  for (const e of gathering(g).elders) console.log(`  ${e.name} (${e.house}): ${e.words}`);
+  console.log(`  LETTER ${gathering(g).letter}`);
+}
 for (const n of s.notes.filter((n) => n.weight >= 2.5).slice(-25))
   console.log(`  d${(n.at / DAY).toFixed(1)} ${n.text} ${n.words ? `“${n.words}”` : ''}`);
+const deaths = s.notes.filter((n) => n.kind === 'death');
+const riders = s.notes
+  .filter((n) => n.kind === 'due')
+  .map((n) => (/short/.test(n.text) ? (n.text.match(/(\d+) short/)?.[1] ?? '?') + ' short' : 'whole'));
+console.log(
+  `SUMMARY bot=${BOT} seed=${seed}: riders [${riders.join(', ')}], ended ${s.flags.ended ?? '-'} d${dayOfMinute(s.minute)}, deaths ${deaths.length} (hungry ${deaths.filter((n) => /nothing in the jar/.test(n.text)).length}), left ${Object.values(s.departed).filter((d) => d.why === 'left').length}, people ${s.people.length}, seized ${s.stats.seized ?? 0}, given ${Math.round(s.stats.given ?? 0)}`,
+);
 if (process.env.REPLAY !== '0') {
   const fp = fingerprint(s);
   const r = replay(seed, g.inputs, s.minute);

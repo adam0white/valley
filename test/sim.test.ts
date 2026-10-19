@@ -61,3 +61,27 @@ describe('the valley', () => {
     }
   });
 });
+
+describe('what a house says', () => {
+  it('answers a visit in a named person’s words, and the next house says something else', () => {
+    const g = newGame(7);
+    step(g, 8 * 60);
+    act(g, { verb: 'visit', house: 'dere' });
+    step(g, 1 * DAY);
+    act(g, { verb: 'visit', house: 'kara' });
+    step(g, 2 * DAY);
+    const voices = g.valley.notes.filter((n) => n.kind === 'voice');
+    expect(voices.length).toBe(2);
+    expect(voices[0]?.text).toMatch(/of the Dere house, at the hearth:/);
+    expect(voices[0]?.words).toBeTruthy();
+    expect(voices[0]?.words).not.toBe(voices[1]?.words);
+  });
+
+  it('remembers who was seized from at the end of the term', () => {
+    const g = newGame(7);
+    step(g, 8 * 60);
+    act(g, { verb: 'seize', house: 'dere' });
+    step(g, 60);
+    expect(g.valley.stats.hard ?? []).toContain('dere');
+  });
+});

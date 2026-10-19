@@ -229,6 +229,14 @@ export function beats(g: Game) {
   }
   if (s.knocks.some((k) => k.what === 'grain') && beat(g, 'give')) {
     reveal(g, 'give');
+    note(s, {
+      at: s.minute,
+      kind: 'story',
+      text: 'Osman the reeve, low: “The granary is the agha’s, kahya, but the key is on your belt. What you give, the rider will count as missing.”',
+      words: 'The key is on your belt.',
+      who: 'osman',
+      weight: 2,
+    });
   }
   // Hunger in the lanes when the granary is low: the reeve says the agha can be written to.
   const lean = s.households.filter(
@@ -371,8 +379,16 @@ function readGathering(g: Game): { elders: ElderWord[]; letter: string } {
     const worst = eps.filter((e) => e.valence < -0.2).sort((a, b) => a.valence - b.valence)[0];
     const best = eps.filter((e) => e.valence > 0.2).sort((a, b) => b.valence - a.valence)[0];
     const visited = s.kahyaState.seen[h.id] !== undefined;
+    // A death from hunger under your seal is what this house says, before anything else.
+    const starved = (s.stats.starved ?? []).find((d) => d.house === h.id);
+    const deadName = starved?.name;
+    const hard = !!starved?.hard || (s.stats.hard ?? []).includes(h.id);
     let words: string;
-    if (worst && worst.at < 0 && (trust < 0.35 || !best))
+    if (deadName)
+      words = hard
+        ? `${deadName} died with nothing in the jar. You had the key to the granary. That is all I will say.`
+        : `${deadName} died hungry, the winter you were here. I don’t say it was you. I don’t say it wasn’t.`;
+    else if (worst && worst.at < 0 && (trust < 0.35 || !best))
       // A memory from before your term: the office, not you.
       words = `I remember ${worst.summary.replace(/^the kahya/, 'when the last kahya')}. It was the same seal.`;
     else if (worst && (trust < 0.35 || !best))
@@ -390,14 +406,22 @@ function readGathering(g: Game): { elders: ElderWord[]; letter: string } {
   const meanTrust =
     s.people.reduce((a, p) => a + (p.will.voices.find((v) => v.voiceId === KAHYA)?.trust ?? 0.5), 0) /
     Math.max(1, s.people.length);
+  // The edges of the office, in the agha's hand: an iron seal pleases him, an open hand worries him.
+  const seized = s.stats.seized ?? 0;
+  const hungryDead = s.stats.starved?.length ?? 0;
+  const given = s.stats.given ?? 0;
   const letter =
-    s.flags.ended === 'dismissed'
-      ? 'The agha’s letter thanks you for your service.'
-      : s.agha.missed === 0 && meanTrust > 0.45
-        ? 'The agha’s letter renews your seal for another term, and asks how you did it.'
-        : s.agha.missed === 0
-          ? 'The agha’s letter renews your seal. It says nothing about the valley.'
-          : 'The agha’s letter renews your seal, for now. It mentions the year you were short.';
+    s.flags.ended !== 'dismissed' && s.agha.missed === 0 && seized >= 6
+      ? `The agha’s letter renews your seal and raises your stipend. He has never had the shares in so cleanly, he writes. ${hungryDead ? `He does not mention the ${hungryDead === 1 ? 'one who' : `${hungryDead} who`} died hungry. The elders did.` : 'The elders were quieter about it.'}`
+      : s.flags.ended !== 'dismissed' && given >= 40
+        ? `The agha’s letter renews your seal${s.agha.missed ? ', for now' : ''}. It asks, twice, where ${Math.round(given)} kile of his barley went. In the margin you write the names of the houses that ate it.`
+        : s.flags.ended === 'dismissed'
+          ? 'The agha’s letter thanks you for your service.'
+          : s.agha.missed === 0 && meanTrust > 0.45
+            ? 'The agha’s letter renews your seal for another term, and asks how you did it.'
+            : s.agha.missed === 0
+              ? 'The agha’s letter renews your seal. It says nothing about the valley.'
+              : 'The agha’s letter renews your seal, for now. It mentions the year you were short.';
   return { elders, letter };
 }
 

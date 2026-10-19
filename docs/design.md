@@ -65,9 +65,26 @@ Measured on 2026-10-19, desktop, whole term with a plain bot steward, seed 1, ab
 
 **Progress you can see (polish round 1).** An evening note says how many worked the agha's field and roughly how much still stands; notes mark the granary passing half the due and holding all of it; the main screen says in words how near the granary is to the due and how many days until the rider; the map lays the standing barley over for a week after a storm. These came from the first casual playtester and the HF-character playtester, who both saw only refusals and no progress.
 
+**Iteration 1 after playtest round 1 (2026-10-19).** All four testers said the kahya's own acts were mute. Now one named person of the house answers each visit, gift, seizure and easing at once, in a register read from their traits (blunt, anxious, wry, plain) and about what is true for that house: the jars, a birth, a death, a wedding or someone gone this season, and the strongest thing they remember the kahya doing (a pure read of HF memory, no `recall`). After an easing, another house of the hamlet says what the lanes think the next morning. No line is said twice in the valley within 90 days, and two people do not give the same reply on the same day. Each reply is also a half-clear HF `glimpseOf`, so hunches move with what people say. A paid call is answered as paid. Other changes:
+- Winter and quiet stretches have lane life: someone's evening every few days. Faith appears only as one evening walk to the mosque among eight lines.
+- The clock does not run faster than slow while a hungry knock is open. An unanswered hungry knock is noted ("waited at your door, and went back down the lane") and costs a little trust. Empty jars are reported once a month per house. A death from hunger says so.
+- Osman explains the granary key when giving first opens. The agha's yearly letter is a note on the crop day. Only one Press button shows per person. Shares say which rider they were for. Empty houses read as shut. The ledger's exit says "Set the seal down for now".
+- **Economy.** A household's yield factor is 0.7 to 1.2 (it was 0.55 to 1.15). Baby names are drawn from 16-name pools and never repeat the name of a living person.
+
+**The edges of the office (owner direction 2026-10-19: "keep those edges a bit fun and slightly in our calculations").** Two edge stewards are measured beside the plain and idle ones (`BOT=iron|open node scripts/measure.ts <seed>`). The iron kahya seizes from every unpaid house and turns away every hungry knock. The open hand eases every house and gives 15 kile to every knock. Each edge gets its own ending. The agha raises the iron kahya's stipend, while each house that lost someone to hunger after he was hard with it says "You had the key to the granary". The open hand's letter asks where the barley went, "In the margin you write the names of the houses that ate it". Term tallies live in `stats` (notes are capped at 400).
+
+| Steward, seed 1 (2026-10-19) | Riders | Deaths (hungry) | Left | Seized / given |
+|---|---|---|---|---|
+| idle | 354 short, dismissed day 426 | 0 | 0 | 0 / 0 |
+| plain | whole, 73 short; term reached | 0 | 1 | 2 / small |
+| iron | whole y1 and y2; term reached, stipend raised | 10 (10) | 3 | many / 0 |
+| open | whole, 120 short; term reached | 0 | 1 | 0 / 45 |
+
 ## Deferred (targets)
 - The sim in a Web Worker: only if a phone measure shows stutter; decide by 2026-10-22.
 - Notes grouped per house per day (hunches are done): polish round 2 (2026-10-21).
+- Conversation the player steers at a hearth (asking about a person, a debt, a grievance): version 1.1 (2026-10-23).
+- An edge that pays off inside the fiction for the open hand (the valley carries the shortfall itself): judge after round 2 (2026-10-21).
 - Ledger volumes to turn back to (an abandoned future kept as crossed-out ink): polish round 2 (2026-10-21).
 - The year-three levy (the agha's rider wants men): version 1.1, after the polish rounds (2026-10-23).
 - Brokering marriages and one neighbouring valley over the pass: version 2, after the owner's first play (on or after 2026-10-26).

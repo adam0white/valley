@@ -345,6 +345,9 @@ function rateNow(t: number): number {
   // Nights go by faster when nobody is out.
   if (partOfDay(s.minute) === 'night' && !s.kahyaState.visit) r *= 3;
   if (t < slowUntil) r = Math.min(r, SLOW_RATE);
+  // Someone at the door holds the valley at the slow pace until you answer (slowdown, not a pause).
+  if (s.knocks.some((k) => !k.answered && k.what === 'grain' && k.at <= s.minute && k.until > s.minute))
+    r = Math.min(r, SPEEDS[0]);
   return r;
 }
 
@@ -894,7 +897,11 @@ function knockCard(s: ValleyState, k: Knock): string {
 
 const busy = (s: ValleyState) => !!s.kahyaState.visit && s.kahyaState.visit.back > s.minute;
 
+/** People who already have a Press button on screen: one per person, on their latest line. */
+const pressShown = new Set<string>();
+
 function notebook(s: ValleyState): string {
+  pressShown.clear();
   const today = dayOfMinute(s.minute);
   const byDay = new Map<number, Note[]>();
   for (const n of s.notes) {
@@ -906,7 +913,8 @@ function notebook(s: ValleyState): string {
     byDay.set(d, list);
   }
   const days = [...byDay.keys()].sort((a, b) => b - a);
-  if (!days.length) return '<p class="soft">The notebook is empty. Tap a house on the map.</p>';
+  if (!days.length)
+    return '<p class="soft">Nothing has been written these three weeks. Tap a house on the map, or let the days pass.</p>';
   return days
     .map((d) => {
       const list = byDay.get(d) ?? [];
@@ -933,7 +941,7 @@ function notebook(s: ValleyState): string {
 
 function noteLine(s: ValleyState, n: Note): string {
   let extra = '';
-  if (n.kind === 'reply' && n.ask && n.who && s.flags.verbs.includes('insist')) {
+  if (n.kind === 'reply' && n.ask && n.who && s.flags.verbs.includes('insist') && !pressShown.has(n.who)) {
     const a = s.asks.find((x) => x.id === n.ask);
     const r = a?.replies[n.who];
     if (
@@ -945,6 +953,7 @@ function noteLine(s: ValleyState, n: Note): string {
       (r.verdict === 'deferred' || r.verdict === 'refused' || r.verdict === 'modified')
     ) {
       const who = n.who;
+      pressShown.add(who);
       extra = btn(
         `Press ${personOf(s, who)?.name ?? 'them'}`,
         () => order({ verb: 'insist', ask: a.id, pid: who }),
@@ -1000,6 +1009,7 @@ function jobInSeason(s: ValleyState): Job | null {
 }
 
 function houseCard(s: ValleyState, hh: Household): string {
+  pressShown.clear();
   const people = hh.members.map((m) => personOf(s, m)).filter((p) => !!p);
   const names = people.map((p) => p?.name ?? '').join(', ');
   const job = jobInSeason(s);
@@ -1036,7 +1046,7 @@ function houseCard(s: ValleyState, hh: Household): string {
     .slice(-4)
     .reverse();
   const share =
-    s.flags.verbs.includes('take') && underSeal(s, hh)
+    s.flags.verbs.includes('take') && underSeal(s, hh) && hh.members.length
       ? `<p class="soft" style="font-size:15px">The agha’s book: their share is ${shareOwed(hh)} kile${hh.eased ? ' (eased)' : ''}; ${hh.paid >= shareOwed(hh) - 0.5 ? 'paid' : hh.paid > 0 ? 'part paid' : 'not yet paid'}.</p>`
       : '';
   return `<div class="card ink-in">
@@ -1048,7 +1058,7 @@ function houseCard(s: ValleyState, hh: Household): string {
       },
       { cls: 'x' },
     )}</div>
-    <div class="looks">${esc(hh.looks)}</div>
+    <div class="looks">${esc(hh.members.length ? hh.looks : 'The door is shut and the hearth is cold.')}</div>
     <div class="people">${hh.members.length ? esc(names) : 'Nobody lives here now.'}</div>
     ${lines
       .filter(Boolean)
@@ -1059,6 +1069,12 @@ function houseCard(s: ValleyState, hh: Household): string {
     ${recent.map((n) => noteLine(s, n)).join('')}
   </div>`;
 }
+
+const CRIER: Record<Job, string> = {
+  'reap-agha': 'for the agha’s barley',
+  'bring-share': 'for the shares',
+  'build-mill': 'for the mill',
+};
 
 const JOB_LABEL: Record<Job, string> = {
   'reap-agha': 'to the agha’s barley',
@@ -1177,7 +1193,7 @@ function valleyThumbs(s: ValleyState): string {
       out.push(
         btn(`Call ${who} to bring the shares`, () => order({ verb: 'call', job, houses }), {
           cls: 'primary wide',
-          hint: `the rider comes ${dateWords(nextRiderDay(s))}`,
+          hint: `the rider comes ${riderWords(s)}`,
         }),
       );
     else {
@@ -1196,7 +1212,7 @@ function valleyThumbs(s: ValleyState): string {
     const said = a ? Object.values(a.replies) : [];
     const came = said.filter((r) => r.verdict === 'assented' || r.verdict === 'complied').length;
     out.push(
-      `<p class="soft" style="margin:0;flex-basis:100%;font-size:15px">The crier has called ${JOB_LABEL[job].replace(/^to /, 'for ')}. ${came ? `${came > 6 ? 'Many' : came > 2 ? 'Some' : 'A few'} have come.` : 'Nobody has come yet.'}</p>`,
+      `<p class="soft" style="margin:0;flex-basis:100%;font-size:15px">The crier has called ${CRIER[job]}. ${came ? `${came > 6 ? 'Many' : came > 2 ? 'Some' : 'A few'} have come.` : 'Nobody has come yet.'}</p>`,
     );
   }
   if (s.flags.verbs.includes('borrow') && (!s.agha.loan || s.minute - s.agha.loan.asked > 300 * DAY))
@@ -1212,6 +1228,19 @@ function valleyThumbs(s: ValleyState): string {
     }),
   );
   return out.join('');
+}
+
+/** The rider's date, with the year when it is not this one. */
+function riderWords(s: ValleyState): string {
+  const d = nextRiderDay(s);
+  const y = yearOf(d);
+  return y === yearOf(dayOfMinute(s.minute)) ? dateWords(d) : `${dateWords(d)} of year ${yearWord(y)}`;
+}
+
+/** Shares are counted afresh when the new crop stands (doy 175) and stand for that year's rider. */
+function sharesFresh(s: ValleyState): boolean {
+  const doy = doyOf(dayOfMinute(s.minute));
+  return doy >= 175 && doy <= doyOf(nextRiderDay(s));
 }
 
 function ledger(s: ValleyState): string {
@@ -1232,12 +1261,12 @@ function ledger(s: ValleyState): string {
     <table>
       <tr><td>In the granary</td><td class="n">${Math.round(s.agha.granary)} kile</td></tr>
       <tr><td>The due</td><td class="n">${s.agha.due} kile</td></tr>
-      <tr><td>The rider comes</td><td class="n">${esc(dateWords(nextRiderDay(s)))}</td></tr>
+      <tr><td>The rider comes</td><td class="n">${esc(riderWords(s))}</td></tr>
       ${s.agha.arrears ? `<tr><td>Written against this year</td><td class="n">${s.agha.arrears}</td></tr>` : ''}
       ${loan}
       <tr><td>Years short</td><td class="n">${s.agha.missed}</td></tr>
     </table>
-    ${s.flags.verbs.includes('take') ? `<h3 style="margin:8px 0 0;font-size:16px">Shares this year</h3><table>${rows}</table>` : ''}
+    ${s.flags.verbs.includes('take') ? `<h3 style="margin:8px 0 0;font-size:16px">${sharesFresh(s) ? 'Shares this year' : 'Shares brought to the last rider'}</h3><table>${rows}</table>` : ''}
     <div class="actions">
       ${btn(
         'Bind this volume now',

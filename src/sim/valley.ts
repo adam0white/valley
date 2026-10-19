@@ -55,6 +55,7 @@ import {
 } from '@adam0white/human-framework';
 import {
   DAY,
+  dateWords,
   daylight,
   dayOfMinute,
   doyOf,
@@ -67,6 +68,17 @@ import {
 } from './calendar.ts';
 import { foundValley, type Household, KAHYA, makeKahya } from './people.ts';
 import { DRAW, hashUnit, mixSeed, strHash } from './rng.ts';
+import {
+  ASSENT,
+  easeLaneWords,
+  easeWords,
+  giftWords,
+  registerOf,
+  seizeWords,
+  speakerOf,
+  type VoiceContext,
+  visitWords,
+} from './voices.ts';
 
 // ---------- constants (engineering assumptions, tuned by the headless measure) ----------
 
@@ -145,7 +157,8 @@ export type NoteKind =
   | 'prayer'
   | 'review'
   | 'work'
-  | 'hunger';
+  | 'hunger'
+  | 'voice';
 
 export interface Note {
   id: number;
@@ -160,6 +173,8 @@ export interface Note {
   weight: number;
   /** The ask it answers. */
   ask?: string;
+  /** A reply line rewritten the same day: the verdict it first said. */
+  was?: string;
 }
 
 export interface Knock {
@@ -243,7 +258,19 @@ export interface ValleyState {
   /** People who left or died this step, to be taken out of the lists. */
   leaving: string[];
   /** Day counters for the measure. */
-  stats: { asks: number; verdicts: Record<string, number>; harvestVerdicts: Record<string, number> };
+  stats: {
+    asks: number;
+    verdicts: Record<string, number>;
+    harvestVerdicts: Record<string, number>;
+    /** The edges of the office over the term (absent in older saves): seizures, kile given, the hungry dead. */
+    seized?: number;
+    given?: number;
+    starved?: { name: string; house: string; hard: boolean }[];
+    /** Houses the kahya was hard with: seized from, or left waiting at the door with empty jars. */
+    hard?: string[];
+  };
+  /** Lines said in the valley (key 'valley'), with the day, so a line is not said twice in a season. */
+  said?: Record<string, Record<string, number>>;
   /** Who worked the agha's field today, for the evening tally (absent in older saves). */
   tally?: { day: number; who: string[] };
 }
@@ -317,7 +344,7 @@ function stateOf(c: Community): CommunityState {
 /** The agha's due for the year: his own field at a good year plus the houses' shares under your seal. */
 export function dueFor(s: ValleyState): number {
   const shares = s.households
-    .filter((h) => s.flags.upper || h.hamlet === 'lower')
+    .filter((h) => (s.flags.upper || h.hamlet === 'lower') && h.members.length > 0)
     .reduce((a, h) => a + h.share, 0);
   return Math.round(
     V.aghaField * 0.7 +
@@ -548,7 +575,14 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
         tags: ['work', 'outdoors'],
       });
     }
-    if (a.job === 'bring-share' && light && h.paid < shareOwed(h) - 0.01 && h.members[0] === p.id) {
+    // A house with nothing in the jar has nothing to carry down: no offer, so no yes that moves nothing.
+    if (
+      a.job === 'bring-share' &&
+      light &&
+      h.paid < shareOwed(h) - 0.01 &&
+      h.members[0] === p.id &&
+      h.store >= 1
+    ) {
       const owe = shareOwed(h) - h.paid;
       out.push({
         id: 'bring-share',
@@ -756,6 +790,26 @@ function captureReply(s: ValleyState, p: Person, offer: Affordance, record: Deci
     s.stats.harvestVerdicts[res.verdict] = (s.stats.harvestVerdicts[res.verdict] ?? 0) + 1;
   const h = houseOfPerson(s, p.id);
   const words = replyWords(s, p, ask, reply);
+  // An answer is also a look at the person: the kahya's hunch about them moves a little.
+  glimpseOf(s.kahya, p, Math.max(reply.at, s.kahya.now), 0.5);
+  // One line per person per ask per day: a change of mind the same day rewrites that line.
+  const today = dayOfMinute(reply.at);
+  const mine = sameDay
+    ? s.notes.findLast(
+        (n) => n.kind === 'reply' && n.ask === ask.id && n.who === p.id && dayOfMinute(n.at) === today,
+      )
+    : undefined;
+  if (mine) {
+    const first = (mine.was ?? prev?.verdict ?? reply.verdict) as Reply['verdict'];
+    mine.was = first;
+    mine.text =
+      first === reply.verdict
+        ? replyText(s, p, ask, reply)
+        : `${p.name} ${PAST[first]?.(ask.job) ?? 'answered'}, then ${PAST[reply.verdict]?.(ask.job) ?? 'answered'}.`;
+    mine.words = words;
+    mine.weight = Math.max(mine.weight, reply.verdict === 'refused' ? 3 : 2);
+    return;
+  }
   const weight =
     reply.verdict === 'assented'
       ? prev
@@ -792,6 +846,15 @@ const DAY_ACTIONS = new Set([
   'ask-kahya',
 ]);
 
+/** A verdict as a past-tense clause, for a line that says someone changed their mind. */
+const PAST: Record<string, (job: Job) => string> = {
+  assented: (job) => (job === 'bring-share' ? 'carried the share down' : 'came'),
+  complied: () => 'came because you pressed',
+  deferred: (job) => `put ${JOB_WORDS[job]} off`,
+  modified: (job) => (job === 'bring-share' ? 'brought half' : 'did something else'),
+  refused: () => 'would not',
+};
+
 const JOB_WORDS: Record<Job, string> = {
   'reap-agha': 'the agha’s barley',
   'build-mill': 'the mill',
@@ -819,14 +882,29 @@ function replyText(_s: ValleyState, p: Person, ask: Ask, r: Reply): string {
 /** The person's words, with HF's line kept only where it reads right (The Pass: never a generic line where it is wrong). */
 function replyWords(s: ValleyState, p: Person, ask: Ask, r: Reply): string {
   const h = houseOfPerson(s, p.id);
-  const pick = (xs: string[]) =>
-    xs[Math.floor(hashUnit(s.seed, DRAW.line, strHash(p.id), r.at) * xs.length)] ?? xs[0] ?? '';
+  // Two people of the valley do not say the same words on the same day: the pick moves on to an unsaid line.
+  s.said ??= {};
+  const today = s.said.today ?? {};
+  const day = dayOfMinute(r.at);
+  const pick = (xs: string[]) => {
+    const start = Math.floor(hashUnit(s.seed, DRAW.line, strHash(p.id), r.at) * xs.length);
+    for (let i = 0; i < xs.length; i++) {
+      const line = xs[(start + i) % xs.length] ?? '';
+      if (today[line] !== day) {
+        today[line] = day;
+        s.said ??= {};
+        s.said.today = today;
+        return line;
+      }
+    }
+    return xs[start] ?? xs[0] ?? '';
+  };
   if (r.verdict === 'assented') {
-    if (ask.job === 'reap-agha')
-      return pick(['I’ll come.', 'We’ll be there.', 'For the agha, then.', 'Fine. Before the rain.']);
-    if (ask.job === 'bring-share')
-      return pick(['Here it is. Write it down.', 'Count it in front of me.', 'There. We owe nothing.']);
-    return pick(['I’ll carry.', 'Fine.', 'A mill would be good.']);
+    const a = ASSENT[registerOf(p)];
+    if (ask.wage && ask.job !== 'bring-share') return pick(a.paid);
+    if (ask.job === 'reap-agha') return pick(a.reap);
+    if (ask.job === 'bring-share') return pick(a.share);
+    return pick(a.carry);
   }
   if (r.verdict === 'complied')
     return pick(['Since you insist.', 'I’m coming. Don’t stand over me.', 'As you say, kahya.']);
@@ -1182,6 +1260,12 @@ function afterStep(s: ValleyState, ev: SimEvent[]) {
   }
 }
 
+/** The kahya was hard with this house: it is remembered at the end of the term. */
+function markHard(s: ValleyState, hid: string) {
+  s.stats.hard ??= [];
+  if (!s.stats.hard.includes(hid)) s.stats.hard.push(hid);
+}
+
 function dies(s: ValleyState, p: Person, h: Household, at: number) {
   const all = createCommunity(s.people.filter((q) => q.now <= at || q === p));
   try {
@@ -1190,10 +1274,15 @@ function dies(s: ValleyState, p: Person, h: Household, at: number) {
     // Someone's clock ran past the news; they hear it at their next look (engineering fallback).
   }
   const age = Math.floor(ageYears(p));
+  const hungry = daysOfBread(s, h) < 2;
+  if (hungry && underSeal(s, h)) {
+    s.stats.starved ??= [];
+    s.stats.starved.push({ name: p.name, house: h.id, hard: (s.stats.hard ?? []).includes(h.id) });
+  }
   note(s, {
     at,
     kind: 'death',
-    text: `${p.name} of ${h.name} died${age >= 60 ? ', old' : age < 5 ? ', a small child' : ''}. They buried ${p.life.sex === 'female' ? 'her' : 'him'} before the evening prayer.`,
+    text: `${p.name} of ${h.name} died${age >= 60 ? ', old' : age < 5 ? ', a small child' : ''}${hungry ? ', after weeks with nothing in the jar' : ''}. They buried ${p.life.sex === 'female' ? 'her' : 'him'} before the evening prayer.`,
     who: p.id,
     house: h.id,
     weight: 3,
@@ -1281,6 +1370,10 @@ function endOfDay(s: ValleyState, day: number) {
     });
   }
   eveningTally(s, day);
+  laneLife(s, day);
+  hungerWord(s, day);
+  lapseKnocks(s, (day + 1) * DAY);
+  s.knocks = s.knocks.filter((k) => !k.answered || k.until > (day - 30) * DAY);
   granaryMilestones(s, day);
   // Eating: every house eats from its store.
   for (const h of s.households) {
@@ -1343,7 +1436,7 @@ function endOfDay(s: ValleyState, day: number) {
   // A new crop stands in the summer from what was sown.
   if (doy === 175) {
     for (const h of s.households) {
-      const yieldU = 0.55 + 0.6 * hashUnit(s.seed, DRAW.yield, strHash(h.id), yearOf(next));
+      const yieldU = 0.7 + 0.5 * hashUnit(s.seed, DRAW.yield, strHash(h.id), yearOf(next));
       h.field.standing = h.field.size * Math.max(0.2, h.field.sown) * yieldU;
       h.field.sown = 0;
       h.paid = 0;
@@ -1352,6 +1445,13 @@ function endOfDay(s: ValleyState, day: number) {
     s.agha.standing = V.aghaField * (0.6 + 0.5 * hashUnit(s.seed, DRAW.yield, 999, yearOf(next)));
     s.agha.due = dueFor(s);
     s.agha.dueDay = next + (259 - doy);
+    const owed = (s.agha.arrears ?? 0) + (s.agha.loan && !s.agha.loan.paid ? s.agha.loan.owe : 0);
+    note(s, {
+      at: next * DAY + 8 * 60,
+      kind: 'letter',
+      text: `The agha’s letter for the year: his due is ${s.agha.due} kile by ${dateWords(s.agha.dueDay)}. His own field, every house’s share${owed ? `, and ${owed} still owed to him from before` : ''}${s.flags.beats.includes('mill-done') ? ', less forty for the mill' : ''}.`,
+      weight: 2.5,
+    });
   }
   // Births.
   for (const p of [...s.people]) {
@@ -1437,6 +1537,82 @@ function eveningTally(s: ValleyState, day: number) {
   });
 }
 
+/** The lanes when nothing is asked of them: in winter, and on quiet stretches, someone's evening, every few days. */
+const LANE: Record<string, string[]> = {
+  winter: [
+    '{who} of {house} has the loom up by the stove. You can hear it from the lane.',
+    'Snow on the upper lanes. The {fam} children were out on a tray until dark.',
+    'The men sat late over backgammon at the coffeehouse. {who} lost, and blamed the dice.',
+    '{who} of {house} mended a yoke by lamplight.',
+    '{who} walked to the mosque through the snow for the night prayer, as most evenings.',
+    'A wolf was heard above the {fam} fold. {who} sat up with the dog.',
+    '{who} of {house} told the old story of the flood to the children again. They knew the ending and shouted it.',
+    'Bread baked at the {fam} oven today; the smell went all down the lane.',
+  ],
+  quiet: [
+    '{who} of {house} is turning the garden behind the house.',
+    '{who} of {house} took the goats up to the high grass.',
+    'Washing day at the spring. {who} of {house} brought the news, as usual.',
+    'The {fam} roof is being re-mudded before the rains. {who} is on it, shouting down.',
+  ],
+  lean: [
+    'At the {fam} house they have been eating thin soup since the week began.',
+    'There was no smoke from the {fam} chimney this morning. {who} says they are saving wood.',
+  ],
+};
+
+function laneLife(s: ValleyState, day: number) {
+  const season = seasonOf(doyOf(day));
+  const quiet = !s.notes.some((n) => dayOfMinute(n.at) >= day - 2 && n.kind !== 'weather');
+  if (season !== 'winter' && !quiet) return;
+  if (hashUnit(s.seed, DRAW.line, 77, day) > (season === 'winter' ? 0.3 : 0.4)) return;
+  const homes = s.households.filter((h) => h.members.length && underSeal(s, h));
+  const h = homes[Math.floor(hashUnit(s.seed, DRAW.line, 78, day) * homes.length)];
+  if (!h) return;
+  const people = h.members
+    .map((id) => personOf(s, id))
+    .filter((p): p is Person => !!p && p.body.alive && isAdult(p));
+  const p = people[Math.floor(hashUnit(s.seed, DRAW.line, 79, day) * people.length)];
+  if (!p) return;
+  const pool =
+    daysOfBread(s, h) < 25
+      ? (LANE.lean ?? [])
+      : season === 'winter'
+        ? (LANE.winter ?? [])
+        : (LANE.quiet ?? []);
+  const line = pool[Math.floor(hashUnit(s.seed, DRAW.line, 80, day) * pool.length)] ?? '';
+  note(s, {
+    at: day * DAY + 20 * 60,
+    kind: 'story',
+    text: line
+      .replace('{who}', p.name)
+      .replace('{house}', h.name)
+      .replace('{fam}', h.name.replace(/^the /, '').replace(/ house$/, '')),
+    who: p.id,
+    house: h.id,
+    weight: 1,
+  });
+}
+
+/** When a house's jars are empty, someone tells you: the reeve if he is living, else the coffeehouse talk. */
+function hungerWord(s: ValleyState, day: number) {
+  for (const h of s.households) {
+    if (!h.members.length || daysOfBread(s, h) >= 1) continue;
+    const key = `empty-${h.id}-${Math.floor(day / 30)}`;
+    if (s.flags.beats.includes(key)) continue;
+    s.flags.beats.push(key);
+    const osman = personOf(s, 'osman');
+    const by = osman?.body.alive && h.id !== 'kavak' ? 'Osman, at your door:' : 'Talk at the coffeehouse:';
+    note(s, {
+      at: day * DAY + 17 * 60,
+      kind: 'knock',
+      text: `${by} there is nothing left in the jars of ${h.name}. They are eating what the neighbours bring, and that is not much.`,
+      house: h.id,
+      weight: 3,
+    });
+  }
+}
+
 /** The granary passing half the due, and the whole due: the year's two good evenings at the konak. */
 function granaryMilestones(s: ValleyState, day: number) {
   const y = yearOf(day);
@@ -1515,9 +1691,47 @@ function routineFor(_s: ValleyState, p: Person, day: number) {
 function born(s: ValleyState, mother: Person, father: Person, h: Household, at: number) {
   const n = h.members.length + h.gone.length;
   const boy = hashUnit(s.seed, DRAW.person, strHash(mother.id), n) > 0.5;
-  const names = boy
-    ? ['Ali', 'Hüseyin', 'Mehmet', 'Yunus', 'Emin', 'Halit']
-    : ['Ayşe', 'Fatma', 'Hatice', 'Gülsüm', 'Elif', 'Zehra'];
+  const pool = boy
+    ? [
+        'Ali',
+        'Hüseyin',
+        'Mehmet',
+        'Yunus',
+        'Emin',
+        'Halit',
+        'Osman',
+        'Hasan',
+        'İsa',
+        'Cemal',
+        'Nuri',
+        'Kemal',
+        'Hamza',
+        'Bilal',
+        'Adem',
+        'Zeki',
+      ]
+    : [
+        'Ayşe',
+        'Fatma',
+        'Hatice',
+        'Gülsüm',
+        'Elif',
+        'Zehra',
+        'Meryem',
+        'Hacer',
+        'Şerife',
+        'Emine',
+        'Nazlı',
+        'Havva',
+        'Rukiye',
+        'Saliha',
+        'Hanife',
+        'Döndü',
+      ];
+  // A child is not given a name someone living in the valley already answers to.
+  const living = new Set(s.people.filter((q) => q.body.alive).map((q) => q.name));
+  const free = pool.filter((x) => !living.has(x));
+  const names = free.length ? free : pool;
   const name = names[Math.floor(hashUnit(s.seed, DRAW.name, strHash(mother.id), n) * names.length)] ?? 'Ali';
   const id = `${h.id}-b${s.nextNote}`;
   const d = deliver(mother, { id, name }, Math.max(mother.now, at));
@@ -1712,6 +1926,7 @@ export function give(s: ValleyState, hid: string, kile: number): number {
   if (amt <= 0) return 0;
   s.agha.granary -= amt;
   h.store += amt;
+  s.stats.given = (s.stats.given ?? 0) + amt;
   for (const m of h.members) {
     const p = personOf(s, m);
     if (!p || !isAdult(p)) continue;
@@ -1735,6 +1950,7 @@ export function give(s: ValleyState, hid: string, kile: number): number {
     house: hid,
     weight: 1.5,
   });
+  houseSpeaks(s, h, s.minute + 40, giftWords, 'when the sack came');
   return amt;
 }
 
@@ -1781,7 +1997,39 @@ export function turnAway(s: ValleyState, knockId: string): boolean {
     house: k.house,
     weight: 1.5,
   });
+  if (k.what === 'grain') markHard(s, k.house);
   return true;
+}
+
+/** A knock nobody answered: they waited and went home. Remembered, though more softly than being sent away. */
+function lapseKnocks(s: ValleyState, upTo: number) {
+  for (const k of s.knocks) {
+    if (k.answered || k.until > upTo) continue;
+    k.answered = 'ignored';
+    if (k.what !== 'grain') continue;
+    const p = personOf(s, k.personId);
+    if (p?.body.alive) {
+      adoptVoiceTrust(p, KAHYA, 0, 0.08);
+      queuePercept(s, p.id, {
+        at: k.until,
+        channel: 'social',
+        kind: 'harm',
+        actorId: KAHYA,
+        targetId: p.id,
+        valence: -0.4,
+        salience: 0.6,
+        summary: 'the kahya left us waiting at the door',
+      });
+    }
+    if (k.what === 'grain') markHard(s, k.house);
+    note(s, {
+      at: k.until,
+      kind: 'knock',
+      text: `${p?.name ?? 'Someone'} of ${houseOf(s, k.house)?.name ?? 'a house'} waited at your door, and went back down the lane.`,
+      house: k.house,
+      weight: 2.5,
+    });
+  }
 }
 
 /** Send the reeve's men for a house's share: it is taken, whatever they say. */
@@ -1793,6 +2041,8 @@ export function seize(s: ValleyState, hid: string): number {
   h.store -= amt;
   h.paid += amt;
   s.agha.granary += amt;
+  s.stats.seized = (s.stats.seized ?? 0) + 1;
+  markHard(s, hid);
   for (const m of h.members) {
     const p = personOf(s, m);
     if (!p || !isAdult(p)) continue;
@@ -1833,6 +2083,7 @@ export function seize(s: ValleyState, hid: string): number {
     house: hid,
     weight: 3,
   });
+  houseSpeaks(s, h, s.minute + 30, seizeWords, 'in the doorway');
   return amt;
 }
 
@@ -1853,7 +2104,81 @@ export function ease(s: ValleyState, hid: string): boolean {
     house: hid,
     weight: 1.5,
   });
+  houseSpeaks(s, h, s.minute + 60, easeWords, 'when the word came');
+  // The lanes see it: one other house of the hamlet says what the lanes think, the next morning.
+  const others = s.households.filter((o) => o !== h && o.hamlet === h.hamlet && o.members.length);
+  const o = others[Math.floor(hashUnit(s.seed, DRAW.line, strHash(hid), s.minute) * others.length)];
+  if (o) {
+    const p = speakerOf(o, (id) => personOf(s, id));
+    if (p) {
+      const at = (dayOfMinute(s.minute) + 1) * DAY + 10 * HOUR;
+      const kind = daysOfBread(s, h) < 40 ? 2 : daysOfBread(s, o) < daysOfBread(s, h) ? 0 : 1;
+      const line = easeLaneWords(voiceCtx(s, o, p, at), p, kind);
+      note(s, {
+        at,
+        kind: 'voice',
+        text: line.replace(/:.*$/, ':'),
+        words: line.replace(/^[^“]*“|”$/g, ''),
+        house: o.id,
+        weight: 2,
+      });
+    }
+  }
   return true;
+}
+
+/** What is true for a house this season, for the person who answers the kahya (see voices.ts). */
+function voiceCtx(s: ValleyState, h: Household, p: Person, at: number): VoiceContext {
+  s.said ??= {};
+  s.said.valley ??= {};
+  const day = dayOfMinute(at);
+  const recent = (n: Note, days: number) => n.house === h.id && dayOfMinute(n.at) >= day - days && n.at <= at;
+  const birth = s.notes.findLast((n) => n.kind === 'birth' && recent(n, 40));
+  const gone = Object.values(s.departed).filter((d) => d.house === h.id && d.day >= day - 60);
+  const died = gone.findLast((d) => d.why === 'died' && d.day >= day - 40);
+  const left = gone.findLast((d) => d.why === 'left');
+  const needy = s.households
+    .filter((o) => o !== h && o.hamlet === h.hamlet && o.members.length)
+    .sort((a, b) => daysOfBread(s, a) - daysOfBread(s, b))[0];
+  return {
+    seed: s.seed,
+    minute: at,
+    said: s.said.valley ?? {},
+    bread: daysOfBread(s, h),
+    trust: p.will.voices.find((v) => v.voiceId === KAHYA)?.trust ?? 0.5,
+    ...(birth
+      ? {
+          born: `${birth.text.match(/calling (?:him|her) ([^.]+)\./)?.[1] ?? 'the baby'} (${/had a boy/.test(birth.text) ? 'boy' : 'girl'})`,
+        }
+      : {}),
+    ...(died ? { died: died.name } : {}),
+    ...(left ? { left: left.name } : {}),
+    ...(s.notes.some((n) => n.kind === 'wedding' && recent(n, 20)) ? { wed: true } : {}),
+    ...(needy && daysOfBread(s, needy) < 40 ? { needy: needy.name.replace(/^the /, 'The ') } : {}),
+  };
+}
+
+/** One named person of the house answers what the kahya just did. */
+function houseSpeaks(
+  s: ValleyState,
+  h: Household,
+  at: number,
+  words: (ctx: VoiceContext, p: Person) => string,
+  where: string,
+) {
+  const p = speakerOf(h, (id) => personOf(s, id));
+  if (!p) return;
+  const line = words(voiceCtx(s, h, p, at), p);
+  if (!line) return;
+  note(s, {
+    at,
+    kind: 'voice',
+    text: `${p.name} of ${h.name}, ${where}:`,
+    words: line,
+    who: p.id,
+    house: h.id,
+    weight: 2.5,
+  });
 }
 
 /** Walk to a house and sit with them. Returns the minute the kahya is back, or undefined if busy. */
@@ -1867,7 +2192,9 @@ export function visit(s: ValleyState, hid: string, why: Knock['what'] | 'call' =
   const arrive = s.minute + walk;
   const leave = arrive + stay;
   ks.visit = { house: hid, arrive, leave, back: leave + walk };
+  const firstTime = ks.seen[hid] === undefined;
   ks.seen[hid] = arrive;
+  houseSpeaks(s, h, arrive + 20, (ctx, p) => visitWords(ctx, p, h, firstTime), 'at the hearth');
   // What the kahya will remember of their jars: the read is as old as the visit.
   ks.guess ??= {};
   ks.guess[hid] = { at: arrive, bread: Math.round(daysOfBread(s, h)) };
