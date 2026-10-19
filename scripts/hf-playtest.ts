@@ -81,7 +81,11 @@ function judge(n: Note): PlayEvent {
   const t = `${n.text}${n.words ? ` “${n.words}”` : ''}`;
   const v = (() => {
     if (n.kind === 'reply')
-      return /would not/.test(n.text) ? -0.3 : /put .* off|instead|brought half/.test(n.text) ? -0.05 : 0.25;
+      return /would not|will not/.test(n.text)
+        ? -0.3
+        : /put .* off|instead|brought half/.test(n.text)
+          ? -0.05
+          : 0.25;
     if (n.kind === 'birth' || n.kind === 'wedding') return 0.35;
     if (n.kind === 'death' || n.kind === 'left') return -0.5;
     if (n.kind === 'weather' && /storm|laid|flattened/.test(n.text)) return -0.5;
@@ -111,7 +115,7 @@ function judge(n: Note): PlayEvent {
             ? [`seize:${n.house}`]
             : [`ease:${n.house}`, 'ease:']
       : n.kind === 'reply'
-        ? ['call:', 'wage:', ...(n.who ? [`press:${n.ask}:${n.who}`] : [])]
+        ? ['call:', 'wage:', ...(n.ids ?? (n.who ? [n.who] : [])).map((id) => `press:${n.ask}:${id}`)]
         : n.kind === 'knock' && /went back down the lane|sent .* away/.test(n.text)
           ? ['away:']
           : false;

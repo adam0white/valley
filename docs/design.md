@@ -89,11 +89,14 @@ After iteration 1 the open hand still reached the end of its term, with the ride
 - Winter. The mill is in the first winter, with its progress seen. Give opens when any house is short.
 - The open-hand edge: Osman's word, the spring talk, a run on the granary, full houses passing the sack on, its own dismissal letter.
 - The kahya's last two acts toward a house are on its card. Roman volume numbers. An explicit early-ending letter. Text fixes.
-Replay still matches (seed 1, fingerprint 1620ea64). The tests run with a 120 s timeout because this machine has run at a load average up to 121 with other agents' builds; HEAD timed the same under that load.
+- Put-offs of one ask on one day are one line too, with a hold-to-press button for each name. Someone who puts it off in the morning and comes by noon is simply in the day's "came" line. Someone who came and then put it off gets their own line.
+- The game-design reviewer (Opus, read-only, after round 2) found the biggest first-five-minutes problem: the granary cannot move for 18 days, until the threshing, and the main line said "nowhere near his due" all that time. Two players in two rounds quit there. During the harvest the main line now describes the field: how much of his barley is cut, "Get it cut before the rain" before the first call, and when the sheaves reach the granary. The first harvest evening's tally heads the day. The giveaway word now sums a ten-day gift ledger kept in state, no longer the note text. Houses the open hand fed say so at the end ("The agha lost some barley and we kept our children").
+Replay still matches (seed 1, fingerprint 316dd7c1). The tests run with a 120 s timeout because this machine has run at a load average up to 121 with other agents' builds; HEAD timed the same under that load.
 
 ## Deferred (targets)
 - The sim in a Web Worker: only if a phone measure shows stutter; decide by 2026-10-22.
-- Put-off replies grouped per ask and day, with a Press for each name (assents and pressed refusals are grouped already): polish round 3 (2026-10-21).
+- The forecast's lever: Osman's forecast should come while barley still stands and offer something besides the loan (an early sack from houses with full jars, which they can refuse or resent). The reviewer called the loan alone a debt trap: round 3 (2026-10-21).
+- A winter decision stream: disputes or debts between two houses, drawn from HF ties, brought to the kahya as two-option knocks: version 1.1 (2026-10-23).
 - A shorter notebook on phones (the last few entries and one history button, the commuter's ask in both rounds): polish round 3 (2026-10-21).
 - The Valley's HF playtester adapter: a press sent at night should be answered by the next morning's reply, and the grouped pressed line should not count as an answer. Fix in `scripts/hf-playtest.ts` by 2026-10-21.
 - A one-line first goal on the map screen for a new kahya: polish round 3 (2026-10-21).

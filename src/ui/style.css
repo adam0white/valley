@@ -337,6 +337,15 @@ button:disabled {
   position: relative;
   overflow: hidden;
 }
+.note .presses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.note .presses button {
+  margin-top: 0;
+}
 .more {
   background: none;
   border: none;

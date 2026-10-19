@@ -346,6 +346,15 @@ const WARM_VISITED = [
   'You sat on our step and asked about the goats. Nobody from the konak ever asked about the goats.',
   'The children still call the stool by the door the kahya’s stool.',
 ];
+/** For a house the open hand fed. */
+const OPEN_HAND = [
+  'The agha lost some barley and we kept our children. I know which I would choose.',
+  'Your sack came up our lane the winter it mattered. The agha can count it if he likes.',
+  'They say you gave his grain away. They say it as if it were a bad thing.',
+  'You were a poor kahya and a good neighbour. I would rather have the second.',
+  'The rider wrote you down as short. We wrote you down as the one who came with a sack.',
+  'Nobody in this house went to bed hungry while you held the key. Put that in the agha’s book.',
+];
 /** For a house that hardly knew you. */
 const STRANGER = [
   'We hardly saw you. The crier did your asking.',
@@ -424,6 +433,13 @@ function readGathering(g: Game): { elders: ElderWord[]; letter: string } {
       words = `I remember ${worst.summary.replace(/^the kahya/, 'when the last kahya')}. It was the same seal.`;
     else if (worst && (trust < 0.35 || !best))
       words = `I remember ${asYou(worst.summary)}. I won’t pretend I don’t.`;
+    else if (
+      (s.stats.given ?? 0) >= 40 &&
+      trust > 0.45 &&
+      (s.kahyaState.acts?.[h.id] ?? []).some((x) => /gave/.test(x.what))
+    )
+      // The open hand's own reward: the houses it fed say so.
+      words = pickLine(OPEN_HAND, h.id, used);
     else if (best && trust > 0.5) words = `I remember ${asYou(best.summary)}. Write that in your book.`;
     else if (!visited && eps.length < 2 && trust >= 0.3) words = pickLine(STRANGER, h.id, used);
     else

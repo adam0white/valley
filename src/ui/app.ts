@@ -950,6 +950,30 @@ function notebook(s: ValleyState): string {
 
 function noteLine(s: ValleyState, n: Note): string {
   let extra = '';
+  // A grouped put-off line: a Press for each person in it who can still be pressed.
+  if (n.ids && n.group?.startsWith('off-') && n.ask && s.flags.verbs.includes('insist')) {
+    const a = s.asks.find((x) => x.id === n.ask);
+    if (a && !a.closed && a.until > s.minute) {
+      const can = n.ids.filter(
+        (id) => !pressShown.has(id) && !a.insisted.includes(id) && a.replies[id]?.verdict === 'deferred',
+      );
+      extra = can
+        .map((id, i) => {
+          pressShown.add(id);
+          return btn(
+            `Press ${personOf(s, id)?.name ?? 'them'}`,
+            () => order({ verb: 'insist', ask: a.id, pid: id }),
+            {
+              hold: true,
+              cls: 'press',
+              ...(i === 0 ? { hint: 'hold: they come, and remember being pushed' } : {}),
+            },
+          );
+        })
+        .join('');
+      if (extra) extra = `<div class="presses">${extra}</div>`;
+    }
+  }
   if (n.kind === 'reply' && n.ask && n.who && s.flags.verbs.includes('insist') && !pressShown.has(n.who)) {
     const a = s.asks.find((x) => x.id === n.ask);
     const r = a?.replies[n.who];
@@ -970,7 +994,7 @@ function noteLine(s: ValleyState, n: Note): string {
       );
     }
   }
-  return `<div class="note${n.weight >= 2.5 ? ' heavy' : ''}"><span class="t">${esc(partOfDay(n.at))}</span>${esc(n.text)}${n.words && !n.text.includes(n.words) ? `<span class="w">“${esc(n.words)}”</span>` : ''}${extra}</div>`;
+  return `<div class="note${n.weight >= 2.5 ? ' heavy' : ''}"><span class="t">${esc(partOfDay(n.at))}</span>${esc(n.text)}${n.words && !n.text.toLowerCase().includes(n.words.toLowerCase()) ? `<span class="w">“${esc(n.words)}”</span>` : ''}${extra}</div>`;
 }
 
 const BREAD: [number, string][] = [
@@ -1196,6 +1220,26 @@ function dueWords(s: ValleyState): string {
   if (days > 120)
     return `The rider comes again on ${dateWords(nextRiderDay(s))}. The granary rests till the harvest.`;
   const r = s.agha.granary / Math.max(1, s.agha.due);
+  const when0 = days === 1 ? 'The rider comes tomorrow.' : `The rider comes in ${days} days.`;
+  // In the harvest the granary cannot move before the threshing: say what the field is doing instead.
+  const inField = s.agha.standing + s.agha.reaped;
+  if (r < 1 && days > 0 && inField > 5 && doyOf(today) < 262) {
+    const cutShare = s.agha.reaped / inField;
+    const field =
+      s.agha.standing < 3
+        ? 'His barley is all cut and lies in sheaves.'
+        : cutShare > 0.66
+          ? 'Most of his barley is cut; some still stands.'
+          : cutShare > 0.33
+            ? 'About half his barley is cut.'
+            : cutShare > 0.05
+              ? 'A little of his barley is cut; most still stands.'
+              : 'His barley is still standing.';
+    const goal = !s.asks.length ? ' Get it cut before the rain.' : '';
+    const thresh =
+      doyOf(today) < 216 ? ' The sheaves reach the granary at the threshing, from 5 Ağustos.' : '';
+    return `${when0} ${field}${goal}${thresh}`;
+  }
   const fill =
     r >= 1
       ? 'The granary holds his due.'

@@ -178,6 +178,8 @@ export interface Note {
   /** Several people answering the same way at once share one line (absent in older saves). */
   group?: string;
   names?: string[];
+  /** For a grouped line, the people in it (same order as names). */
+  ids?: string[];
 }
 
 export interface Knock {
@@ -280,6 +282,8 @@ export interface ValleyState {
   tally?: { day: number; who: string[] };
   /** Word is out that the kahya hands out the agha's grain: until this minute, people come to the door sooner. */
   openHand?: number;
+  /** The kahya's gifts of the last ten days, for the giveaway word (absent in older saves). */
+  gifts?: { at: number; kile: number }[];
   /** What came into the granary since the last weekly word (absent in older saves). */
   inflow?: { from: number; threshed: number; shares: number };
 }
@@ -828,7 +832,7 @@ function captureReply(s: ValleyState, p: Person, offer: Affordance, record: Deci
       names.length === 1
         ? names[0]
         : names.length > 6
-          ? `${names.slice(0, 4).join(', ')} and ${COUNT[names.length - 4] ?? names.length - 4} others`
+          ? `${names.slice(0, 4).join(', ')} and ${COUNT[names.length - 4]?.toLowerCase() ?? names.length - 4} others`
           : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
     const text =
       names.length === 1
@@ -853,14 +857,30 @@ function captureReply(s: ValleyState, p: Person, offer: Affordance, record: Deci
       });
     return;
   }
-  // One line per person per ask per day: a change of mind the same day rewrites that line.
+  // One line per person per ask per day. Plain yeses and put-offs of one ask on one day share a line each (who came
+  // is the news, not twenty copies of "I'll come"); a change of mind the same day takes the person out of that shared
+  // line and gives them their own ("put it off, then came").
   const today = dayOfMinute(reply.at);
-  const mine = sameDay
-    ? s.notes.findLast(
-        (n) =>
-          n.kind === 'reply' && !n.group && n.ask === ask.id && n.who === p.id && dayOfMinute(n.at) === today,
-      )
-    : undefined;
+  let wasToday: Reply['verdict'] | undefined;
+  for (const [key, verdict] of [
+    [`came-${ask.id}-${today}`, 'assented'],
+    [`off-${ask.id}-${today}`, 'deferred'],
+  ] as const) {
+    const g = s.notes.findLast((n) => n.group === key);
+    const k = g?.ids?.indexOf(p.id) ?? -1;
+    if (!g?.ids || k < 0) continue;
+    if (verdict === reply.verdict) return;
+    // Putting it off in the morning and coming by noon is just coming.
+    if (!(verdict === 'deferred' && reply.verdict === 'assented')) wasToday = verdict;
+    g.ids.splice(k, 1);
+    g.names?.splice(k, 1);
+    if (!g.ids.length) s.notes = s.notes.filter((n) => n !== g);
+    else g.text = groupText(ask, verdict, g.names ?? []);
+  }
+  const mine = s.notes.findLast(
+    (n) =>
+      n.kind === 'reply' && !n.group && n.ask === ask.id && n.who === p.id && dayOfMinute(n.at) === today,
+  );
   if (mine) {
     const first = (mine.was ?? prev?.verdict ?? reply.verdict) as Reply['verdict'];
     mine.was = first;
@@ -872,26 +892,29 @@ function captureReply(s: ValleyState, p: Person, offer: Affordance, record: Deci
     mine.weight = Math.max(mine.weight, reply.verdict === 'refused' ? 3 : 2);
     return;
   }
-  // Plain yeses of one ask on one day share a line: who came is the news, not twenty copies of "I'll come".
-  if (reply.verdict === 'assented' && !mine) {
-    const key = `came-${ask.id}-${today}`;
+  if (wasToday) {
+    note(s, {
+      at: p.now,
+      kind: 'reply',
+      text: `${p.name} ${PAST[wasToday]?.(ask.job) ?? 'answered'}, then ${PAST[reply.verdict]?.(ask.job) ?? 'answered'}.`,
+      words,
+      who: p.id,
+      ...(h ? { house: h.id } : {}),
+      weight: reply.verdict === 'refused' ? 3 : 2,
+      ask: ask.id,
+      was: wasToday,
+    });
+    return;
+  }
+  if (reply.verdict === 'assented' || reply.verdict === 'deferred') {
+    const key = `${reply.verdict === 'assented' ? 'came' : 'off'}-${ask.id}-${today}`;
     const g = s.notes.findLast((n) => n.group === key);
     const names = [...(g?.names ?? []), p.name];
-    const list =
-      names.length === 1
-        ? names[0]
-        : names.length > 8
-          ? `${names.slice(0, 6).join(', ')} and ${COUNT[names.length - 6] ?? names.length - 6} more`
-          : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-    const head =
-      ask.job === 'reap-agha'
-        ? 'Came to the agha’s barley today'
-        : ask.job === 'build-mill'
-          ? 'Carried stone for the mill today'
-          : 'Brought their share today';
-    const text = `${head}: ${list}.`;
+    const ids = [...(g?.ids ?? []), p.id];
+    const text = groupText(ask, reply.verdict, names);
     if (g) {
       g.names = names;
+      g.ids = ids;
       g.text = text;
       g.at = Math.max(g.at, p.now);
     } else
@@ -902,23 +925,15 @@ function captureReply(s: ValleyState, p: Person, offer: Affordance, record: Deci
         words,
         who: p.id,
         ...(h ? { house: h.id } : {}),
-        weight: 1,
+        weight: reply.verdict === 'assented' ? 1 : 1.5,
         ask: ask.id,
         group: key,
         names,
+        ids,
       });
     return;
   }
-  const weight =
-    reply.verdict === 'assented'
-      ? prev
-        ? 0.5
-        : 1
-      : reply.verdict === 'refused'
-        ? 3
-        : reply.verdict === 'complied'
-          ? 2.5
-          : 2;
+  const weight = reply.verdict === 'refused' ? 3 : reply.verdict === 'complied' ? 2.5 : 2;
   note(s, {
     at: p.now,
     kind: 'reply',
@@ -944,6 +959,24 @@ const DAY_ACTIONS = new Set([
   'leave',
   'ask-kahya',
 ]);
+
+/** The shared line for one ask's plain yeses or put-offs on one day. */
+function groupText(ask: Ask, verdict: 'assented' | 'deferred', names: string[]): string {
+  const list =
+    names.length === 1
+      ? names[0]
+      : names.length > 8
+        ? `${names.slice(0, 6).join(', ')} and ${COUNT[names.length - 6]?.toLowerCase() ?? names.length - 6} more`
+        : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  if (verdict === 'deferred') return `Put ${JOB_WORDS[ask.job]} off today: ${list}.`;
+  const head =
+    ask.job === 'reap-agha'
+      ? 'Came to the agha’s barley today'
+      : ask.job === 'build-mill'
+        ? 'Carried stone for the mill today'
+        : 'Brought their share today';
+  return `${head}: ${list}.`;
+}
 
 /** A verdict as a past-tense clause, for a line that says someone changed their mind. */
 const PAST: Record<string, (job: Job) => string> = {
@@ -1631,6 +1664,10 @@ function eveningTally(s: ValleyState, day: number) {
   const cutKey = `cut-${yearOf(day)}`;
   if (s.flags.beats.includes(cutKey)) return;
   if (left < 3) s.flags.beats.push(cutKey);
+  // The first evening of a harvest is where a new kahya learns that the work counts: it heads the day.
+  const firstKey = `first-cut-${yearOf(day)}`;
+  const firstCut = !s.flags.beats.includes(firstKey);
+  if (firstCut) s.flags.beats.push(firstKey);
   const cut =
     left < 3
       ? 'The last of it is cut.'
@@ -1643,7 +1680,7 @@ function eveningTally(s: ValleyState, day: number) {
     at: day * DAY + 19 * 60,
     kind: 'work',
     text: `${who} worked the agha’s field today. ${cut}`,
-    weight: left < 3 ? 2.5 : 1.5,
+    weight: left < 3 ? 2.5 : firstCut ? 3 : 2,
   });
 }
 
@@ -2153,7 +2190,7 @@ export function give(s: ValleyState, hid: string, kile: number): number {
         weight: 1.5,
       });
     }
-    openHandWord(s);
+    openHandWord(s, needy ? amt : 0);
     return amt;
   }
   h.store += amt;
@@ -2166,7 +2203,7 @@ export function give(s: ValleyState, hid: string, kile: number): number {
     weight: 1.5,
   });
   houseSpeaks(s, h, s.minute + 40, said, 'when the sack came');
-  openHandWord(s);
+  openHandWord(s, amt);
   return amt;
 }
 
@@ -2202,13 +2239,13 @@ function actOn(s: ValleyState, hid: string, what: string) {
  * so at the granary door, the spring talks about it the next morning, and for ten days houses come to the door long
  * before they are hungry (an edge kept playable: owner direction 2026-10-19).
  */
-function openHandWord(s: ValleyState) {
+function openHandWord(s: ValleyState, amt: number) {
   const day = dayOfMinute(s.minute);
-  const recent = s.notes
-    .filter(
-      (n) => n.kind === 'gift' && dayOfMinute(n.at) >= day - 10 && !/came back up the lane/.test(n.text),
-    )
-    .reduce((a, n) => a + Number(n.text.match(/(\d+) kile/)?.[1] ?? 0), 0);
+  s.gifts = [
+    ...(s.gifts ?? []).filter((x) => x.at >= s.minute - 10 * DAY),
+    ...(amt > 0 ? [{ at: s.minute, kile: amt }] : []),
+  ];
+  const recent = s.gifts.reduce((a, x) => a + x.kile, 0);
   if (recent < 30) return;
   const key = `open-hand-${Math.floor(day / 30)}`;
   if (s.flags.beats.includes(key)) return;

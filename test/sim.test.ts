@@ -28,6 +28,23 @@ describe('the valley', () => {
     expect(fingerprint(r.valley)).toBe(fp);
   });
 
+  it('put-offs of one ask on one day share one line, and nobody is on two lines that day', () => {
+    const g = play(3);
+    const seen = new Map<string, string>();
+    for (const n of g.valley.notes.filter((n) => n.kind === 'reply' && n.ask)) {
+      if (n.group?.startsWith('off-')) {
+        expect(seen.has(n.group)).toBe(false);
+        seen.set(n.group, n.text);
+        expect(n.ids?.length).toBe(n.names?.length);
+      }
+    }
+    expect(seen.size).toBeGreaterThan(0);
+    const offIds = g.valley.notes.flatMap((n) =>
+      n.group?.startsWith('off-') ? (n.ids ?? []).map((id) => `${n.group}|${id}`) : [],
+    );
+    expect(new Set(offIds).size).toBe(offIds.length);
+  });
+
   it('a saved volume restores and carries on identically', () => {
     const g = play(6);
     const sv = save(g);
