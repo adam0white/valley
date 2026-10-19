@@ -226,6 +226,8 @@ button:disabled {
   flex-basis: 100%;
 }
 .thumbs button .h,
+.ledger button .h,
+.knock button .h,
 .card .h {
   font-family: var(--hand);
   font-size: 17px;

@@ -244,6 +244,8 @@ export interface ValleyState {
   leaving: string[];
   /** Day counters for the measure. */
   stats: { asks: number; verdicts: Record<string, number>; harvestVerdicts: Record<string, number> };
+  /** Who worked the agha's field today, for the evening tally (absent in older saves). */
+  tally?: { day: number; who: string[] };
 }
 
 // ---------- founding ----------
@@ -894,6 +896,11 @@ function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ende
       const amt = Math.min(s.agha.standing, reapAmount(s, p, hours, !!act.protest));
       s.agha.standing -= amt;
       s.agha.reaped += amt;
+      if (amt > 0) {
+        const d = dayOfMinute(act.startedAt);
+        if (s.tally?.day !== d) s.tally = { day: d, who: [] };
+        if (!s.tally.who.includes(p.id)) s.tally.who.push(p.id);
+      }
       const ask = openAsksFor(s, p.id, act.startedAt).find((a) => a.job === 'reap-agha');
       let material = 0;
       if (ask) {
@@ -1273,6 +1280,8 @@ function endOfDay(s: ValleyState, day: number) {
       weight: 3,
     });
   }
+  eveningTally(s, day);
+  granaryMilestones(s, day);
   // Eating: every house eats from its store.
   for (const h of s.households) {
     h.store = Math.max(0, h.store - h.members.length * V.ration);
@@ -1385,6 +1394,72 @@ function endOfDay(s: ValleyState, day: number) {
  * Each harvest dawn, every grown member of a house with barley standing holds "our own barley" for the day: a job
  * owed to the house, heavier the more stands and the nearer the rain. This is what a call competes with.
  */
+const COUNT = [
+  '',
+  'One',
+  'Two',
+  'Three',
+  'Four',
+  'Five',
+  'Six',
+  'Seven',
+  'Eight',
+  'Nine',
+  'Ten',
+  'Eleven',
+  'Twelve',
+];
+
+/** The evening word from the agha's field: who came, and roughly how much is cut. Approximate on purpose. */
+function eveningTally(s: ValleyState, day: number) {
+  const t = s.tally;
+  if (!t || t.day !== day || !t.who.length) return;
+  delete s.tally;
+  const n = t.who.length;
+  const who = n <= 12 ? `${COUNT[n]} ${n === 1 ? 'person' : 'people'}` : 'More than a dozen';
+  const left = s.agha.standing;
+  const cutKey = `cut-${yearOf(day)}`;
+  if (s.flags.beats.includes(cutKey)) return;
+  if (left < 3) s.flags.beats.push(cutKey);
+  const cut =
+    left < 3
+      ? 'The last of it is cut.'
+      : left < 0.25 * V.aghaField
+        ? 'Most of it is cut now.'
+        : left < 0.6 * V.aghaField
+          ? 'About half of it stands.'
+          : 'Most of it still stands.';
+  note(s, {
+    at: day * DAY + 19 * 60,
+    kind: 'work',
+    text: `${who} worked the agha’s field today. ${cut}`,
+    weight: left < 3 ? 2.5 : 1.5,
+  });
+}
+
+/** The granary passing half the due, and the whole due: the year's two good evenings at the konak. */
+function granaryMilestones(s: ValleyState, day: number) {
+  const y = yearOf(day);
+  const r = s.agha.granary / Math.max(1, s.agha.due);
+  const rider = nextRiderDay(s);
+  for (const [at, key, text] of [
+    [
+      0.5,
+      `half-${y}`,
+      'The granary is past half the agha’s due. Osman stood in the doorway and counted the sacks twice.',
+    ],
+    [
+      1,
+      `full-${y}`,
+      `The agha’s due is in the granary, with ${Math.max(0, rider - day)} days before his rider.`,
+    ],
+  ] as const) {
+    if (r < at || s.flags.beats.includes(key) || rider - day < 0) continue;
+    s.flags.beats.push(key);
+    note(s, { at: day * DAY + 18 * 60, kind: 'harvest', text, weight: at === 1 ? 3 : 2 });
+  }
+}
+
 export function ownFieldDuties(s: ValleyState, day: number) {
   const doy = doyOf(day);
   const season = seasonOf(doy);

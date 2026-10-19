@@ -518,6 +518,8 @@ function drawMap() {
   ctx.setLineDash([]);
   // Fields: standing barley as upright strokes, sheaves as stooks, a sown field as green rows.
   const season = seasonOf(doyOf(dayOfMinute(s.minute)));
+  const today = dayOfMinute(s.minute);
+  const laid = [0, 1, 2, 3, 4, 5, 6].some((k) => today - k >= 0 && weatherOf(s.seed, today - k).sky === 'storm');
   const field = (
     key: string,
     fx: number,
@@ -550,7 +552,9 @@ function drawMap() {
       const py = fy + (hash(key, 200 + k) - 0.5) * r * 1.1;
       ctx.beginPath();
       ctx.moveTo(X(px), Y(py));
-      ctx.lineTo(X(px + 1), Y(py - 7));
+      // After a storm the standing barley lies over, all one way, until it is cut.
+      if (laid) ctx.lineTo(X(px + 6), Y(py - 2));
+      else ctx.lineTo(X(px + 1), Y(py - 7));
       ctx.stroke();
     }
     const st = Math.min(12, Math.round((reaped / Math.max(1, size)) * 12));
@@ -1135,8 +1139,33 @@ function houseThumbs(s: ValleyState, hh: Household): string {
   return out.join('');
 }
 
+/** The agha's due in words, for the main screen: the exact numbers stay in his ledger. */
+function dueWords(s: ValleyState): string {
+  const days = nextRiderDay(s) - dayOfMinute(s.minute);
+  const r = s.agha.granary / Math.max(1, s.agha.due);
+  const fill =
+    r >= 1
+      ? 'The granary holds his due.'
+      : r > 0.8
+        ? 'The granary is nearly at his due.'
+        : r > 0.5
+          ? 'The granary is past half his due.'
+          : r > 0.2
+            ? 'The granary is well short of his due.'
+            : 'The granary is nowhere near his due.';
+  const when =
+    days <= 0
+      ? 'The rider is in the valley.'
+      : days === 1
+        ? 'The rider comes tomorrow.'
+        : `The rider comes in ${days} days.`;
+  return `${when} ${fill}`;
+}
+
 function valleyThumbs(s: ValleyState): string {
-  const out: string[] = [];
+  const out: string[] = [
+    `<p class="soft" style="margin:0;flex-basis:100%;font-size:15px">${esc(dueWords(s))}</p>`,
+  ];
   const job = jobInSeason(s);
   const houses = s.households.filter((h) => underSeal(s, h) && h.members.length).map((h) => h.id);
   const year = yearOf(dayOfMinute(s.minute));
@@ -1171,7 +1200,7 @@ function valleyThumbs(s: ValleyState): string {
   if (s.flags.verbs.includes('borrow') && (!s.agha.loan || s.minute - s.agha.loan.asked > 300 * DAY))
     out.push(
       btn('Write to the agha for grain', () => order({ verb: 'borrow', kile: 80 }), {
-        hint: 'owed with a quarter more',
+        hint: '80 kile in twelve days; 100 owed to him at the next rider',
       }),
     );
   out.push(
@@ -1217,10 +1246,14 @@ function ledger(s: ValleyState): string {
         { hint: volumeLabel(s, volume) },
       )}
       ${btn('Export the playtest', download, { hint: 'seed, every order you gave, and the valley' })}
-      ${btn('Close the ledger', () => {
-        writeLog();
-        bindVolume().finally(title);
-      })}
+      ${btn(
+        'Set the seal down for now',
+        () => {
+          writeLog();
+          bindVolume().finally(title);
+        },
+        { hint: 'your place is kept; back to the cover' },
+      )}
     </div>
     <p class="soft" style="font-size:14px">The term ends at the elders’ gathering, ${esc(dateWords(END_DAY))} of year three.</p>
   </div>`;
