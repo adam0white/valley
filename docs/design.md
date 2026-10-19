@@ -73,18 +73,32 @@ Measured on 2026-10-19, desktop, whole term with a plain bot steward, seed 1, ab
 
 **The edges of the office (owner direction 2026-10-19: "keep those edges a bit fun and slightly in our calculations").** Two edge stewards are measured beside the plain and idle ones (`BOT=iron|open node scripts/measure.ts <seed>`). The iron kahya seizes from every unpaid house and turns away every hungry knock. The open hand eases every house and gives 15 kile to every knock. Each edge gets its own ending. The agha raises the iron kahya's stipend, while each house that lost someone to hunger after he was hard with it says "You had the key to the granary". The open hand's letter asks where the barley went, "In the margin you write the names of the houses that ate it". Term tallies live in `stats` (notes are capped at 400).
 
-| Steward, seed 1 (2026-10-19) | Riders | Deaths (hungry) | Left | Seized / given |
+| Steward, seed 1 (after iteration 2) | Riders | Deaths (hungry) | Left | Seized / given (kile) |
 |---|---|---|---|---|
-| idle | 354 short, dismissed day 426 | 0 | 0 | 0 / 0 |
-| plain | whole, 73 short; term reached | 0 | 1 | 2 / small |
-| iron | whole y1 and y2; term reached, stipend raised | 10 (10) | 3 | many / 0 |
-| open | whole, 120 short; term reached | 0 | 1 | 0 / 45 |
+| idle | 354 and 467 short, dismissed day 426 | 0 | 0 | 0 / 0 |
+| plain | whole, 64 short; term reached; replay matches | 0 | 1 | 2 / 18 |
+| iron | whole, whole; term reached, stipend raised | 10 (10) | 3 | 15 / 0 |
+| open (gives to every knock and to the hungriest house every other day) | 79 and 34 short, dismissed day 791; Osman's giveaway word twice | 0 | 0 | 0 / 135 |
+
+After iteration 1 the open hand still reached the end of its term, with the rider whole in year one and 120 short in year two, having given 45 kile. Now it gives three times as much, pulls a run on the granary, and is dismissed. It ends with its own letter: the agha "is not a charity", and nobody died hungry. The iron seal is unchanged: paid, praised and remembered for its dead. Both edges are measured on every round (`BOT=iron|open REPLAY=0 node scripts/measure.ts 1`; the `WATCH` line counts forecasts, giveaway words, tallies and grouped press lines over the whole term).
+
+**Iteration 2 after playtest round 2 (2026-10-19).** Round 2 ([docs/playtests/2026-10-19-round2.md](playtests/2026-10-19-round2.md)) scored 5, 6, 6 and 4. The four reports agreed on three things. Lines repeated across houses. Weddings and births were mute. A shortfall could not be read or acted on, and the ledger's granary looked frozen during the harvest. What changed:
+- Voices. Visit openers fit the scene (wedding, birth, death) and the visit (a return within ten days says so). Pools are larger, and the elders' lines are larger and sex-neutral. Spouse words follow the speaker. One assent line per ask and day, and one line for the people who came when pressed and will not come again.
+- Knocks show from their own hour, not before the event. The wedding knock comes from a house under the seal. Births, weddings and deaths can be declined with regrets, and an unanswered wedding is heard.
+- The shortfall. Osman's forecast 25 days before the rider opens the loan. He gives a weekly tally of what came in. The ledger shows the agha's sheaves and standing barley. The due is recomputed at every rider, and a loan is owed at the first rider four months after it arrives.
+- Winter. The mill is in the first winter, with its progress seen. Give opens when any house is short.
+- The open-hand edge: Osman's word, the spring talk, a run on the granary, full houses passing the sack on, its own dismissal letter.
+- The kahya's last two acts toward a house are on its card. Roman volume numbers. An explicit early-ending letter. Text fixes.
+Replay still matches (seed 1, fingerprint 1620ea64). The tests run with a 120 s timeout because this machine has run at a load average up to 121 with other agents' builds; HEAD timed the same under that load.
 
 ## Deferred (targets)
 - The sim in a Web Worker: only if a phone measure shows stutter; decide by 2026-10-22.
-- Notes grouped per house per day (hunches are done): polish round 2 (2026-10-21).
+- Put-off replies grouped per ask and day, with a Press for each name (assents and pressed refusals are grouped already): polish round 3 (2026-10-21).
+- A shorter notebook on phones (the last few entries and one history button, the commuter's ask in both rounds): polish round 3 (2026-10-21).
+- The Valley's HF playtester adapter: a press sent at night should be answered by the next morning's reply, and the grouped pressed line should not count as an answer. Fix in `scripts/hf-playtest.ts` by 2026-10-21.
+- A one-line first goal on the map screen for a new kahya: polish round 3 (2026-10-21).
 - Conversation the player steers at a hearth (asking about a person, a debt, a grievance): version 1.1 (2026-10-23).
-- An edge that pays off inside the fiction for the open hand (the valley carries the shortfall itself): judge after round 2 (2026-10-21).
+- The open hand's payoff inside the fiction beyond its letter (the valley carrying part of the shortfall for a kahya it trusts): judge after the owner's first play (2026-10-26).
 - Ledger volumes to turn back to (an abandoned future kept as crossed-out ink): polish round 2 (2026-10-21).
 - The year-three levy (the agha's rider wants men): version 1.1, after the polish rounds (2026-10-23).
 - Brokering marriages and one neighbouring valley over the pass: version 2, after the owner's first play (on or after 2026-10-26).

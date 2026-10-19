@@ -175,6 +175,9 @@ export interface Note {
   ask?: string;
   /** A reply line rewritten the same day: the verdict it first said. */
   was?: string;
+  /** Several people answering the same way at once share one line (absent in older saves). */
+  group?: string;
+  names?: string[];
 }
 
 export interface Knock {
@@ -218,6 +221,8 @@ export interface KahyaState {
   seen: Record<string, number>;
   /** The kahya's read of each house's jars, as of the last visit (days of bread, world truth at that minute). */
   guess?: Record<string, { at: number; bread: number }>;
+  /** The kahya's own book of what he did to each house, last four (absent in older saves). */
+  acts?: Record<string, { day: number; what: string }[]>;
 }
 
 export interface Flags {
@@ -273,6 +278,10 @@ export interface ValleyState {
   said?: Record<string, Record<string, number>>;
   /** Who worked the agha's field today, for the evening tally (absent in older saves). */
   tally?: { day: number; who: string[] };
+  /** Word is out that the kahya hands out the agha's grain: until this minute, people come to the door sooner. */
+  openHand?: number;
+  /** What came into the granary since the last weekly word (absent in older saves). */
+  inflow?: { from: number; threshed: number; shares: number };
 }
 
 // ---------- founding ----------
@@ -342,6 +351,13 @@ function stateOf(c: Community): CommunityState {
 }
 
 /** The agha's due for the year: his own field at a good year plus the houses' shares under your seal. */
+/** A loan is owed at the first rider at least four months after it arrives (so a late loan covers this year). */
+export function loanOwedAt(s: ValleyState, riderDay: number): number {
+  const l = s.agha.loan;
+  if (!l || l.paid) return 0;
+  return l.arrives <= (riderDay - 120) * DAY ? l.owe : 0;
+}
+
 export function dueFor(s: ValleyState): number {
   const shares = s.households
     .filter((h) => (s.flags.upper || h.hamlet === 'lower') && h.members.length > 0)
@@ -350,7 +366,7 @@ export function dueFor(s: ValleyState): number {
     V.aghaField * 0.7 +
       shares +
       (s.agha.arrears ?? 0) +
-      (s.agha.loan && !s.agha.loan.paid ? s.agha.loan.owe : 0) -
+      loanOwedAt(s, nextRiderDay(s)) -
       (s.flags.beats.includes('mill-done') ? 40 : 0),
   );
 }
@@ -630,7 +646,15 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
     });
   }
   // Hunger: the door of the konak, and the agha's stooks at night.
-  if (daysOfBread(s, h) < 12 && h.members[0] === p.id && light && !knockedLately(s, h.id, p.now)) {
+  // When word is out that the kahya hands out the agha's grain, a house goes to his door long before it is hungry,
+  // and it costs less face (everyone is going); whether a person goes is still their own HF decision.
+  const open = (s.openHand ?? 0) > p.now;
+  if (
+    daysOfBread(s, h) < (open ? 70 : 12) &&
+    h.members[0] === p.id &&
+    light &&
+    !knockedLately(s, h.id, p.now)
+  ) {
     out.push({
       id: 'ask-kahya',
       action: 'ask-kahya',
@@ -638,7 +662,7 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
       placeId: 'konak',
       duration: 50,
       effort: 0.2,
-      advertises: { food: 0.2, esteem: -0.25, safety: 0.15 },
+      advertises: { food: 0.2, esteem: open ? -0.08 : -0.25, safety: 0.15 },
       tags: ['social'],
     });
   }
@@ -792,11 +816,49 @@ function captureReply(s: ValleyState, p: Person, offer: Affordance, record: Deci
   const words = replyWords(s, p, ask, reply);
   // An answer is also a look at the person: the kahya's hunch about them moves a little.
   glimpseOf(s.kahya, p, Math.max(reply.at, s.kahya.now), 0.5);
+  // People pressed into it who now will not do it on your word share one line, not one line each.
+  if (reply.verdict === 'refused' && reply.reason === 'distrust' && ask.insisted.includes(p.id)) {
+    s.notes = s.notes.filter(
+      (n) =>
+        !(n.kind === 'reply' && n.ask === ask.id && n.who === p.id && !n.group && n.at >= reply.at - DAY),
+    );
+    const g = s.notes.findLast((n) => n.group === `pressed-${ask.id}` && n.at >= reply.at - 3 * HOUR);
+    const names = [...(g?.names ?? []), p.name];
+    const list =
+      names.length === 1
+        ? names[0]
+        : names.length > 6
+          ? `${names.slice(0, 4).join(', ')} and ${COUNT[names.length - 4] ?? names.length - 4} others`
+          : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+    const text =
+      names.length === 1
+        ? `${list} came when you pressed, and will not come again on your word today.`
+        : `${list} came when you pressed. They will not come again on your word today.`;
+    if (g) {
+      g.names = names;
+      g.text = text;
+      g.weight = 3;
+    } else
+      note(s, {
+        at: p.now,
+        kind: 'reply',
+        text,
+        words,
+        who: p.id,
+        ...(h ? { house: h.id } : {}),
+        weight: 2.5,
+        ask: ask.id,
+        group: `pressed-${ask.id}`,
+        names,
+      });
+    return;
+  }
   // One line per person per ask per day: a change of mind the same day rewrites that line.
   const today = dayOfMinute(reply.at);
   const mine = sameDay
     ? s.notes.findLast(
-        (n) => n.kind === 'reply' && n.ask === ask.id && n.who === p.id && dayOfMinute(n.at) === today,
+        (n) =>
+          n.kind === 'reply' && !n.group && n.ask === ask.id && n.who === p.id && dayOfMinute(n.at) === today,
       )
     : undefined;
   if (mine) {
@@ -808,6 +870,43 @@ function captureReply(s: ValleyState, p: Person, offer: Affordance, record: Deci
         : `${p.name} ${PAST[first]?.(ask.job) ?? 'answered'}, then ${PAST[reply.verdict]?.(ask.job) ?? 'answered'}.`;
     mine.words = words;
     mine.weight = Math.max(mine.weight, reply.verdict === 'refused' ? 3 : 2);
+    return;
+  }
+  // Plain yeses of one ask on one day share a line: who came is the news, not twenty copies of "I'll come".
+  if (reply.verdict === 'assented' && !mine) {
+    const key = `came-${ask.id}-${today}`;
+    const g = s.notes.findLast((n) => n.group === key);
+    const names = [...(g?.names ?? []), p.name];
+    const list =
+      names.length === 1
+        ? names[0]
+        : names.length > 8
+          ? `${names.slice(0, 6).join(', ')} and ${COUNT[names.length - 6] ?? names.length - 6} more`
+          : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+    const head =
+      ask.job === 'reap-agha'
+        ? 'Came to the agha’s barley today'
+        : ask.job === 'build-mill'
+          ? 'Carried stone for the mill today'
+          : 'Brought their share today';
+    const text = `${head}: ${list}.`;
+    if (g) {
+      g.names = names;
+      g.text = text;
+      g.at = Math.max(g.at, p.now);
+    } else
+      note(s, {
+        at: p.now,
+        kind: 'reply',
+        text,
+        words,
+        who: p.id,
+        ...(h ? { house: h.id } : {}),
+        weight: 1,
+        ask: ask.id,
+        group: key,
+        names,
+      });
     return;
   }
   const weight =
@@ -933,6 +1032,13 @@ function replyWords(s: ValleyState, p: Person, ask: Ask, r: Reply): string {
       ]);
     return pick(['Our own barley first. Then the agha’s.', 'Who feeds mine while I cut his?']);
   }
+  if (r.reason === 'distrust' && ask.insisted.includes(p.id))
+    return pick([
+      'Once was enough, kahya.',
+      'I came when you pushed. Look what it got me.',
+      'Not on your word. Not today.',
+      'I did it your way once.',
+    ]);
   if (r.reason === 'distrust')
     return pick(['The last kahya said that too.', 'I remember what your office took.', 'No. Not for you.']);
   if (r.reason.startsWith('capacity'))
@@ -1007,6 +1113,7 @@ function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ende
       h.store -= amt;
       h.paid += amt;
       s.agha.granary += amt;
+      inflow(s, 'shares', amt);
       return { ...base, material: -amt };
     }
     case 'eat': {
@@ -1371,6 +1478,8 @@ function endOfDay(s: ValleyState, day: number) {
   }
   eveningTally(s, day);
   laneLife(s, day);
+  inflowWord(s, day);
+  if (day === s.agha.dueDay - 25) forecastWord(s, day);
   hungerWord(s, day);
   lapseKnocks(s, (day + 1) * DAY);
   s.knocks = s.knocks.filter((k) => !k.answered || k.until > (day - 30) * DAY);
@@ -1417,6 +1526,7 @@ function endOfDay(s: ValleyState, day: number) {
     const t = Math.min(s.agha.reaped, 12);
     s.agha.reaped -= t;
     s.agha.granary += t;
+    inflow(s, 'threshed', t);
   }
   if (doy === 216) {
     note(s, {
@@ -1445,7 +1555,7 @@ function endOfDay(s: ValleyState, day: number) {
     s.agha.standing = V.aghaField * (0.6 + 0.5 * hashUnit(s.seed, DRAW.yield, 999, yearOf(next)));
     s.agha.due = dueFor(s);
     s.agha.dueDay = next + (259 - doy);
-    const owed = (s.agha.arrears ?? 0) + (s.agha.loan && !s.agha.loan.paid ? s.agha.loan.owe : 0);
+    const owed = (s.agha.arrears ?? 0) + loanOwedAt(s, s.agha.dueDay);
     note(s, {
       at: next * DAY + 8 * 60,
       kind: 'letter',
@@ -1538,26 +1648,40 @@ function eveningTally(s: ValleyState, day: number) {
 }
 
 /** The lanes when nothing is asked of them: in winter, and on quiet stretches, someone's evening, every few days. */
-const LANE: Record<string, string[]> = {
+const LANE: Record<string, [number, string][]> = {
   winter: [
-    '{who} of {house} has the loom up by the stove. You can hear it from the lane.',
-    'Snow on the upper lanes. The {fam} children were out on a tray until dark.',
-    'The men sat late over backgammon at the coffeehouse. {who} lost, and blamed the dice.',
-    '{who} of {house} mended a yoke by lamplight.',
-    '{who} walked to the mosque through the snow for the night prayer, as most evenings.',
-    'A wolf was heard above the {fam} fold. {who} sat up with the dog.',
-    '{who} of {house} told the old story of the flood to the children again. They knew the ending and shouted it.',
-    'Bread baked at the {fam} oven today; the smell went all down the lane.',
+    [20, '{who} of {house} has the loom up by the stove. You can hear it from the lane.'],
+    [16, 'Snow on the upper lanes. The {fam} children were out on a tray until dark.'],
+    [21, 'The men sat late over backgammon at the coffeehouse. {who} lost, and blamed the dice.'],
+    [19, '{who} of {house} mended a yoke by lamplight.'],
+    [20, '{who} walked to the mosque through the snow for the night prayer, as most evenings.'],
+    [22, 'A wolf was heard above the {fam} fold. {who} sat up with the dog.'],
+    [
+      20,
+      '{who} of {house} told the old story of the flood to the children again. They knew the ending and shouted it.',
+    ],
+    [11, 'Bread baked at the {fam} oven today; the smell went all down the lane.'],
+    [14, '{who} of {house} went up for firewood and came back with a hare as well.'],
   ],
-  quiet: [
-    '{who} of {house} is turning the garden behind the house.',
-    '{who} of {house} took the goats up to the high grass.',
-    'Washing day at the spring. {who} of {house} brought the news, as usual.',
-    'The {fam} roof is being re-mudded before the rains. {who} is on it, shouting down.',
+  spring: [
+    [10, '{who} of {house} is turning the garden behind the house.'],
+    [9, 'Washing day at the spring. {who} of {house} brought back all the news.'],
+    [7, 'The {fam} ewes are lambing. {who} has not slept properly in a week.'],
+    [12, '{who} of {house} planted beans along the wall. The hens are already after them.'],
+  ],
+  summer: [
+    [8, '{who} of {house} took the goats up to the high grass.'],
+    [13, 'Too hot to work at noon. {who} slept in the shade of the {fam} walnut.'],
+    [9, 'Washing day at the spring. {who} of {house} brought back all the news.'],
+  ],
+  autumn: [
+    [10, 'The {fam} roof is being re-mudded before the rains. {who} is on it, shouting down.'],
+    [11, '{who} of {house} is drying apricots on the roof.'],
+    [15, '{who} of {house} took a donkey of grapes down to the pekmez cauldron.'],
   ],
   lean: [
-    'At the {fam} house they have been eating thin soup since the week began.',
-    'There was no smoke from the {fam} chimney this morning. {who} says they are saving wood.',
+    [19, 'At the {fam} house they have been eating thin soup since the week began.'],
+    [8, 'There was no smoke from the {fam} chimney this morning. {who} says they are saving wood.'],
   ],
 };
 
@@ -1574,24 +1698,84 @@ function laneLife(s: ValleyState, day: number) {
     .filter((p): p is Person => !!p && p.body.alive && isAdult(p));
   const p = people[Math.floor(hashUnit(s.seed, DRAW.line, 79, day) * people.length)];
   if (!p) return;
-  const pool =
+  const key =
     daysOfBread(s, h) < 25
-      ? (LANE.lean ?? [])
+      ? 'lean'
       : season === 'winter'
-        ? (LANE.winter ?? [])
-        : (LANE.quiet ?? []);
-  const line = pool[Math.floor(hashUnit(s.seed, DRAW.line, 80, day) * pool.length)] ?? '';
+        ? 'winter'
+        : season === 'spring'
+          ? 'spring'
+          : season === 'summer' || season === 'harvest'
+            ? 'summer'
+            : 'autumn';
+  const pool = LANE[key] ?? [];
+  s.said ??= {};
+  s.said.lanes ??= {};
+  const said = s.said.lanes;
+  const start = Math.floor(hashUnit(s.seed, DRAW.line, 80, day) * pool.length);
+  for (let i = 0; i < pool.length; i++) {
+    const [hour, line] = pool[(start + i) % pool.length] ?? [0, ''];
+    if (said[line] !== undefined && day - (said[line] ?? 0) < 45) continue;
+    said[line] = day;
+    note(s, {
+      at: day * DAY + hour * 60,
+      kind: 'story',
+      text: line
+        .replace('{who}', p.name)
+        .replace('{house}', h.name)
+        .replace('{fam}', h.name.replace(/^the /, '').replace(/ house$/, '')),
+      who: p.id,
+      house: h.id,
+      weight: 1,
+    });
+    return;
+  }
+}
+
+function inflow(s: ValleyState, k: 'threshed' | 'shares', kile: number) {
+  if (kile <= 0) return;
+  s.inflow ??= { from: dayOfMinute(s.minute), threshed: 0, shares: 0 };
+  s.inflow[k] += kile;
+}
+
+const about = (k: number) => (k < 15 ? 'a few sacks' : `about ${Math.round(k / 10) * 10} kile`);
+
+/** Once a week while grain is coming in, Osman says where the granary's new sacks came from. */
+function inflowWord(s: ValleyState, day: number) {
+  const f = s.inflow;
+  if (!f || day - f.from < 6 || f.threshed + f.shares < 5) return;
+  delete s.inflow;
+  const parts = [
+    f.threshed >= 5 ? `the threshing floor gave ${about(f.threshed)} of the agha’s own barley` : '',
+    f.shares >= 5 ? `the houses brought ${about(f.shares)} in shares` : '',
+  ].filter(Boolean);
   note(s, {
-    at: day * DAY + 20 * 60,
-    kind: 'story',
-    text: line
-      .replace('{who}', p.name)
-      .replace('{house}', h.name)
-      .replace('{fam}', h.name.replace(/^the /, '').replace(/ house$/, '')),
-    who: p.id,
-    house: h.id,
-    weight: 1,
+    at: day * DAY + 18 * 60,
+    kind: 'harvest',
+    text: `Osman’s tally for the week: ${parts.join(', and ')}. It is all in the granary.`,
+    who: 'osman',
+    weight: 1.5,
   });
+}
+
+/**
+ * Twenty-five days before the rider, Osman does the sums aloud: what the granary will hold if every unpaid share
+ * comes in and the agha's sheaves are threshed, against the due, and what the gap is made of. A short forecast opens
+ * the agha's loan as a lever (it costs a quarter more next year).
+ */
+function forecastWord(s: ValleyState, day: number) {
+  const unpaid = s.households
+    .filter((h) => underSeal(s, h) && h.members.length)
+    .reduce((a, h) => a + Math.max(0, Math.min(h.store, shareOwed(h) - h.paid)), 0);
+  const will = s.agha.granary + s.agha.reaped + unpaid;
+  const gap = s.agha.due - will;
+  const loan = s.agha.loan?.arrived ? loanOwedAt(s, s.agha.dueDay) : 0;
+  const text =
+    gap <= 5
+      ? `Osman did the sums on the threshing floor: with the shares still owed and the agha’s sheaves threshed, the granary will hold his due, ${gap < -40 ? 'with room to spare' : 'just'}.`
+      : `Osman did the sums on the threshing floor: with every share in and every sheaf threshed, the granary will still be ${about(gap)} short when the rider comes.${loan ? ` The loan is ${loan} of what he wants.` : ''}${s.agha.standing > 20 ? ' There is barley still standing in his field.' : ''} The agha lends, if you write: it would be owed at next year’s rider, with a quarter more.`;
+  note(s, { at: day * DAY + 17 * 60, kind: 'story', text, who: 'osman', weight: gap > 5 ? 3 : 2 });
+  if (gap > 5 && !s.flags.verbs.includes('borrow')) s.flags.verbs.push('borrow');
 }
 
 /** When a house's jars are empty, someone tells you: the reeve if he is living, else the coffeehouse talk. */
@@ -1809,15 +1993,18 @@ function weddings(s: ValleyState, day: number) {
       house: ha.id,
       weight: 2.5,
     });
-    s.knocks.push({
-      id: `k${s.nextNote}`,
-      at: t,
-      personId: a.id,
-      house: ha.id,
-      what: 'wedding',
-      words: 'You’ll come to the wedding, kahya? It would be an honour.',
-      until: t + DAY,
-    });
+    // The invitation comes from whichever house is under your seal (the groom's first).
+    const [hostP, hostH] = underSeal(s, ha) ? [a, ha] : underSeal(s, hb) ? [b, hb] : [undefined, undefined];
+    if (hostP && hostH)
+      s.knocks.push({
+        id: `k${s.nextNote}`,
+        at: t,
+        personId: hostP.id,
+        house: hostH.id,
+        what: 'wedding',
+        words: 'You’ll come to the wedding, kahya? It would be an honour.',
+        until: t + DAY,
+      });
   }
 }
 
@@ -1828,7 +2015,7 @@ function riderComes(s: ValleyState, day: number) {
   s.agha.delivered += give;
   const short = s.agha.due - give;
   const owedBefore = s.agha.arrears ?? 0;
-  if (s.agha.loan?.arrived) s.agha.loan.paid = true;
+  if (s.agha.loan?.arrived && loanOwedAt(s, day) > 0) s.agha.loan.paid = true;
   s.agha.arrears = 0;
   if (short > 0.5 && short <= Math.max(8, s.agha.due * 0.05) && owedBefore === 0) {
     s.agha.arrears = Math.round(short);
@@ -1855,6 +2042,8 @@ function riderComes(s: ValleyState, day: number) {
     });
   }
   for (const a of s.asks) if (a.job === 'bring-share') a.closed = true;
+  // Next year's due, as it stands now (the loan is paid, arrears are written): the ledger never shows a stale due.
+  s.agha.due = dueFor(s);
 }
 
 // ---------- verbs (applied by the game at the input's minute) ----------
@@ -1912,6 +2101,8 @@ export function insist(s: ValleyState, askId: string, pid: string): boolean {
   const ask = s.asks.find((a) => a.id === askId);
   if (!ask || ask.closed || ask.insisted.includes(pid)) return false;
   ask.insisted.push(pid);
+  const ph = houseOfPerson(s, pid);
+  if (ph) actOn(s, ph.id, `pressed ${personOf(s, pid)?.name ?? 'them'}`);
   promote(s, pid);
   const p = personOf(s, pid);
   if (p) communityOf(s).interrupts[pid] = { at: Math.max(s.minute, p.now), reason: 'the kahya insisted' };
@@ -1924,9 +2115,62 @@ export function give(s: ValleyState, hid: string, kile: number): number {
   if (!h) return 0;
   const amt = Math.min(kile, s.agha.granary);
   if (amt <= 0) return 0;
+  const before = daysOfBread(s, h);
+  const knocked = s.knocks.some(
+    (k) => !k.answered && k.house === hid && k.what === 'grain' && k.at <= s.minute,
+  );
   s.agha.granary -= amt;
-  h.store += amt;
   s.stats.given = (s.stats.given ?? 0) + amt;
+  for (const k of s.knocks) if (!k.answered && k.house === hid && k.what === 'grain') k.answered = 'gave';
+  actOn(s, hid, 'gave');
+  const said = (ctx: VoiceContext, p: Person) =>
+    giftWords({ ...ctx, bread: knocked ? Math.min(before, 20) : before }, p);
+  // A house with full jars does not keep the agha's grain: it carries it on to the hungriest house of its hamlet
+  // that evening, or, if nobody is short, sends it back up the lane.
+  if (before >= 150 && !knocked) {
+    const needy = s.households
+      .filter((o) => o !== h && o.hamlet === h.hamlet && o.members.length && daysOfBread(s, o) < 60)
+      .sort((x, y) => daysOfBread(s, x) - daysOfBread(s, y))[0];
+    houseSpeaks(s, h, s.minute + 40, said, 'when the sack came');
+    if (needy) {
+      needy.store += amt;
+      thank(s, needy, amt, `the kahya’s grain came to us by way of ${h.name}`);
+      note(s, {
+        at: s.minute,
+        kind: 'gift',
+        text: `You had ${Math.round(amt)} kile carried to ${h.name}. They carried it on to ${needy.name} before dark.`,
+        house: hid,
+        weight: 2,
+      });
+    } else {
+      s.agha.granary += amt;
+      s.stats.given -= amt;
+      note(s, {
+        at: s.minute,
+        kind: 'gift',
+        text: `You had ${Math.round(amt)} kile carried to ${h.name}. The sack came back up the lane before dark.`,
+        house: hid,
+        weight: 1.5,
+      });
+    }
+    openHandWord(s);
+    return amt;
+  }
+  h.store += amt;
+  thank(s, h, amt, `the kahya gave us ${Math.round(amt)} kile from the agha’s granary`);
+  note(s, {
+    at: s.minute,
+    kind: 'gift',
+    text: `You had ${Math.round(amt)} kile carried to ${h.name}.`,
+    house: hid,
+    weight: 1.5,
+  });
+  houseSpeaks(s, h, s.minute + 40, said, 'when the sack came');
+  openHandWord(s);
+  return amt;
+}
+
+function thank(s: ValleyState, h: Household, amt: number, summary: string) {
   for (const m of h.members) {
     const p = personOf(s, m);
     if (!p || !isAdult(p)) continue;
@@ -1937,21 +2181,52 @@ export function give(s: ValleyState, hid: string, kile: number): number {
       kind: 'gift',
       actorId: KAHYA,
       targetId: m,
-      valence: 0.5,
+      valence: amt >= 3 ? 0.5 : 0.3,
       salience: 0.7,
-      summary: `the kahya gave us ${Math.round(amt)} kile from the agha’s granary`,
+      summary,
     });
   }
-  for (const k of s.knocks) if (!k.answered && k.house === hid && k.what === 'grain') k.answered = 'gave';
+}
+
+/** What the kahya did to a house, kept in his own book (the house card shows the last of it). */
+function actOn(s: ValleyState, hid: string, what: string) {
+  const ks = s.kahyaState;
+  ks.acts ??= {};
+  const list = ks.acts[hid] ?? [];
+  list.push({ day: dayOfMinute(s.minute), what });
+  ks.acts[hid] = list.slice(-4);
+}
+
+/**
+ * A giveaway is noticed: when thirty kile or more of the agha's grain went down the lanes in ten days, Osman says
+ * so at the granary door, the spring talks about it the next morning, and for ten days houses come to the door long
+ * before they are hungry (an edge kept playable: owner direction 2026-10-19).
+ */
+function openHandWord(s: ValleyState) {
+  const day = dayOfMinute(s.minute);
+  const recent = s.notes
+    .filter(
+      (n) => n.kind === 'gift' && dayOfMinute(n.at) >= day - 10 && !/came back up the lane/.test(n.text),
+    )
+    .reduce((a, n) => a + Number(n.text.match(/(\d+) kile/)?.[1] ?? 0), 0);
+  if (recent < 30) return;
+  const key = `open-hand-${Math.floor(day / 30)}`;
+  if (s.flags.beats.includes(key)) return;
+  s.flags.beats.push(key);
+  s.openHand = s.minute + 10 * DAY;
   note(s, {
-    at: s.minute,
-    kind: 'gift',
-    text: `You had ${Math.round(amt)} kile carried to ${h.name}.`,
-    house: hid,
-    weight: 1.5,
+    at: s.minute + 30,
+    kind: 'story',
+    text: `Osman, at the granary door: “That’s ${about(recent)} gone down the lanes since ${dateWords(day - 10)}, kahya. I’m only counting. The rider will count too.”`,
+    who: 'osman',
+    weight: 2.5,
   });
-  houseSpeaks(s, h, s.minute + 40, giftWords, 'when the sack came');
-  return amt;
+  note(s, {
+    at: (day + 1) * DAY + 9 * 60,
+    kind: 'story',
+    text: 'Talk at the spring: “The kahya is handing out the agha’s barley. Go up before the rider comes and it stops.”',
+    weight: 2.5,
+  });
 }
 
 /** Write to the agha for grain: it comes in twelve days and is owed at the next rider with a quarter more. Once a year. */
@@ -1963,7 +2238,7 @@ export function borrow(s: ValleyState, kile: number): boolean {
   note(s, {
     at: s.minute,
     kind: 'letter',
-    text: `You wrote to the agha for ${k} kile against next year’s due. The letter went down with the miller’s boy.`,
+    text: `You wrote to the agha for ${k} kile, to be paid back with a quarter more at ${loanOwedAt(s, s.agha.dueDay) ? 'this year’s rider. His due grows by that much' : 'next year’s rider, not this one'}. The letter went down with the miller’s boy.`,
     weight: 2,
   });
   return true;
@@ -1975,6 +2250,21 @@ export function turnAway(s: ValleyState, knockId: string): boolean {
   if (!k || k.answered) return false;
   k.answered = 'refused';
   const h = houseOf(s, k.house);
+  if (k.what !== 'grain') {
+    // Regrets for a wedding, a birth or a mourning: polite, and a little remembered.
+    const host = personOf(s, k.personId);
+    if (host?.body.alive) adoptVoiceTrust(host, KAHYA, 0.25, k.what === 'death' ? 0.08 : 0.03);
+    actOn(s, k.house, k.what === 'wedding' ? 'sent regrets for the wedding' : 'sent word instead of coming');
+    note(s, {
+      at: s.minute,
+      kind: 'knock',
+      text: `You sent your regrets to ${h?.name ?? 'them'}. ${k.what === 'death' ? 'They thanked the boy who brought them, and shut the door.' : 'They were disappointed, and polite about it.'}`,
+      house: k.house,
+      weight: 1,
+    });
+    return true;
+  }
+  actOn(s, k.house, 'sent them away from the door');
   for (const m of h?.members ?? []) {
     const p = personOf(s, m);
     if (!p || !isAdult(p)) continue;
@@ -2006,6 +2296,20 @@ function lapseKnocks(s: ValleyState, upTo: number) {
   for (const k of s.knocks) {
     if (k.answered || k.until > upTo) continue;
     k.answered = 'ignored';
+    if (k.what === 'wedding') {
+      // The drum was heard without you: a small slight, said once, and remembered a little.
+      const host = personOf(s, k.personId);
+      if (host?.body.alive) adoptVoiceTrust(host, KAHYA, 0.2, 0.04);
+      actOn(s, k.house, 'stayed away from the wedding');
+      note(s, {
+        at: k.until,
+        kind: 'knock',
+        text: `The drum was heard from ${houseOf(s, k.house)?.name ?? 'the lane'} all night without you.`,
+        house: k.house,
+        weight: 1,
+      });
+      continue;
+    }
     if (k.what !== 'grain') continue;
     const p = personOf(s, k.personId);
     if (p?.body.alive) {
@@ -2022,6 +2326,7 @@ function lapseKnocks(s: ValleyState, upTo: number) {
       });
     }
     if (k.what === 'grain') markHard(s, k.house);
+    actOn(s, k.house, 'left them waiting at the door');
     note(s, {
       at: k.until,
       kind: 'knock',
@@ -2043,6 +2348,7 @@ export function seize(s: ValleyState, hid: string): number {
   s.agha.granary += amt;
   s.stats.seized = (s.stats.seized ?? 0) + 1;
   markHard(s, hid);
+  actOn(s, hid, 'sent the reeve’s men for the share');
   for (const m of h.members) {
     const p = personOf(s, m);
     if (!p || !isAdult(p)) continue;
@@ -2092,6 +2398,7 @@ export function ease(s: ValleyState, hid: string): boolean {
   const h = houseOf(s, hid);
   if (!h || h.eased) return false;
   h.eased = true;
+  actOn(s, hid, 'eased their share');
   for (const m of h.members) {
     const p = personOf(s, m);
     if (!p || !isAdult(p)) continue;
@@ -2134,6 +2441,13 @@ function voiceCtx(s: ValleyState, h: Household, p: Person, at: number): VoiceCon
   const day = dayOfMinute(at);
   const recent = (n: Note, days: number) => n.house === h.id && dayOfMinute(n.at) >= day - days && n.at <= at;
   const birth = s.notes.findLast((n) => n.kind === 'birth' && recent(n, 40));
+  const wed = s.notes.findLast(
+    (n) =>
+      n.kind === 'wedding' &&
+      (n.house === h.id || n.text.includes(` of ${h.name} married`)) &&
+      dayOfMinute(n.at) >= day - 20 &&
+      n.at <= at,
+  );
   const gone = Object.values(s.departed).filter((d) => d.house === h.id && d.day >= day - 60);
   const died = gone.findLast((d) => d.why === 'died' && d.day >= day - 40);
   const left = gone.findLast((d) => d.why === 'left');
@@ -2153,7 +2467,7 @@ function voiceCtx(s: ValleyState, h: Household, p: Person, at: number): VoiceCon
       : {}),
     ...(died ? { died: died.name } : {}),
     ...(left ? { left: left.name } : {}),
-    ...(s.notes.some((n) => n.kind === 'wedding' && recent(n, 20)) ? { wed: true } : {}),
+    ...(wed ? { wed: wed.house === h.id ? ('in' as const) : ('out' as const) } : {}),
     ...(needy && daysOfBread(s, needy) < 40 ? { needy: needy.name.replace(/^the /, 'The ') } : {}),
   };
 }
@@ -2192,9 +2506,28 @@ export function visit(s: ValleyState, hid: string, why: Knock['what'] | 'call' =
   const arrive = s.minute + walk;
   const leave = arrive + stay;
   ks.visit = { house: hid, arrive, leave, back: leave + walk };
+  actOn(
+    s,
+    hid,
+    why === 'wedding'
+      ? 'came to the wedding'
+      : why === 'birth'
+        ? 'came to see the child'
+        : why === 'death'
+          ? 'sat with them in mourning'
+          : 'sat with them',
+  );
   const firstTime = ks.seen[hid] === undefined;
+  const lastSeen = ks.seen[hid];
+  const since = lastSeen === undefined ? undefined : (arrive - lastSeen) / DAY;
   ks.seen[hid] = arrive;
-  houseSpeaks(s, h, arrive + 20, (ctx, p) => visitWords(ctx, p, h, firstTime), 'at the hearth');
+  houseSpeaks(
+    s,
+    h,
+    arrive + 20,
+    (ctx, p) => visitWords(ctx, p, firstTime, why === 'grain' ? 'call' : why, since),
+    why === 'wedding' ? 'at the wedding' : 'at the hearth',
+  );
   // What the kahya will remember of their jars: the read is as old as the visit.
   ks.guess ??= {};
   ks.guess[hid] = { at: arrive, bread: Math.round(daysOfBread(s, h)) };

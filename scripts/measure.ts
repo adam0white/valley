@@ -18,8 +18,26 @@ const idle = BOT === 'idle';
 // knock while the granary lasts and eases every house.
 const iron = BOT === 'iron';
 const openHand = BOT === 'open';
+// Lines worth counting over the whole term (the notebook keeps only the last 400).
+const WATCH: [string, RegExp][] = [
+  ['forecast', /^Osman did the sums/],
+  ['open-hand', /gone down the lanes since/],
+  ['tally', /^Osman’s tally/],
+  ['mill-sight', /mill/i],
+  ['grouped-press', /came when you pressed/],
+];
+const watched: Record<string, number> = {};
+const seenNotes = new Set<number>();
+const watch = () => {
+  for (const n of s.notes) {
+    if (seenNotes.has(n.id)) continue;
+    seenNotes.add(n.id);
+    for (const [k, re] of WATCH) if (re.test(n.text)) watched[k] = (watched[k] ?? 0) + 1;
+  }
+};
 const t0 = performance.now();
 for (let d = 0; d < days && !s.flags.ended; d++) {
+  watch();
   const doy = doyOf(d);
   const season = seasonOf(doy);
   // Morning decisions at 07:30.
@@ -71,8 +89,7 @@ for (let d = 0; d < days && !s.flags.ended; d++) {
     if (
       s.agha.millOpen &&
       s.agha.mill < 600 &&
-      doy > 100 &&
-      doy < 170 &&
+      (doy >= 330 || doy < 170) &&
       !s.asks.some((a) => a.job === 'build-mill' && !a.closed && a.until > s.minute)
     ) {
       act(g, { verb: 'call', job: 'build-mill', houses: houses().slice(0, 6), wage: true });
@@ -84,7 +101,7 @@ for (let d = 0; d < days && !s.flags.ended; d++) {
     )
       act(g, { verb: 'borrow', kile: 80 });
     for (const k of s.knocks) {
-      if (k.answered || k.until < s.minute) continue;
+      if (k.answered || k.at > s.minute || k.until < s.minute) continue;
       if (k.what === 'grain')
         act(
           g,
@@ -93,6 +110,13 @@ for (let d = 0; d < days && !s.flags.ended; d++) {
             : { verb: 'turn-away', knock: k.id },
         );
       else act(g, { verb: 'visit', house: k.house, why: k.what });
+    }
+    // The open hand also walks the lanes with sacks, as the round-2 edge-pusher did: the hungriest house, every other day.
+    if (openHand && d % 2 === 0 && s.flags.verbs.includes('give') && s.agha.granary > 2) {
+      const hungriest = s.households
+        .filter((h) => underSeal(s, h) && h.members.length)
+        .sort((a, b) => daysOfBread(s, a) - daysOfBread(s, b))[0];
+      if (hungriest && daysOfBread(s, hungriest) < 60) act(g, { verb: 'give', house: hungriest.id, kile: 6 });
     }
     if (d % 9 === 3) {
       const hs = houses();
@@ -141,6 +165,8 @@ for (let d = 0; d < days && !s.flags.ended; d++) {
 const total = performance.now() - t0;
 const kinds: Record<string, number> = {};
 for (const n of s.notes) kinds[n.kind] = (kinds[n.kind] ?? 0) + 1;
+watch();
+console.log('WATCH', JSON.stringify(watched));
 console.log('\nverdicts (all asks):', s.stats.verdicts);
 const hv = s.stats.harvestVerdicts;
 const hTot = Object.values(hv).reduce((a, b) => a + b, 0);

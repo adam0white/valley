@@ -43,6 +43,7 @@ import {
   hunchOf,
   type Job,
   type Knock,
+  loanOwedAt,
   type Note,
   nextRiderDay,
   personOf,
@@ -387,7 +388,8 @@ function afterQuantum(t: number) {
     seenNote = n.id;
     if (n.weight >= 2.5 || (first && n.weight >= 2)) slowUntil = t + 3500;
   }
-  if (s.knocks.some((k) => !k.answered && k.at > s.minute - QUANTUM)) slowUntil = t + 3500;
+  if (s.knocks.some((k) => !k.answered && k.at <= s.minute && k.at > s.minute - QUANTUM))
+    slowUntil = t + 3500;
   const day = dayOfMinute(s.minute);
   if (day !== lastDay) {
     lastDay = day;
@@ -605,7 +607,7 @@ function drawMap() {
   ctx.strokeStyle = c.ink ?? '#222';
   ctx.lineWidth = 1.5;
   house(ctx, X(600), Y(545), 1.5);
-  label(ctx, 'konak', X(600) + 22, Y(545) - 10, c['ink-soft'] ?? '#666', 11);
+  label(ctx, 'konak', X(600) - 34, Y(545) + 2, c['ink-soft'] ?? '#666', 11);
   ctx.strokeRect(X(630) - 5, Y(568) - 5, 10, 10);
   if (s.agha.millOpen) {
     const done = Math.min(1, s.agha.mill / 600);
@@ -633,7 +635,9 @@ function drawMap() {
   ctx.arc(X(548), Y(520), 4, 0, Math.PI * 2);
   ctx.stroke();
   // Houses.
-  const knocking = new Set(s.knocks.filter((k) => !k.answered && k.until > s.minute).map((k) => k.house));
+  const knocking = new Set(
+    s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).map((k) => k.house),
+  );
   for (const hh of s.households) {
     const under = underSeal(s, hh);
     if (hh.hamlet === 'upper' && !s.flags.upper) continue;
@@ -840,7 +844,7 @@ function btn(
 function drawSheet(force = false) {
   if (!g) return;
   const s = g.valley;
-  const key = `${s.notes.at(-1)?.id ?? 0}|${s.knocks.filter((k) => !k.answered).length}|${selected}|${tab}|${s.asks.length}|${s.kahyaState.visit?.back ?? 0 > s.minute}|${dayOfMinute(s.minute)}|${[...openDays].join(',')}`;
+  const key = `${s.notes.at(-1)?.id ?? 0}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute).length}|${selected}|${tab}|${s.asks.length}|${s.kahyaState.visit?.back ?? 0 > s.minute}|${dayOfMinute(s.minute)}|${[...openDays].join(',')}`;
   if (!force && key === sheetKey) return;
   sheetKey = key;
   lastSheet = performance.now();
@@ -849,7 +853,9 @@ function drawSheet(force = false) {
   const thumbs = app.querySelector('#thumbs') as HTMLElement | null;
   if (!sheet || !thumbs) return;
   const top = sheet.scrollTop;
-  const knocks = s.knocks.filter((k) => !k.answered && k.until > s.minute).map((k) => knockCard(s, k));
+  const knocks = s.knocks
+    .filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute)
+    .map((k) => knockCard(s, k));
   const hh = selected ? houseOf(s, selected) : undefined;
   const body = hh ? houseCard(s, hh) : tab === 'ledger' ? ledger(s) : notebook(s);
   sheet.innerHTML = knocks.join('') + body;
@@ -862,6 +868,8 @@ function drawSheet(force = false) {
   if (!force) sheet.scrollTop = top;
 }
 
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
 function knockCard(s: ValleyState, k: Knock): string {
   const p = personOf(s, k.personId);
   const hh = houseOf(s, k.house);
@@ -873,7 +881,7 @@ function knockCard(s: ValleyState, k: Knock): string {
         ? `Word from ${hh?.name}: a child.`
         : k.what === 'death'
           ? `Word from ${hh?.name}: a death.`
-          : `${hh?.name} asks you to the wedding.`;
+          : `${cap(hh?.name ?? 'A house')} asks you to the wedding.`;
   const can = s.flags.verbs.includes('give') || k.what === 'grain';
   const row =
     k.what === 'grain'
@@ -891,6 +899,7 @@ function knockCard(s: ValleyState, k: Knock): string {
             () => order({ verb: 'visit', house: k.house, why: k.what }),
             { disabled: busy(s) },
           ),
+          btn('Send your regrets', () => order({ verb: 'turn-away', knock: k.id })),
         ];
   return `<div class="knock ink-in"><div>${esc(ask)}<span class="w hand" style="display:block">“${esc(k.words)}”</span></div><div class="row">${row.join('')}</div></div>`;
 }
@@ -957,11 +966,11 @@ function noteLine(s: ValleyState, n: Note): string {
       extra = btn(
         `Press ${personOf(s, who)?.name ?? 'them'}`,
         () => order({ verb: 'insist', ask: a.id, pid: who }),
-        { hold: true },
+        { hold: true, hint: 'hold: they come, and remember being pushed' },
       );
     }
   }
-  return `<div class="note${n.weight >= 2.5 ? ' heavy' : ''}"><span class="t">${esc(partOfDay(n.at))}</span>${esc(n.text)}${n.words ? `<span class="w">“${esc(n.words)}”</span>` : ''}${extra}</div>`;
+  return `<div class="note${n.weight >= 2.5 ? ' heavy' : ''}"><span class="t">${esc(partOfDay(n.at))}</span>${esc(n.text)}${n.words && !n.text.includes(n.words) ? `<span class="w">“${esc(n.words)}”</span>` : ''}${extra}</div>`;
 }
 
 const BREAD: [number, string][] = [
@@ -1045,6 +1054,26 @@ function houseCard(s: ValleyState, hh: Household): string {
     .filter((n) => n.house === hh.id || (n.who && hh.members.includes(n.who)))
     .slice(-4)
     .reverse();
+  // The kahya's own book: what he last did to this house, in his words (he knows his acts, not their feelings).
+  const acts = s.kahyaState.acts?.[hh.id] ?? [];
+  const today = dayOfMinute(s.minute);
+  const when = (d: number) =>
+    today - d < 1
+      ? 'today'
+      : today - d < 2
+        ? 'yesterday'
+        : today - d < 30
+          ? `${today - d} days ago`
+          : dateWords(d);
+  const book = acts.length
+    ? `<p class="soft" style="font-size:15px">Your book: ${esc(
+        acts
+          .slice(-2)
+          .reverse()
+          .map((a) => `you ${a.what} (${when(a.day)})`)
+          .join('; '),
+      )}.</p>`
+    : '';
   const share =
     s.flags.verbs.includes('take') && underSeal(s, hh) && hh.members.length
       ? `<p class="soft" style="font-size:15px">The agha’s book: their share is ${shareOwed(hh)} kile${hh.eased ? ' (eased)' : ''}; ${hh.paid >= shareOwed(hh) - 0.5 ? 'paid' : hh.paid > 0 ? 'part paid' : 'not yet paid'}.</p>`
@@ -1066,6 +1095,7 @@ function houseCard(s: ValleyState, hh: Household): string {
       .join('')}
     ${reeve ? `<div class="hunch reeve">${esc(reeve)}<span class="by">Osman’s guess</span></div>` : ''}
     ${share}
+    ${book}
     ${recent.map((n) => noteLine(s, n)).join('')}
   </div>`;
 }
@@ -1159,7 +1189,12 @@ function houseThumbs(s: ValleyState, hh: Household): string {
 
 /** The agha's due in words, for the main screen: the exact numbers stay in his ledger. */
 function dueWords(s: ValleyState): string {
-  const days = nextRiderDay(s) - dayOfMinute(s.minute);
+  const today = dayOfMinute(s.minute);
+  if (s.notes.some((n) => n.kind === 'due' && dayOfMinute(n.at) === today && n.at <= s.minute))
+    return 'The rider has been and gone. His book is closed for the year.';
+  const days = nextRiderDay(s) - today;
+  if (days > 120)
+    return `The rider comes again on ${dateWords(nextRiderDay(s))}. The granary rests till the harvest.`;
   const r = s.agha.granary / Math.max(1, s.agha.due);
   const fill =
     r >= 1
@@ -1253,13 +1288,15 @@ function ledger(s: ValleyState): string {
     .join('');
   const loan =
     s.agha.loan && !s.agha.loan.paid
-      ? `<tr><td>Owed for the loan</td><td class="n">${s.agha.loan.owe}</td></tr>`
+      ? `<tr><td>Owed for the loan${loanOwedAt(s, s.agha.dueDay) ? '' : ', at next year’s rider'}</td><td class="n">${s.agha.loan.owe}</td></tr>`
       : '';
   return `<div class="ledger ink-in">
     <h2 style="margin:0">The agha’s ledger</h2>
     <p class="soft" style="font-size:14px">The only numbers in the valley are his.</p>
     <table>
       <tr><td>In the granary</td><td class="n">${Math.round(s.agha.granary)} kile</td></tr>
+      ${s.agha.reaped >= 1 ? `<tr><td>Cut, in his sheaves, not yet threshed</td><td class="n">about ${Math.round(s.agha.reaped / 5) * 5 || 1}</td></tr>` : ''}
+      ${s.agha.standing >= 1 ? `<tr><td>Still standing in his field</td><td class="n">about ${Math.round(s.agha.standing / 10) * 10 || 5}</td></tr>` : ''}
       <tr><td>The due</td><td class="n">${s.agha.due} kile</td></tr>
       <tr><td>The rider comes</td><td class="n">${esc(riderWords(s))}</td></tr>
       ${s.agha.arrears ? `<tr><td>Written against this year</td><td class="n">${s.agha.arrears}</td></tr>` : ''}

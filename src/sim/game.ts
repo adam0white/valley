@@ -227,7 +227,8 @@ export function beats(g: Game) {
       weight: 3,
     });
   }
-  if (s.knocks.some((k) => k.what === 'grain') && beat(g, 'give')) {
+  const leanHouse = s.households.some((h) => underSeal(s, h) && h.members.length && daysOfBread(s, h) < 30);
+  if ((leanHouse || s.knocks.some((k) => k.what === 'grain' && k.at <= s.minute)) && beat(g, 'give')) {
     reveal(g, 'give');
     note(s, {
       at: s.minute,
@@ -247,20 +248,20 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'story',
-      text: 'Osman the reeve came by at dusk. Two houses are scraping the jars, he said, and the granary is low. The agha lends, against next year, if you write to him.',
+      text: 'Osman the reeve came by at dusk. Two houses are scraping the jars, he said, and the granary is low. The agha lends, if you write to him, and his rider takes it back with a quarter more.',
       words: 'He lends. He never forgets that he lent.',
       who: 'osman',
       weight: 2.5,
     });
   }
   if (s.knocks.some((k) => k.what !== 'grain')) reveal(g, 'attend');
-  // Year two: the millwright, then the upper hamlet.
-  if (year === 2 && doy >= 95 && beat(g, 'mill')) {
+  // The first winter: the millwright (the fields are idle and the stone slides on the snow). Year two: the upper hamlet.
+  if ((year > 1 || doy >= 330) && beat(g, 'mill')) {
     s.agha.millOpen = true;
     note(s, {
       at: s.minute,
       kind: 'letter',
-      text: 'A millwright from the city came with the agha’s letter: a mill on the stream, if the valley carries the stone. Six hundred hours of backs. When it turns, the agha will take his share in flour and ask less grain of the valley.',
+      text: 'A millwright from the city came up through the snow with the agha’s letter: a mill on the stream, if the valley carries the stone. Six hundred hours of backs, and the fields are idle till spring; stone slides on a sledge over frozen ground. When the mill turns, the agha will take his share in flour and ask forty kile less of the valley.',
       weight: 3,
     });
   }
@@ -274,6 +275,16 @@ export function beats(g: Game) {
       weight: 3,
     });
   }
+  // The mill rising, in what can be seen at the stream.
+  const MILL_SIGHTS: [number, string][] = [
+    [0.25, 'The race is dug at the stream. Osman paced it out twice and pronounced it straight.'],
+    [0.5, 'The mill walls are up to a man’s chest. Children dare each other to walk along them.'],
+    [0.75, 'The millstones came up on the sledge, two days for the pair. The whole valley went to look.'],
+  ];
+  if (s.agha.millOpen)
+    for (const [f, text] of MILL_SIGHTS)
+      if (s.agha.mill >= f * V.millHours && beat(g, `mill-${f}`))
+        note(s, { at: s.minute, kind: 'work', text, weight: 2 });
   if (s.agha.millOpen && s.agha.mill >= V.millHours && beat(g, 'mill-done')) {
     s.agha.due = dueFor(s);
     note(s, {
@@ -322,35 +333,55 @@ export function gathering(g: Game): { elders: ElderWord[]; letter: string } {
 const WARM = [
   'You asked, and mostly you listened. That is more than the last one did.',
   'Come back in the spring. Not as kahya.',
+  'You were the agha’s man, and somehow ours too. I don’t know how you managed it.',
+  'When the next one comes, I will tell him how it was done.',
+  'There was bread in this house every winter you were here. I noticed.',
+  'You never shouted. People remember a kahya who never shouted.',
+  'If you pass this way again, there is a place at our cloth.',
 ];
 /** Warm lines that only fit a kahya who came down this lane. */
 const WARM_VISITED = [
   'When you knocked, we opened. Not every kahya can say that.',
-  'My wife says you ate our bread like a neighbour. She doesn’t say that of many.',
+  'You ate our bread like a neighbour. They don’t say that of many in this house.',
+  'You sat on our step and asked about the goats. Nobody from the konak ever asked about the goats.',
+  'The children still call the stool by the door the kahya’s stool.',
 ];
 /** For a house that hardly knew you. */
 const STRANGER = [
   'We hardly saw you. The crier did your asking.',
   'You never came down our lane. I couldn’t tell you what you were like.',
   'I would know the agha’s rider in the road sooner than you.',
+  'Which one were you? Forgive me. There have been a few.',
+  'We heard your name at the mill. That is all we had of you.',
+  'If you came by, nobody told me.',
 ];
 const PLAIN = [
   'You were here {years}. We will see what the next one is like.',
   'The barley came in. That is what a kahya is for.',
   'We had no quarrel with you. Write that down, it is rare.',
   'You came when you needed something. So did the last one.',
-  'My son says you were fair. My son is young.',
+  'The young ones say you were fair. The young ones say a lot of things.',
   'You kept the agha’s book. Ours you never saw.',
+  'Nothing to complain of. Nothing to sing about either.',
+  'You did the work of the seal. I can’t say better or worse.',
+  'The rider came and went, and so did you. The valley is still here.',
+  'Ask me again in ten years. Kahyas look different from far away.',
+  'We paid, you counted. That was most of it.',
+  'You were not the worst. I’ve seen the worst.',
 ];
 const COLD = [
   'We did what you asked. Don’t ask me to say more than that.',
   'Your book will say what it says. Ours says something else.',
   'The next one will hear about you before he unpacks.',
   'I have nothing to say to the agha’s man.',
+  'You knew where our door was when the share was due.',
+  'Go well. Go soon.',
+  'We will be civil to the next one too. It costs nothing.',
+  'I said my piece at the well. I won’t say it twice.',
 ];
 
 const asYou = (summary: string) =>
-  summary.replace(/^the kahya’s /, 'when your ').replace(/^the kahya /, 'when you ');
+  summary.replace(/^(the )?kahya’s /i, 'when your ').replace(/^(the )?kahya /i, 'when you ');
 
 function pickLine(pool: string[], key: string, used: Set<string>): string {
   const start = (strHash(key) >>> 0) % pool.length;
@@ -413,15 +444,17 @@ function readGathering(g: Game): { elders: ElderWord[]; letter: string } {
   const letter =
     s.flags.ended !== 'dismissed' && s.agha.missed === 0 && seized >= 6
       ? `The agha’s letter renews your seal and raises your stipend. He has never had the shares in so cleanly, he writes. ${hungryDead ? `He does not mention the ${hungryDead === 1 ? 'one who' : `${hungryDead} who`} died hungry. The elders did.` : 'The elders were quieter about it.'}`
-      : s.flags.ended !== 'dismissed' && given >= 40
-        ? `The agha’s letter renews your seal${s.agha.missed ? ', for now' : ''}. It asks, twice, where ${Math.round(given)} kile of his barley went. In the margin you write the names of the houses that ate it.`
-        : s.flags.ended === 'dismissed'
-          ? 'The agha’s letter thanks you for your service.'
-          : s.agha.missed === 0 && meanTrust > 0.45
-            ? 'The agha’s letter renews your seal for another term, and asks how you did it.'
-            : s.agha.missed === 0
-              ? 'The agha’s letter renews your seal. It says nothing about the valley.'
-              : 'The agha’s letter renews your seal, for now. It mentions the year you were short.';
+      : s.flags.ended === 'dismissed' && given >= 40 && hungryDead === 0
+        ? `The agha’s letter thanks you for your service, and ends it. Your term was to run three harvests; it ran short. He has worked out where ${Math.round(given)} kile of his barley went, he writes, and he is not a charity. Nobody in the valley died hungry while you held the seal. He does not mention that. The elders did.`
+        : s.flags.ended !== 'dismissed' && given >= 40
+          ? `The agha’s letter renews your seal${s.agha.missed ? ', for now' : ''}. It asks, twice, where ${Math.round(given)} kile of his barley went. In the margin you write the names of the houses that ate it.`
+          : s.flags.ended === 'dismissed'
+            ? 'The agha’s letter thanks you for your service, and ends it. Your term was to run three harvests; it ran short. Another man has the seal.'
+            : s.agha.missed === 0 && meanTrust > 0.45
+              ? 'The agha’s letter renews your seal for another term, and asks how you did it.'
+              : s.agha.missed === 0
+                ? 'The agha’s letter renews your seal. It says nothing about the valley.'
+                : 'The agha’s letter renews your seal, for now. It mentions the year you were short.';
   return { elders, letter };
 }
 
@@ -484,9 +517,29 @@ export function fingerprint(s: ValleyState): string {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
-const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV'];
+const roman = (n: number): string => {
+  const parts: [number, string][] = [
+    [100, 'C'],
+    [90, 'XC'],
+    [50, 'L'],
+    [40, 'XL'],
+    [10, 'X'],
+    [9, 'IX'],
+    [5, 'V'],
+    [4, 'IV'],
+    [1, 'I'],
+  ];
+  let out = '';
+  let k = Math.max(1, Math.floor(n));
+  for (const [v, r] of parts)
+    while (k >= v) {
+      out += r;
+      k -= v;
+    }
+  return out;
+};
 export const volumeLabel = (s: ValleyState, n: number) =>
-  `Volume ${ROMAN[n] ?? n + 1}, ${dateWords(dayOfMinute(s.minute))} of year ${['one', 'two', 'three', 'four'][yearOf(dayOfMinute(s.minute)) - 1] ?? yearOf(dayOfMinute(s.minute))}`;
+  `Volume ${roman(n + 1)}, ${dateWords(dayOfMinute(s.minute))} of year ${['one', 'two', 'three', 'four'][yearOf(dayOfMinute(s.minute)) - 1] ?? yearOf(dayOfMinute(s.minute))}`;
 
 export function save(g: Game, n = 0): SavedGame {
   return {

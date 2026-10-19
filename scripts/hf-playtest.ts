@@ -31,6 +31,7 @@ interface PlayEvent {
   valence: number;
   salience: number;
   by?: string;
+  answers?: boolean | string[];
 }
 interface PlayAction {
   id: string;
@@ -89,10 +90,32 @@ function judge(n: Note): PlayEvent {
     if (n.kind === 'work') return /last of it/.test(n.text) ? 0.6 : 0.3;
     if (n.kind === 'harvest' && /granary/.test(n.text)) return /due is in/.test(n.text) ? 0.8 : 0.5;
     if (n.kind === 'gift' || n.kind === 'visit') return 0.15;
+    if (n.kind === 'voice')
+      return /nothing in the jar|scraped|remember|haven’t forgotten|hard|Take it/.test(
+        n.text + (n.words ?? ''),
+      )
+        ? -0.15
+        : 0.3;
+    if (n.kind === 'story') return 0.05;
     if (n.kind === 'seize') return -0.2;
     return 0;
   })();
-  return { kind: n.kind, summary: t, valence: v, salience: sal, by: n.who };
+  // What input this note answers (by id prefix), so an unanswered provocation is seen as unanswered.
+  const answers: string[] | boolean =
+    n.kind === 'voice'
+      ? /hearth|wedding/.test(n.text)
+        ? [`visit:${n.house}`]
+        : /sack/.test(n.text)
+          ? [`give:${n.house}`]
+          : /doorway/.test(n.text)
+            ? [`seize:${n.house}`]
+            : [`ease:${n.house}`, 'ease:']
+      : n.kind === 'reply'
+        ? ['call:', 'wage:', ...(n.who ? [`press:${n.ask}:${n.who}`] : [])]
+        : n.kind === 'knock' && /went back down the lane|sent .* away/.test(n.text)
+          ? ['away:']
+          : false;
+  return { kind: n.kind, summary: t, valence: v, salience: sal, ...(n.who ? { by: n.who } : {}), answers };
 }
 
 class ValleyAdapter {
@@ -113,7 +136,7 @@ class ValleyAdapter {
       if (n.weight >= 2.5) this.slowFor = 3.5;
     }
     this.seenNote = s.notes.filter((n) => n.at <= s.minute + QUANTUM).at(-1)?.id ?? this.seenNote;
-    const knocks = s.knocks.filter((k) => !k.answered && k.until > s.minute).length;
+    const knocks = s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length;
     const days = nextRiderDay(s) - dayOfMinute(s.minute);
     const short = 1 - Math.min(1, s.agha.granary / Math.max(1, s.agha.due));
     const d = dayOfMinute(s.minute);
@@ -123,6 +146,17 @@ class ValleyAdapter {
       events,
       features: { pressure: Math.min(1, 0.3 * knocks + (days < 20 ? short * 0.6 : 0)) },
       over: !!s.flags.ended,
+      chapter: `y${yearOf(d)} ${seasonOf(doyOf(d))}`,
+      ...(s.flags.ended
+        ? {
+            outcome:
+              s.flags.ended === 'dismissed'
+                ? ('loss' as const)
+                : s.agha.missed
+                  ? ('mixed' as const)
+                  : ('win' as const),
+          }
+        : {}),
     };
   }
   actions(): PlayAction[] {
@@ -138,7 +172,7 @@ class ValleyAdapter {
       if (yearOf(dayOfMinute(s.minute)) > 1 || job === 'build-mill')
         add(`wage:${job}`, 'call for a sheaf in eight', 'call', 0.55);
     }
-    for (const k of s.knocks.filter((k) => !k.answered && k.until > s.minute)) {
+    for (const k of s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute)) {
       if (k.what === 'grain') {
         if (s.agha.granary >= 2) add(`give:${k.house}`, `give grain to ${k.house}`, 'give', 0.65);
         add(`away:${k.id}`, `send ${k.house} away`, 'send-away', 0.25, ['confront']);

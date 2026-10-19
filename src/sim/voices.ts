@@ -40,7 +40,8 @@ export interface VoiceContext {
   /** This season in the house: a child born, someone died, a wedding, someone gone to the city. */
   born?: string;
   died?: string;
-  wed?: boolean;
+  /** A wedding this season: a bride came into the house, or a daughter went out of it. */
+  wed?: 'in' | 'out';
   left?: string;
   /** The hungriest other house in the hamlet, by name, for a full house to point at. */
   needy?: string;
@@ -105,7 +106,7 @@ const OPEN: Record<Register, { warm: Pool; wary: Pool; cold: Pool }> = {
       'Kahya. Sit, if you’re staying.',
       'We weren’t expecting you. Sit.',
       'Sit. The fire’s low, I’ll feed it.',
-      'Kahya. My husband is in the field.',
+      'Kahya. {Spouse} is in the field.',
     ],
     cold: [
       'Kahya.',
@@ -159,7 +160,7 @@ const JARS: { min: number; lines: Pool }[] = [
       'You can see for yourself. The jar is scraped.',
       'We boiled the last of the seed. God forgive us.',
       'The children have stopped asking. That’s worse.',
-      'I haven’t eaten since yesterday. Don’t tell my wife I told you.',
+      'I haven’t eaten since yesterday. Don’t tell {spouse} I told you.',
     ],
   },
 ];
@@ -179,10 +180,34 @@ const DIED = [
   'Sit with us a while. The house is too quiet without {dead}.',
   '{dead} always said the kahyas never came down this lane.',
 ];
-const WED = [
-  'The house is full of the new bride’s things. Mind the chest.',
-  'We are still sweeping up after the wedding.',
-];
+const WED = {
+  in: [
+    'The house is full of the new bride’s things. Mind the chest.',
+    'We are still sweeping up after the wedding.',
+  ],
+  out: [
+    'We gave our girl away this month. The house is quieter. Too quiet.',
+    'Her loom is still here. She’ll send for it.',
+  ],
+};
+/** Why the kahya came, when he was asked: the first thing said is about that, not about him. */
+const SCENE: Record<'wedding' | 'birth' | 'death', Pool> = {
+  wedding: [
+    'You came! Sit, eat. The drum won’t stop till morning.',
+    'The kahya at our wedding. My father will tell this for a year.',
+    'Sit with the men, kahya. Eat first, talk after.',
+  ],
+  birth: [
+    'Come in, quietly. She’s only just asleep.',
+    'You came to see the child. Sit, sit.',
+    'God is generous. Come and look.',
+  ],
+  death: [
+    'Thank you for coming. Sit with us.',
+    'You came. Sit. There’s nothing to say, I know.',
+    'Sit. The women are inside.',
+  ],
+};
 const LEFT = [
   '{gone} went to the city. Don’t ask me about it.',
   'You’ll have heard {gone} left. There is work in the city, they say.',
@@ -190,7 +215,7 @@ const LEFT = [
 
 const GOOD = [
   'We remember {deed}. We don’t forget that.',
-  'My wife still talks about how {deed}.',
+  '{Spouse} still talks about how {deed}.',
   'You did right by us when {deed}.',
 ];
 const BAD = [
@@ -204,7 +229,6 @@ const OFFICE = [
 ];
 const FIRST = [
   'No kahya has sat in this house before.',
-  'Nobody from the konak has come down here in years.',
   'You’re the first of them to come to the door without wanting something. Or are you?',
 ];
 
@@ -220,7 +244,8 @@ function pick(ctx: VoiceContext, p: Person, key: string, pool: Pool, k: number):
       return line;
     }
   }
-  return pool[start] ?? '';
+  // Every line in the pool was said this season: say nothing rather than repeat (the caller copes with '').
+  return '';
 }
 
 /** The most salient thing this person remembers the kahya doing (pure read of HF memory, no recall). */
@@ -238,6 +263,12 @@ function strongestDeed(p: Person, now: number): Episode | undefined {
   return score > 0.15 ? best : undefined;
 }
 
+/** "my wife" or "my husband", as the speaker would say it. */
+function spoken(p: Person, line: string): string {
+  const sp = p.life.sex === 'female' ? 'my husband' : 'my wife';
+  return line.replace(/\{spouse\}/g, sp).replace(/\{Spouse\}/g, sp.charAt(0).toUpperCase() + sp.slice(1));
+}
+
 const band = (trust: number) => (trust > 0.6 ? 'warm' : trust < 0.35 ? 'cold' : 'wary');
 
 /** Who answers for a house: the head, unless a mother of a newborn or a mourner has more to say. */
@@ -247,15 +278,40 @@ export function speakerOf(h: Household, people: (id: string) => Person | undefin
 }
 
 /** Two or three sentences a house says when the kahya sits with them. */
-export function visitWords(ctx: VoiceContext, p: Person, h: Household, firstTime: boolean): string {
+/** A kahya who keeps coming back to the same hearth: the house notices, and so do the neighbours. */
+const AGAIN: Pool = [
+  'Again, kahya? People will talk.',
+  'You were here the other day. Did you forget something?',
+  'Back so soon. Sit, then. The kettle hasn’t cooled.',
+  'The neighbours are counting your visits, kahya. So am I.',
+  'If you come any oftener we’ll have to feed you properly.',
+  'Twice in a week. Either you like our bread or you want something.',
+];
+
+export function visitWords(
+  ctx: VoiceContext,
+  p: Person,
+  firstTime: boolean,
+  why: 'call' | 'wedding' | 'birth' | 'death' = 'call',
+  /** Days since the kahya last sat in this house, if he has. */
+  since?: number,
+): string {
   const r = registerOf(p);
-  const parts: string[] = [pick(ctx, p, 'open', OPEN[r][band(ctx.trust)], 0)];
+  const opener =
+    why !== 'call'
+      ? SCENE[why]
+      : since !== undefined && since < 10
+        ? AGAIN
+        : firstTime
+          ? OPEN[r][band(ctx.trust)]
+          : OPEN[r][band(ctx.trust)].filter((l) => !/expecting|didn’t know you were coming/.test(l));
+  const parts: string[] = [pick(ctx, p, `open-${why}`, opener, 0) || 'Kahya.'];
   if (ctx.died) parts.push(pick(ctx, p, 'died', DIED, 1).replace('{dead}', ctx.died));
   else if (ctx.born) {
     const boy = /\bboy\b/.test(ctx.born);
     const name = ctx.born.replace(/ \((boy|girl)\)$/, '');
     parts.push(pick(ctx, p, 'born', boy ? BORN_BOY : BORN, 1).replace('{child}', name));
-  } else if (ctx.wed) parts.push(pick(ctx, p, 'wed', WED, 1));
+  } else if (ctx.wed) parts.push(pick(ctx, p, 'wed', WED[ctx.wed], 1));
   else if (ctx.left) parts.push(pick(ctx, p, 'left', LEFT, 1).replace('{gone}', ctx.left));
   const jars = JARS.find((j) => ctx.bread >= j.min) ?? JARS[3];
   if (jars && !ctx.died) parts.push(pick(ctx, p, `jars${jars.min}`, jars.lines, 2));
@@ -269,7 +325,7 @@ export function visitWords(ctx: VoiceContext, p: Person, h: Household, firstTime
     );
   else if (deed && deed.at < 0) parts.push(pick(ctx, p, 'office', OFFICE, 3));
   else if (firstTime) parts.push(pick(ctx, p, 'first', FIRST, 3));
-  return parts.slice(0, 3).join(' ');
+  return spoken(p, parts.filter(Boolean).slice(0, 3).join(' '));
 }
 
 const GIFT: Record<string, Pool> = {
@@ -381,7 +437,7 @@ export const ASSENT: Record<Register, { reap: Pool; share: Pool; carry: Pool; pa
     paid: ['Paid, even. Is the agha unwell?', 'A sheaf in eight. The world is turning.'],
   },
   plain: {
-    reap: ['I’ll come.', 'We’ll be there.', 'After the dew. I’ll come.'],
+    reap: ['I’ll come.', 'We’ll be there.', 'I’ll bring my own sickle.'],
     share: ['Here it is. Write it down.', 'There. We owe nothing.'],
     carry: ['I’ll carry.', 'A mill would be good.'],
     paid: ['For a sheaf, I’ll come.', 'That’s fair. We’ll be there.'],
