@@ -434,3 +434,20 @@ button:disabled {
     grid-row: 3;
   }
 }
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.sr button:focus {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  clip-path: none;
+  width: auto;
+  height: auto;
+}

@@ -311,7 +311,7 @@ function enter() {
   seenNote = Math.max(seenNote, (g.valley.notes.at(-1)?.id ?? 0) - 6);
   app.innerHTML = `<div class="play">
     <div class="top">${mark()}<span class="grow"></span><span class="speed" id="speed"></span></div>
-    <div class="map"><canvas id="map"></canvas><div class="caption" id="cap"></div></div>
+    <div class="map"><canvas id="map" aria-label="The valley map: tap a house"></canvas><div class="caption" id="cap"></div><nav class="sr" id="houses" aria-label="The houses"></nav></div>
     <div class="sheet" id="sheet"></div>
     <div class="thumbs" id="thumbs"></div>
   </div>`;
@@ -326,6 +326,10 @@ function enter() {
   });
   app.querySelector('#sheet')?.addEventListener('click', onSheetClick);
   app.querySelector('#thumbs')?.addEventListener('click', onSheetClick);
+  app.querySelector('#houses')?.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-h]');
+    if (b?.dataset.h) pick(b.dataset.h);
+  });
   drawTop();
   drawSheet(true);
   last = performance.now();
@@ -783,10 +787,26 @@ function tapMap(cv: HTMLCanvasElement, e: MouseEvent) {
       best = hh;
     }
   }
-  selected = best && selected !== best.id ? best.id : null;
+  pick(best?.id ?? null);
+}
+
+/** Select a house (or none): the map tap and the accessible house list both land here. */
+function pick(id: string | null) {
+  selected = id && selected !== id ? id : null;
   hunchCache = null;
   drawSheet(true);
   drawMap();
+}
+
+/** The houses as buttons for screen readers and keyboards, kept in step with the map. */
+function drawHouses(s: ValleyState) {
+  const nav = app.querySelector('#houses');
+  if (!nav) return;
+  const list = s.households.filter((h) => h.hamlet === 'lower' || s.flags.upper);
+  const key = list.map((h) => h.id).join(',');
+  if (nav.getAttribute('data-key') === key) return;
+  nav.setAttribute('data-key', key);
+  nav.innerHTML = list.map((h) => `<button data-h="${h.id}">${esc(h.name)}</button>`).join('');
 }
 
 // ---------- the sheet: knocks, the house card, the notebook, the ledger ----------
@@ -824,6 +844,7 @@ function drawSheet(force = false) {
   const hh = selected ? houseOf(s, selected) : undefined;
   const body = hh ? houseCard(s, hh) : tab === 'ledger' ? ledger(s) : notebook(s);
   sheet.innerHTML = knocks.join('') + body;
+  drawHouses(s);
   thumbs.innerHTML = hh ? houseThumbs(s, hh) : valleyThumbs(s);
   for (const b of app.querySelectorAll<HTMLButtonElement>('button.hold[data-k]')) {
     const fn = actions[Number(b.dataset.k)];
