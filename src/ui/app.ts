@@ -592,7 +592,7 @@ function drawMap() {
   ctx.strokeStyle = c.ink ?? '#222';
   ctx.lineWidth = 1.5;
   house(ctx, X(600), Y(545), 1.5);
-  label(ctx, 'konak', X(600), Y(545) + 16, c['ink-soft'] ?? '#666', 11);
+  label(ctx, 'konak', X(600) + 22, Y(545) - 10, c['ink-soft'] ?? '#666', 11);
   ctx.strokeRect(X(630) - 5, Y(568) - 5, 10, 10);
   if (s.agha.millOpen) {
     const done = Math.min(1, s.agha.mill / 600);

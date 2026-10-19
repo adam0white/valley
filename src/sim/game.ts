@@ -313,12 +313,21 @@ export function gathering(g: Game): { elders: ElderWord[]; letter: string } {
 
 const WARM = [
   'You asked, and mostly you listened. That is more than the last one did.',
-  'When you knocked, we opened. Not every kahya can say that.',
   'Come back in the spring. Not as kahya.',
+];
+/** Warm lines that only fit a kahya who came down this lane. */
+const WARM_VISITED = [
+  'When you knocked, we opened. Not every kahya can say that.',
   'My wife says you ate our bread like a neighbour. She doesn’t say that of many.',
 ];
+/** For a house that hardly knew you. */
+const STRANGER = [
+  'We hardly saw you. The crier did your asking.',
+  'You never came down our lane. I couldn’t tell you what you were like.',
+  'I would know the agha’s rider in the road sooner than you.',
+];
 const PLAIN = [
-  'You were here three years. We will see what the next one is like.',
+  'You were here {years}. We will see what the next one is like.',
   'The barley came in. That is what a kahya is for.',
   'We had no quarrel with you. Write that down, it is rare.',
   'You came when you needed something. So did the last one.',
@@ -351,6 +360,8 @@ function readGathering(g: Game): { elders: ElderWord[]; letter: string } {
   const s = g.valley;
   const elders: ElderWord[] = [];
   const used = new Set<string>();
+  const served = Math.max(1, yearOf(dayOfMinute(s.minute)));
+  const years = ['one year', 'two years', 'three years'][Math.min(2, served - 1)] ?? 'three years';
   for (const h of s.households) {
     if (!underSeal(s, h)) continue;
     const head = h.members.map((m) => personOf(s, m)).find((p): p is Person => !!p && p.body.alive);
@@ -359,11 +370,21 @@ function readGathering(g: Game): { elders: ElderWord[]; letter: string } {
     const eps = recall(head, { actorId: KAHYA, limit: 6 });
     const worst = eps.filter((e) => e.valence < -0.2).sort((a, b) => a.valence - b.valence)[0];
     const best = eps.filter((e) => e.valence > 0.2).sort((a, b) => b.valence - a.valence)[0];
+    const visited = s.kahyaState.seen[h.id] !== undefined;
     let words: string;
-    if (worst && (trust < 0.35 || !best))
+    if (worst && worst.at < 0 && (trust < 0.35 || !best))
+      // A memory from before your term: the office, not you.
+      words = `I remember ${worst.summary.replace(/^the kahya/, 'when the last kahya')}. It was the same seal.`;
+    else if (worst && (trust < 0.35 || !best))
       words = `I remember ${asYou(worst.summary)}. I won’t pretend I don’t.`;
     else if (best && trust > 0.5) words = `I remember ${asYou(best.summary)}. Write that in your book.`;
-    else words = pickLine(trust > 0.55 ? WARM : trust < 0.3 ? COLD : PLAIN, h.id, used);
+    else if (!visited && eps.length < 2 && trust >= 0.3) words = pickLine(STRANGER, h.id, used);
+    else
+      words = pickLine(
+        trust > 0.55 ? (visited ? [...WARM_VISITED, ...WARM] : WARM) : trust < 0.3 ? COLD : PLAIN,
+        h.id,
+        used,
+      ).replace('{years}', years);
     elders.push({ id: head.id, name: head.name, house: h.name, words });
   }
   const meanTrust =
