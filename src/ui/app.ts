@@ -519,7 +519,9 @@ function drawMap() {
   // Fields: standing barley as upright strokes, sheaves as stooks, a sown field as green rows.
   const season = seasonOf(doyOf(dayOfMinute(s.minute)));
   const today = dayOfMinute(s.minute);
-  const laid = [0, 1, 2, 3, 4, 5, 6].some((k) => today - k >= 0 && weatherOf(s.seed, today - k).sky === 'storm');
+  const laid = [0, 1, 2, 3, 4, 5, 6].some(
+    (k) => today - k >= 0 && weatherOf(s.seed, today - k).sky === 'storm',
+  );
   const field = (
     key: string,
     fx: number,
