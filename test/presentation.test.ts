@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAY, START_DOY, YEAR_DAYS } from '../src/sim/calendar.ts';
+import { DAY, monthEnglish, START_DOY, YEAR_DAYS } from '../src/sim/calendar.ts';
 import { compactRun, fingerprint, newGame, save, volumeLabel } from '../src/sim/game.ts';
 import { call, shareOwed } from '../src/sim/valley.ts';
 import {
@@ -24,6 +24,38 @@ const atDoy = (doy: number) => {
 };
 
 describe('owner-facing presentation', () => {
+  it('keeps English month boundaries across game years without changing state', () => {
+    const months = [
+      ['January', 31],
+      ['February', 28],
+      ['March', 31],
+      ['April', 30],
+      ['May', 31],
+      ['June', 30],
+      ['July', 31],
+      ['August', 31],
+      ['September', 30],
+      ['October', 31],
+      ['November', 30],
+      ['December', 31],
+    ] as const;
+    const g = newGame(7);
+    let doy = 0;
+    for (const [name, length] of months) {
+      for (const year of [1, 2, 3]) {
+        for (const date of [1, length]) {
+          const day = year * YEAR_DAYS + doy + date - 1 - START_DOY;
+          g.valley.minute = day * DAY;
+          const before = fingerprint(g.valley);
+          expect(monthEnglish(day)).toBe(name);
+          expect(dateEnglish(day)).toBe(`${date} ${name}`);
+          expect(fingerprint(g.valley)).toBe(before);
+        }
+      }
+      doy += length;
+    }
+  });
+
   it('translates calendar and essential terms while keeping names and greetings', () => {
     expect(englishText('Osman: “Selam, kahya. 5 Ağustos; agha’s konak; 6 kile.”')).toBe(
       'Osman: “Selam, steward. 5 August; landowner’s residence; 6 grain measures.”',

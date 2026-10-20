@@ -30,7 +30,8 @@ describe('notebook run exports', () => {
   it('keeps the owner’s day-12 run below 5 KB and replays to its recorded fingerprint', () => {
     const g = replay(406153184, ownerInputs, 17550);
     expect(fingerprint(g.valley)).toBe('e6948b88');
-    const run = compactRun(g);
+    const run = compactRun(save(g));
+    expect(run).toEqual(compactRun(g));
     expect(Buffer.byteLength(JSON.stringify(run))).toBeLessThan(5_000);
     expect(run).not.toHaveProperty('state');
     expect(run).not.toHaveProperty('savedAt');
@@ -57,6 +58,22 @@ describe('notebook run exports', () => {
     expect(fingerprint(load(JSON.parse(JSON.stringify(full))).valley)).toBe(full.fingerprint);
     g.inputs.push({ verb: 'visit', house: 'dere', at: 0 });
     expect(run.inputs).toEqual([]);
+  });
+
+  it('compacts the captured export without reading a later game or changing the download', () => {
+    const g = replay(7, [], 0);
+    const full = save(g, 2);
+    const json = JSON.stringify(full);
+    g.inputs.push({ verb: 'visit', house: 'dere', at: 0 });
+    const compact = compactRun(full);
+    expect(compact).not.toHaveProperty('state');
+    expect(compact).not.toHaveProperty('savedAt');
+    expect(compact.inputs).toEqual([]);
+    expect(compact.label).toBe(full.label);
+    expect(fingerprint(load(compact).valley)).toBe(full.fingerprint);
+    expect(JSON.stringify(full)).toBe(json);
+    full.inputs.push({ verb: 'visit', house: 'dere', at: 0 });
+    expect(compact.inputs).toEqual([]);
   });
 
   it('rejects a compact run whose replay does not match its fingerprint', () => {

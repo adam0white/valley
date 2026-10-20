@@ -575,7 +575,19 @@ export function save(g: Game, n = 0): SavedGame {
   };
 }
 
-export function compactRun(g: Game, n = 0): CompactRun {
+/** Compact the dialog's captured export, rather than reading a game that may have moved on. */
+export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
+  if ('state' in g)
+    return {
+      game: g.game,
+      version: g.version,
+      framework: g.framework,
+      seed: g.seed,
+      minute: g.minute,
+      inputs: structuredClone(g.inputs),
+      fingerprint: g.fingerprint,
+      label: g.label,
+    };
   return {
     game: 'valley',
     version: GAME_VERSION,

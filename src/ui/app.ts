@@ -17,7 +17,6 @@ import {
 } from '../sim/calendar.ts';
 import {
   act,
-  compactRun,
   END_DAY,
   GAME_VERSION,
   type Game,
@@ -32,7 +31,6 @@ import {
   seedFrom,
   stateJson,
   step,
-  volumeLabel,
 } from '../sim/game.ts';
 import type { Household } from '../sim/people.ts';
 import {
@@ -109,7 +107,7 @@ const esc = (x: string) =>
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c,
   );
 const mark = () => `<a class="mark" href="${HUB}">◇ human framework</a>`;
-const footer = () => `<div class="footer"><a href="${HUB}/games/">◇ all notebooks</a></div>`;
+const footer = () => `<div class="footer"><a href="${HUB}/games/">◇ All games</a></div>`;
 const yearWord = (y: number) => ['one', 'two', 'three', 'four'][y - 1] ?? String(y);
 
 function partOfDay(m: number): string {
@@ -247,7 +245,16 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
 // ---------- the title page ----------
 
 export function start() {
-  mountLab(() => (g ? compactRun(g, volume) : undefined));
+  mountLab({
+    getRun: () => (g ? save(g, volume) : undefined),
+    hasRun: () => !!g,
+    download,
+    bindVolume: async () => {
+      if (!g) return;
+      lastSnapDay = dayOfMinute(g.valley.minute);
+      await bindVolume();
+    },
+  });
   if ('serviceWorker' in navigator && location.hostname !== 'localhost')
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   title();
@@ -985,6 +992,7 @@ const pressShown = new Set<string>();
 
 function charge(s: ValleyState): string {
   return `<article class="charge card"><h2>Your charge</h2><p class="purpose">${esc(PURPOSE)}</p>
+    <details class="office-terms"><summary>Words used in the valley</summary><dl><dt>kahya</dt><dd>steward: your office in the valley.</dd><dt>agha</dt><dd>landowner: the absent owner whose due you collect.</dd><dt>kile</dt><dd>grain measure: the unit counted in the landowner’s ledger.</dd></dl></details>
     <h3>The work ahead</h3><p>${esc(nextWords(s))}</p>
     <h3>Ask, listen, decide</h3><p>Call a household to work or bring its share. People weigh your request against their own fields and promises. They can refuse.</p>
     <p>Choose a house to read its replies and visit. Walking takes time; you can visit again when you return. A visit makes your knowledge of their jars less uncertain.</p>
@@ -1456,15 +1464,6 @@ function ledger(s: ValleyState): string {
     </table>
     ${s.flags.verbs.includes('take') ? `<h3 style="margin:8px 0 0;font-size:16px">${sharesFresh(s) ? 'Shares this year' : 'Shares brought to the last rider'}</h3><table>${rows}</table>` : ''}
     <div class="actions">
-      ${btn(
-        'Bind this volume now',
-        () => {
-          bindVolume();
-          lastSnapDay = dayOfMinute(s.minute);
-        },
-        { hint: volumeLabel(s, volume) },
-      )}
-      ${btn('Export the playtest', download, { hint: 'seed, every order you gave, and the valley' })}
       ${btn('Pause and return to the cover', pauseToCover, {
         hint: 'your place is kept; time stops until you open the ledger',
       })}
@@ -1549,14 +1548,15 @@ function ending() {
     ${elders.map((e) => `<div class="elder"><b>${esc(e.name)}</b>, ${esc(e.house)}<span class="w">“${esc(e.words)}”</span></div>`).join('')}
     <p>${esc(letter)}</p>
     <div class="actions">
-      <button data-go="export">Export the playtest</button>
       <button class="primary" data-go="title">Close the ledger</button>
     </div>
     ${footer()}
   </div>`;
-  app.querySelector('[data-go="export"]')?.addEventListener('click', download);
   app.querySelector('[data-go="title"]')?.addEventListener('click', () => {
-    clearSaves().then(title);
+    clearSaves().then(() => {
+      g = null;
+      title();
+    });
   });
 }
 

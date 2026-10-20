@@ -1,26 +1,16 @@
-import { type ChildProcess, spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { type Browser, chromium, type Page } from 'playwright-core';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { act, type Input, newGame, step } from '../src/sim/game.ts';
 import { underSeal } from '../src/sim/valley.ts';
+import { startBrowserServer } from './browser-server.ts';
 
 let server: ChildProcess;
 let browser: Browser;
-const origin = 'http://127.0.0.1:5197';
+let origin: string;
 beforeAll(async () => {
-  server = spawn(
-    process.execPath,
-    ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5197', '--strictPort'],
-    { stdio: 'pipe' },
-  );
-  for (let i = 0; i < 100; i++) {
-    if (server.exitCode !== null) throw new Error('UI test server exited');
-    try {
-      if ((await fetch(origin)).ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  ({ server, origin } = await startBrowserServer('ui-test'));
   browser = await chromium.launch();
 }, 30000);
 afterAll(async () => {
@@ -46,6 +36,51 @@ async function open(page: Page, minute = 360, seed = 406153184, inputs: Input[] 
   for (let i = 0; i < 100 && !(await page.locator('#map').count()); i++) await page.clock.runFor(50);
   await page.clock.runFor(50);
 }
+
+it('keeps run controls in a reachable Game menu and explains office terms on request', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page);
+    const menu = page.getByText('Game menu', { exact: true });
+    expect(await menu.isVisible()).toBe(true);
+    await menu.click();
+    expect(await page.getByRole('button', { name: 'Download this run', exact: true }).isVisible()).toBe(true);
+    expect(
+      await page.getByRole('button', { name: 'Send this run to the notebook', exact: true }).isVisible(),
+    ).toBe(true);
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download this run', exact: true }).click();
+    expect((await download).suggestedFilename()).toMatch(/^the-valley-.*\.json$/);
+    await page.getByRole('button', { name: 'Your charge', exact: true }).click();
+    const glossary = page.locator('.office-terms');
+    await glossary.locator('summary').click();
+    expect(await glossary.innerText()).toMatch(/kahya.*steward/s);
+    expect(await glossary.innerText()).toMatch(/agha.*landowner/s);
+    expect(await glossary.innerText()).toMatch(/kile.*grain measure/s);
+    await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
+    const box = await menu.boundingBox();
+    expect(box && box.y >= 0 && box.y + box.height <= 690).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
+it('cannot bind a finished ledger after closing it', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page);
+    await page.evaluate(`import('/src/ui/app.ts').then(({ _debug }) => _debug.skipTo(1200))`);
+    await page.clock.runFor(100);
+    await page.getByRole('button', { name: 'Close the ledger', exact: true }).click();
+    await page.getByText('Game menu', { exact: true }).click();
+    expect(await page.getByRole('button', { name: 'Bind this volume now', exact: true }).isDisabled()).toBe(
+      true,
+    );
+    expect(await page.evaluate(() => localStorage.getItem('valley-log-v1'))).toBeNull();
+  } finally {
+    await page.close();
+  }
+});
 
 it.each([
   [360, 780],

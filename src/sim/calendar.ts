@@ -2,6 +2,7 @@
  * The valley's calendar. Minute 0 is midnight before the first day of play, the 18th of Temmuz (July) in the
  * kahya's first year. Months are named as the valley names them. Weather is pre-rolled per day from the seed.
  */
+import { month } from '@adam0white/lab-kit';
 import { DRAW, hashUnit } from './rng.ts';
 
 export const DAY = 1440;
@@ -23,20 +24,6 @@ const MONTHS = [
   'Ekim',
   'Kasım',
   'Aralık',
-];
-const MONTH_EN = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
 ];
 const MONTH_LEN = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
@@ -67,7 +54,7 @@ export function dateEnglish(day: number): string {
   return `${monthDay(doyOf(day)).date} ${monthEnglish(day)}`;
 }
 export function monthEnglish(day: number): string {
-  return MONTH_EN[monthDay(doyOf(day)).month] ?? '';
+  return month(monthDay(doyOf(day)).month + 1);
 }
 export function monthName(day: number): string {
   return MONTHS[monthDay(doyOf(day)).month] ?? '';
