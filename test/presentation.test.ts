@@ -323,3 +323,19 @@ it('does not promise another loan after the term ends', () => {
   expect(limitsWords(s)).toMatch(/rest of your term/);
   expect(limitsWords(s)).not.toMatch(/year four/);
 });
+
+it('keeps harvest results, rain deadline and grain date together through calls and visits', () => {
+  const s = newGame(7).valley;
+  s.agha.reaped = 187;
+  s.agha.standing = 123;
+  call(s, 'reap-agha', ['coban']);
+  const before = fingerprint(s);
+  expect(nextWords(s)).toMatch(/about 185 cut.*120 standing/i);
+  expect(nextWords(s)).toMatch(/rain.*20 July/i);
+  expect(nextWords(s)).toMatch(/5 August.*grain|grain.*5 August/i);
+  expect(nowWords(s)).toMatch(/call.*underway|replies.*available/i);
+  s.kahyaState.visit = { house: 'coban', arrive: 30, leave: 90, back: 120 };
+  expect(nextWords(s)).toMatch(/185 cut.*120 standing/);
+  delete s.kahyaState.visit;
+  expect(fingerprint(s)).toBe(before);
+});

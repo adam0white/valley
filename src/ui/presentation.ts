@@ -105,12 +105,9 @@ export function nextWords(s: ValleyState): string {
   const unpaid = unpaidShares(s);
   if (riderHasCome(s) && (seasonOf(doy) === 'threshing' || seasonOf(doy) === 'autumn'))
     return `${rider} The households turn to sowing before winter.`;
-  const shares = s.flags.verbs.includes('take')
-    ? 'Shares can be called in during threshing.'
-    : 'Shares can be called in from 9 August.';
   switch (seasonOf(doy)) {
     case 'harvest':
-      return `Next: threshing starts on 5 August; cut sheaves become grain. ${unpaid ? shares : 'All shares are paid; keep grain for winter.'}`;
+      return `About ${Math.round(s.agha.reaped / 5) * 5} cut; ${Math.round(s.agha.standing / 10) * 10} standing. ${day < 2 ? 'Rain: 20 July. ' : day < 18 ? 'First rain: 20 July. ' : 'Cut before more rain. '}Sheaves become grain: 5 August. Due: ${dateEnglish(nextRiderDay(s))}. ${s.flags.verbs.includes('take') ? 'Shares during threshing.' : 'Shares: 9 August.'}`;
     case 'threshing':
       return doy < 220 && !s.flags.verbs.includes('take')
         ? `Cut sheaves are becoming grain. Shares can be called in from 9 August. ${rider}`
@@ -163,11 +160,11 @@ export function nowWords(s: ValleyState): string {
       ? 'Someone waits at your door for grain; answer them.'
       : 'Someone waits at your door with family news; answer them.';
   if (s.kahyaState.visit && s.kahyaState.visit.back > s.minute)
-    return 'Read the notebook while you finish this visit and return to the residence.';
+    return 'Visit underway; you will return to the residence.';
   const job = currentJob(s);
   const ask =
     job && s.asks.find((a) => a.job === job && !a.closed && a.from <= s.minute && a.until > s.minute);
-  if (ask) return 'Read the replies to your standing call; people decide around their own work.';
+  if (ask) return 'The call is underway; replies are available at the houses.';
   if (job === 'reap-agha') return 'Call households to cut the landowner’s barley before the rain.';
   if (job === 'bring-share') return 'Call the unpaid households to bring their shares.';
   const paid = riderReceipt(s)?.text.includes('whole due');

@@ -394,9 +394,11 @@ function enter() {
   });
   app.querySelector('#sheet')?.addEventListener('click', onSheetClick);
   app.querySelector('#thumbs')?.addEventListener('click', onSheetClick);
+  app.querySelector('#house-answer')?.addEventListener('click', onSheetClick);
   app.querySelector('#houses')?.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-h]');
     if (b?.dataset.h) pick(b.dataset.h);
+    if ((e.target as HTMLElement).closest('[data-house-list]')) closeHouse();
   });
   drawTop();
   drawSheet(true);
@@ -484,6 +486,10 @@ function drawTop() {
 function order(o: Order) {
   if (!g) return;
   if (act(g, o)) {
+    if (o.verb === 'visit' || o.verb === 'give') {
+      selected = o.house;
+      houseDetails = false;
+    }
     writeLog();
     hunchCache = null;
     drawSheet(true);
@@ -668,12 +674,13 @@ function drawMap() {
     );
   }
   field('agha', 735, 470, 360, s.agha.standing, s.agha.reaped, 1, true);
-  label(ctx, 'the landowner’s field', X(735), Y(470) + 52 * sc, c['ink-soft'] ?? '#666', 11);
+  if (window.innerWidth >= 900)
+    label(ctx, 'the landowner’s field', X(735), Y(470) + 52 * sc, c['ink-soft'] ?? '#666', 11);
   // Konak, granary, mill, coffeehouse, spring.
   ctx.strokeStyle = c.ink ?? '#222';
   ctx.lineWidth = 1.5;
   house(ctx, X(600), Y(545), 1.5);
-  label(ctx, 'konak', X(600) - 34, Y(545) + 2, c['ink-soft'] ?? '#666', 11);
+  if (window.innerWidth >= 900) label(ctx, 'konak', X(600) - 34, Y(545) + 2, c['ink-soft'] ?? '#666', 11);
   ctx.strokeRect(X(630) - 5, Y(568) - 5, 10, 10);
   if (s.agha.millOpen) {
     const done = Math.min(1, s.agha.mill / 600);
@@ -715,7 +722,8 @@ function drawMap() {
         : (c['ink-soft'] ?? '#666');
     ctx.lineWidth = 1.4;
     house(ctx, X(hh.x), Y(hh.y), 1);
-    label(ctx, hh.short, X(hh.x), Y(hh.y) + 15, c.sky ?? '#3d5a73', 12);
+    if (w >= 900 || window.innerWidth >= 900)
+      label(ctx, hh.short, X(hh.x), Y(hh.y) + 15, c.sky ?? '#3d5a73', 12);
     ctx.strokeStyle = c.sky ?? '#3d5a73';
     ctx.lineWidth = 1;
     const halfLabel = ctx.measureText(hh.short).width / 2;
@@ -908,6 +916,9 @@ function drawHouses(s: ValleyState) {
   const nav = app.querySelector('#houses');
   if (!nav) return;
   const list = s.households.filter((h) => h.hamlet === 'lower' || s.flags.upper);
+  app
+    .querySelector<HTMLElement>('.play')
+    ?.style.setProperty('--house-map-height', `${Math.ceil(list.length / 4) * 48 + 8}px`);
   const key = list.map((h) => h.id).join(',');
   for (const b of nav.querySelectorAll<HTMLButtonElement>('button[data-h]')) {
     b.classList.toggle('selected', b.dataset.h === selected);
@@ -917,7 +928,13 @@ function drawHouses(s: ValleyState) {
   nav.setAttribute('data-key', key);
   nav.innerHTML =
     '<span class="house-prompt">Choose a house</span>' +
-    list.map((h) => `<button data-h="${h.id}" aria-label="${esc(h.name)}">${esc(h.short)}</button>`).join('');
+    list
+      .map(
+        (h) =>
+          `<button data-h="${h.id}" aria-label="${esc(h.name)}"><span class="house-icon" aria-hidden="true">⌂</span>${esc(h.short)}</button>`,
+      )
+      .join('') +
+    '<button class="house-list-toggle" data-house-list>Choose a house</button>';
 }
 
 // ---------- the sheet: knocks, the house card, the notebook, the ledger ----------
@@ -942,6 +959,11 @@ function btn(
 function drawSheet(force = false) {
   if (!g) return;
   const s = g.valley;
+  // Field progress can change without a new note; update the strip without replacing controls.
+  const progress = app.querySelector('#next');
+  const progressWords = englishText(nextWords(s));
+  if (progress && progress.textContent !== progressWords) progress.textContent = progressWords;
+  if (!force && app.querySelector('button.holding')) return;
   const key = `${s.notes.at(-1)?.id ?? 0}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}|${selected}|${tab}|${s.asks.length}|${busy(s)}|${dayOfMinute(s.minute)}|${[...openDays].join(',')}|${historyOpen}|${jobInSeason(s)}|${s.agha.granary >= s.agha.due}|${s.flags.verbs.join(',')}|${loanReturnWords(s)}|${s.agha.granary >= 2}|${s.asks
     .filter((a) => !a.closed && a.until > s.minute)
     .map((a) => a.id)
@@ -958,6 +980,7 @@ function drawSheet(force = false) {
     .filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute)
     .map((k) => knockCard(s, k));
   const hh = selected ? houseOf(s, selected) : undefined;
+  app.querySelector('.play')?.setAttribute('data-house', String(!!hh));
   const body = hh
     ? houseCard(s, hh)
     : tab === 'ledger'
@@ -1182,6 +1205,64 @@ function noteLine(n: Note): string {
   return `<div class="note${n.weight < 2 ? ' quiet' : ''}"><span class="t">${esc(partOfDay(n.at))}</span>${esc(n.text)}${n.words && !n.text.toLowerCase().includes(n.words.toLowerCase()) ? `<span class="w">“${esc(n.words)}”</span>` : ''}</div>`;
 }
 
+function datedReply(s: ValleyState, n: Note): string {
+  const earlier = dayOfMinute(n.at) < dayOfMinute(s.minute) ? 'Earlier word · ' : '';
+  const speaker = n.kind === 'voice' && n.who ? personOf(s, n.who)?.name : undefined;
+  const date = `${earlier}${speaker ? `${speaker} · ` : ''}${fullDateEnglish(dayOfMinute(n.at))}`;
+  // The house header identifies the household; keep the person's complete words immediately below their name.
+  const words =
+    speaker && n.words ? `<div class="note"><span class="w">“${esc(n.words)}”</span></div>` : noteLine(n);
+  return `<div class="reply-date soft">${esc(date)}</div>${words}`;
+}
+
+function knownFood(s: ValleyState, hh: Household): string {
+  const guess = s.kahyaState.guess?.[hh.id];
+  if (!guess) return 'Food: you haven’t seen their jars yet.';
+  const ago = dayOfMinute(s.minute) - dayOfMinute(guess.at);
+  return `${breadWords(guess.bread)}${ago > 2 ? ` Seen ${ago} days ago.` : ''}`;
+}
+
+/** One live refusal beside its consequence and hold control; other replies remain in the notebook. */
+function selectedRefusal(s: ValleyState, hh: Household): string {
+  if (!s.flags.verbs.includes('insist')) return '';
+  const candidates = s.asks
+    .flatMap((ask) => {
+      const complete =
+        ask.job === 'reap-agha'
+          ? s.agha.standing <= 5
+          : ask.job === 'build-mill'
+            ? s.agha.mill >= V.millHours
+            : hh.paid >= shareOwed(hh) - 0.5 || dayOfMinute(s.minute) >= s.agha.dueDay;
+      if (
+        ask.closed ||
+        ask.from > s.minute ||
+        ask.until <= s.minute ||
+        complete ||
+        !ask.houses.includes(hh.id)
+      )
+        return [];
+      return Object.entries(ask.replies)
+        .filter(
+          ([id, reply]) =>
+            hh.members.includes(id) &&
+            !ask.insisted.includes(id) &&
+            ['deferred', 'refused', 'modified'].includes(reply.verdict),
+        )
+        .map(([id, reply]) => ({ ask, id, reply }));
+    })
+    .sort((a, b) => b.reply.at - a.reply.at);
+  const choice = candidates[0];
+  if (!choice) return '';
+  const { ask, id, reply } = choice;
+  return `<div class="decision-reply"><p class="reply-date soft">${esc(fullDateEnglish(dayOfMinute(reply.at)))}</p>
+    <p>${esc(personOf(s, id)?.name ?? 'They')}: “${esc(reply.says)}”</p>
+    ${btn(
+      `Hold to press ${personOf(s, id)?.name ?? 'them'}`,
+      () => order({ verb: 'insist', ask: ask.id, pid: id }),
+      { hold: true, hint: 'They will come, and remember being pushed.' },
+    )}</div>`;
+}
+
 const BREAD: [number, string][] = [
   [200, 'Their jars are full.'],
   [80, 'They have enough to the spring, you think.'],
@@ -1286,9 +1367,9 @@ function houseCard(s: ValleyState, hh: Household): string {
       : '';
   const response = recent.find((n) => n.words && (n.kind === 'voice' || n.ask));
   if (!houseDetails)
-    return `<div class="card">${response ? `<div class="house-response">${noteLine(response)}</div>` : ''}${pending}</div>`;
+    return `<div class="card">${response ? `<div class="house-response">${datedReply(s, response)}</div>` : ''}</div>`;
   return `<div class="card">
-    ${response ? `<div class="house-response">${noteLine(response)}</div>` : ''}
+    ${response ? `<div class="house-response">${datedReply(s, response)}</div>` : ''}
     <div class="house-context"><p class="limits">${esc(limitsWords(s, hh))}</p>
     <div class="looks">${esc(hh.members.length ? hh.looks : 'The door is shut and the hearth is cold.')}</div>
     <div class="people">${hh.members.length ? esc(names) : 'Nobody lives here now.'}</div>
@@ -1337,6 +1418,8 @@ function visitHint(s: ValleyState): string {
 
 function houseThumbs(s: ValleyState, hh: Household): string {
   const out: string[] = [];
+  const food = knownFood(s, hh);
+  const shareStatus = `Their share: ${Math.round(hh.paid)} of ${shareOwed(hh)} grain measures paid${hh.eased ? ' (eased)' : ''}. `;
   const under = underSeal(s, hh);
   const empty = !hh.members.length;
   const renewal = cropReturnWords(s);
@@ -1393,10 +1476,11 @@ function houseThumbs(s: ValleyState, hh: Household): string {
       btn('Ease their share', () => order({ verb: 'ease', house: hh.id }), {
         disabled: !!blocked || hh.eased,
         hint:
-          blocked ??
-          (hh.eased
-            ? `Already eased. ${renewal}`
-            : 'leave half of this year’s share in their jars; the lanes will see'),
+          shareStatus +
+          (blocked ??
+            (hh.eased
+              ? `Already eased. ${renewal}`
+              : 'leave half of this year’s share in their jars; the lanes will see')),
       }),
     );
   if (s.flags.verbs.includes('seize'))
@@ -1404,20 +1488,38 @@ function houseThumbs(s: ValleyState, hh: Household): string {
       btn('Hold to send the reeve’s men', () => order({ verb: 'seize', house: hh.id }), {
         hold: true,
         disabled: !!blocked,
-        hint: blocked ?? 'they take the share from the jars; the lane will remember the force',
+        hint:
+          shareStatus + (blocked ?? 'they take the share from the jars; the lane will remember the force'),
       }),
     );
   out.push(
     btn('Send them grain', () => order({ verb: 'give', house: hh.id, kile: 6 }), {
       disabled: empty || !s.flags.verbs.includes('give') || s.agha.granary < 2,
-      hint: empty
-        ? 'Nobody lives here; giving returns if the house is lived in again.'
-        : !s.flags.verbs.includes('give')
-          ? 'Giving opens when a household is short of food or asks at your door.'
-          : giftHint(s),
+      hint:
+        food +
+        ' ' +
+        (empty
+          ? 'Nobody lives here; giving returns if the house is lived in again.'
+          : !s.flags.verbs.includes('give')
+            ? 'Giving opens when a household is short of food or asks at your door.'
+            : giftHint(s)),
     }),
   );
-  return commandPicker(out, 'house-action', houseAction);
+  const current = currentJob(s);
+  const direct =
+    !houseAction && visiting && (!current || callUnavailable(s, current, hh))
+      ? 'Walk down and sit with them'
+      : houseAction;
+  const refusal = selectedRefusal(s, hh);
+  const command = commandPicker(out, 'house-action', direct);
+  return refusal && !houseAction
+    ? refusal +
+        btn('Other house actions', () => {
+          houseAction = direct || `Call them ${JOB_LABEL[knownJobs(s)[0] ?? 'reap-agha']}`;
+          drawSheet(true);
+          app.querySelector<HTMLSelectElement>('#house-action')?.focus({ preventScroll: true });
+        })
+    : command;
 }
 
 function commandPicker(commands: string[], id: string, selectedTitle: string): string {
@@ -1559,7 +1661,7 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
     if (fired || b.disabled) return;
     const status = app.querySelector<HTMLElement>('#hold-feedback') ?? document.createElement('p');
     status.id = 'hold-feedback';
-    status.className = 'hold-feedback';
+    status.className = b.closest('.decision-reply') ? 'sr' : 'hold-feedback';
     status.setAttribute('role', 'status');
     status.hidden = false;
     status.textContent = 'Keep holding to press this action. Release after the ink fills the control.';

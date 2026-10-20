@@ -23,6 +23,12 @@ afterAll(async () => {
   await browser?.close();
 }, 30000);
 
+async function selectHouseAction(page: Page, label: string) {
+  const alternatives = page.getByRole('button', { name: 'Other house actions', exact: true });
+  if (await alternatives.count()) await alternatives.click();
+  await page.locator('#house-action').selectOption({ label });
+}
+
 async function open(page: Page, minute = 360, seed = 406153184, inputs: Input[] = []) {
   await page.clock.install();
   await page.goto(origin);
@@ -151,10 +157,11 @@ it.each([
       expect(await page.locator('button.hold').count()).toBe(before);
       expect(await page.locator('.pending-replies button').first().isVisible()).toBe(true);
       await page.locator('#houses button').first().click();
-      await page.locator('#house-action').selectOption({ label: 'Walk down and sit with them' });
+      await selectHouseAction(page, 'Walk down and sit with them');
       await page.getByRole('button', { name: /Walk down and sit/ }).click();
       expect(await page.getByRole('button', { name: /You are out on the lanes/ }).isDisabled()).toBe(true);
       expect(await page.locator('#thumbs').innerText()).toMatch(/return/);
+      await page.getByRole('button', { name: 'About', exact: true }).click();
       if (!(await page.locator('.pending-replies').evaluate((el) => (el as HTMLDetailsElement).open)))
         await page.locator('.pending-replies summary').click();
       await page.clock.runFor(700);
@@ -198,7 +205,7 @@ it.each([
     };
     for (const selector of ['#now', '#next', '#cap', '#map', '.house-close', '#thumbs'])
       await visible(selector);
-    expect(await page.locator('#map').evaluate((e) => e.clientHeight)).toBeGreaterThanOrEqual(90);
+    expect(await page.locator('#map').evaluate((e) => e.clientHeight)).toBeGreaterThanOrEqual(44);
     const close = page.locator('.house-close');
     expect(
       await close.evaluate((e) => {
@@ -206,10 +213,12 @@ it.each([
         return e.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
       }),
     ).toBe(true);
-    await page.locator('#house-action').selectOption({ label: 'Send them grain' });
+    await selectHouseAction(page, 'Send them grain');
     const grain = page.getByRole('button', { name: /Send them grain/ });
     await grain.click();
-    expect(await page.locator('.house-response').innerText()).toMatch(/grain|jar|bread|gave|sack/i);
+    expect(await page.locator('.house-response').innerText()).toMatch(
+      /grain|jar|bread|gave|sack|hungry|enough/i,
+    );
     for (const selector of ['#now', '#next', '#cap', '#map', '.house-close', '#thumbs', '.house-response'])
       await visible(selector);
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
@@ -247,11 +256,11 @@ it('retains quiet unavailable actions with dated renewal and names the return de
     })()`);
     await page.getByRole('button', { name: 'The landowner’s ledger', exact: true }).click();
     await page.locator('#houses button').first().click();
-    await page.locator('#house-action').selectOption({ label: 'Ease their share' });
+    await selectHouseAction(page, 'Ease their share');
     const ease = page.getByRole('button', { name: /Ease their share/ });
     expect(await ease.isDisabled()).toBe(true);
     expect(await ease.innerText()).toMatch(/25 June, year two/);
-    await page.locator('#house-action').selectOption({ label: 'Send them grain' });
+    await selectHouseAction(page, 'Send them grain');
     const gift = page.getByRole('button', { name: /Send them grain/ });
     expect(await gift.isDisabled()).toBe(true);
     expect(await gift.innerText()).toMatch(/granary.*(low|empty)|grain.*arriv/i);
@@ -328,8 +337,8 @@ it('keeps grain selected when other house actions unlock', async () => {
   try {
     await open(page);
     await page.locator('#houses button').first().click();
-    await page.locator('#house-action').selectOption({ label: 'Send them grain' });
-    await page.evaluate(`import('/src/ui/app.ts').then(({ _debug }) => {
+    await selectHouseAction(page, 'Send them grain');
+    await page.evaluate(`Promise.resolve(window.__valley).then((_debug) => {
       _debug.game().valley.flags.verbs.push('ease', 'seize');
       _debug.skipTo(0);
     })`);
@@ -339,3 +348,123 @@ it('keeps grain selected when other house actions unlock', async () => {
     await page.close();
   }
 });
+
+it.each([
+  [3390, 360],
+  [4650, 360],
+  [3390, 320],
+  [4650, 320],
+])('fits the exact Çoban reply and refusal at minute %i on a %ix690 phone', async (minute, width) => {
+  const page = await browser.newPage({ viewport: { width, height: 690 }, hasTouch: true });
+  const inputs: Input[] = [
+    {
+      verb: 'call',
+      job: 'reap-agha',
+      houses: ['kavak', 'ak', 'coban', 'dere', 'kara', 'demirci', 'kuyucu', 'tepe'],
+      at: 750,
+    },
+    { verb: 'visit', house: 'ak', at: 2520 },
+    { verb: 'give', house: 'ak', kile: 6, at: 3000 },
+    { verb: 'visit', house: 'coban', at: 3330 },
+    ...(minute > 3840 ? [{ verb: 'give' as const, house: 'coban', kile: 6, at: 3840 }] : []),
+  ];
+  try {
+    await open(page, minute, 905871269, inputs);
+    await page.locator('#houses button[data-h="coban"]').click();
+    await page.clock.runFor(150);
+    for (const selector of [
+      '.house-response',
+      '.decision-reply',
+      '.decision-reply .hold',
+      '#next',
+      '.house-close',
+    ]) {
+      const box = await page.locator(selector).boundingBox();
+      expect(box, selector).not.toBeNull();
+      expect(box && box.y >= 0 && box.y + box.height <= 691, selector).toBe(true);
+    }
+    if (minute === 3390) expect(await page.locator('.house-response').innerText()).toContain('Or are you?');
+    expect(await page.locator('.house-response').innerText()).toMatch(/20 July, year one/);
+    expect(await page.locator('.decision-reply').innerText()).toMatch(/own barley.*remember being pushed/s);
+    expect(await page.locator('.house-response').evaluate((e) => e.scrollHeight <= e.clientHeight + 2)).toBe(
+      true,
+    );
+    expect(await page.locator('#next').innerText()).toMatch(/cut.*standing.*20 July.*5 August/s);
+    await page.getByText('Other house actions', { exact: true }).click();
+    const alternativesBox = await page.locator('#thumbs').boundingBox();
+    expect(alternativesBox && alternativesBox.y + alternativesBox.height <= 691).toBe(true);
+    await page.getByRole('button', { name: 'Choose a house', exact: true }).click();
+    await page.locator('#houses button[data-h="coban"]').click();
+    const press = page.locator('.decision-reply .hold');
+    await press.click();
+    expect(await page.getByRole('status').innerText()).toMatch(/hold/i);
+    expect(await page.evaluate('window.__valley.game().inputs.filter(i=>i.verb === "insist").length')).toBe(
+      0,
+    );
+    await press.focus();
+    await page.keyboard.down('Enter');
+    await page.clock.runFor(700);
+    await page.keyboard.up('Enter');
+    expect(await page.evaluate('window.__valley.game().inputs.filter(i=>i.verb === "insist").length')).toBe(
+      1,
+    );
+  } finally {
+    await page.close();
+  }
+});
+
+it('exposes Visit directly after harvest and keeps known food beside Give', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
+  try {
+    await open(page);
+    await page.evaluate(`Promise.resolve(window.__valley).then((_debug) => {
+      const s = _debug.game().valley;
+      s.agha.standing = 0;
+      s.flags.verbs.push('visit');
+      s.kahyaState.guess = { ...s.kahyaState.guess, coban: {at: 0, bread: 12} };
+      _debug.skipTo(0);
+    })`);
+    await page.locator('#houses button[data-h="coban"]').click();
+    expect(await page.locator('#thumbs button').first().innerText()).toMatch(/Walk down and sit/);
+    await selectHouseAction(page, 'Send them grain');
+    expect(await page.locator('#thumbs').innerText()).toMatch(/scraping the jar/);
+    await page.getByRole('button', { name: /Send them grain/ }).click();
+    await page.evaluate(`Promise.resolve(window.__valley).then((_debug) => {
+      _debug.game().valley.minute += 1440;
+      _debug.skipTo(0);
+    })`);
+    expect(await page.locator('.house-response').innerText()).toMatch(/Earlier word.*18 July/s);
+  } finally {
+    await page.close();
+  }
+});
+
+it.each([false, true])(
+  'gives each phone house a distinct labelled 44px target (upper hamlet: %s)',
+  async (upper) => {
+    const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
+    try {
+      await open(page);
+      if (upper)
+        await page.evaluate('window.__valley.game().valley.flags.upper = true; window.__valley.skipTo(0)');
+      const boxes = await page.locator('#houses button[data-h]').evaluateAll((es) =>
+        es.map((e) => {
+          const r = e.getBoundingClientRect();
+          return { x: r.x, y: r.y, w: r.width, h: r.height, text: e.textContent };
+        }),
+      );
+      expect(boxes.length).toBe(upper ? 14 : 8);
+      for (const b of boxes) {
+        expect(b.w).toBeGreaterThanOrEqual(44);
+        expect(b.h).toBeGreaterThanOrEqual(44);
+        expect(b.x >= 0 && b.x + b.w <= 360 && b.y + b.h <= 690, b.text ?? '').toBe(true);
+      }
+      expect(await page.locator('#houses').evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
+      const navBox = await page.locator('#houses').boundingBox();
+      const sheetBox = await page.locator('.lk-sheet').boundingBox();
+      expect(navBox && sheetBox && navBox.y + navBox.height <= sheetBox.y + 1).toBe(true);
+    } finally {
+      await page.close();
+    }
+  },
+);

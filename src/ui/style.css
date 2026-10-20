@@ -941,6 +941,100 @@ body:has(.play) {
   flex: 0 0 44px;
 }
 
+/* Round 2: essential words determine the fit sheet; the scene yields space. */
+.play.lk-stage {
+  grid-template-rows: auto minmax(var(--house-map-height, 104px), 1fr) auto;
+}
+.play.lk-stage > .lk-sheet {
+  max-block-size: calc(
+    var(--lk-available-height, 100dvh) -
+    var(--lk-strip-height) -
+    var(--house-map-height, 104px)
+  );
+}
+.play .lk-sheet-head {
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+.play .house-response,
+.play .decision-reply {
+  flex: 0 0 auto;
+}
+.reply-date {
+  font-size: 12px;
+  margin: 0;
+}
+.play .decision-reply {
+  width: 100%;
+}
+.play .decision-reply p {
+  margin: 0 0 3px;
+  font-size: 14px;
+}
+.play #thumbs .decision-reply button {
+  width: 100%;
+  position: relative;
+}
+.house-icon,
+.house-list-toggle {
+  display: none;
+}
+@media (max-width: 899px) {
+  .play .map {
+    grid-template-rows: 1fr;
+    min-height: 52px;
+  }
+  .play .map canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.12;
+  }
+  .play #houses {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-content: center;
+    gap: 4px;
+    overflow: visible;
+    background: transparent;
+  }
+  .play #houses button {
+    padding: 4px 2px;
+    font-size: 13px;
+    min-height: 44px;
+  }
+  .play #houses .house-icon {
+    display: inline;
+    margin-right: 3px;
+    font-size: 17px;
+  }
+  .play.lk-stage[data-house="true"] {
+    grid-template-rows: auto minmax(52px, 1fr) auto;
+  }
+  .play.lk-stage[data-house="true"] > .lk-sheet {
+    max-block-size: calc(var(--lk-available-height, 100dvh) - var(--lk-strip-height) - 52px);
+  }
+  .play[data-house="true"] #houses {
+    grid-template-columns: 1fr 1fr;
+  }
+  .play[data-house="true"] .map #houses button[data-h]:not(.selected) {
+    display: none;
+  }
+  .play[data-house="true"] #houses .house-list-toggle {
+    display: block;
+  }
+}
+@media (min-width: 900px) {
+  .play.lk-stage {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .play.lk-stage > .lk-sheet {
+    max-block-size: 100%;
+  }
+}
+
 /* Enlarged type uses page flow so full sentences and controls stay reachable. */
 body:has(.play[data-reflow="true"]) {
   position: static;
@@ -954,7 +1048,7 @@ body:has(.play[data-reflow="true"]) {
 .play[data-reflow="true"] .map {
   min-height: 300px;
 }
-.play[data-reflow="true"] > .lk-sheet {
+.play.lk-stage[data-reflow="true"] > .lk-sheet {
   max-block-size: none;
 }
 .play[data-reflow="true"] .sheet {
@@ -965,7 +1059,7 @@ body:has(.play[data-reflow="true"]) {
 }
 
 @media (min-width: 900px) {
-  .play > .lk-sheet {
+  .play.lk-stage > .lk-sheet {
     max-block-size: 100%;
   }
 }
