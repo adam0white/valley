@@ -23,5 +23,7 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Install Chromium and its system dependencies
+        run: npx --no-install playwright-core install --with-deps chromium
       - run: npm run check
       - run: npm run build
