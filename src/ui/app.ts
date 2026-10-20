@@ -17,6 +17,7 @@ import {
 } from '../sim/calendar.ts';
 import {
   act,
+  compactRun,
   END_DAY,
   GAME_VERSION,
   type Game,
@@ -241,7 +242,7 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
 // ---------- the title page ----------
 
 export function start() {
-  mountLab(() => (g ? save(g, volume) : undefined));
+  mountLab(() => (g ? compactRun(g, volume) : undefined));
   if ('serviceWorker' in navigator && location.hostname !== 'localhost')
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   title();
