@@ -95,15 +95,21 @@ Replay still matches (seed 1, fingerprint 316dd7c1). The tests run with a 120 s 
 
 ## Deferred (targets)
 - The sim in a Web Worker: only if a phone measure shows stutter; decide by 2026-10-22.
-- The forecast's lever: Osman's forecast should come while barley still stands and offer something besides the loan (an early sack from houses with full jars, which they can refuse or resent). The reviewer called the loan alone a debt trap: round 3 (2026-10-21).
-- A winter decision stream: disputes or debts between two houses, drawn from HF ties, brought to the kahya as two-option knocks: version 1.1 (2026-10-23).
-- A shorter notebook on phones (the last few entries and one history button, the commuter's ask in both rounds): polish round 3 (2026-10-21).
+- The forecast's lever: Osman's forecast should come while barley still stands and offer something besides the loan (an early sack from houses with full jars, which they can refuse or resent). The reviewer called the loan alone a debt trap: round 3. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
+- A winter decision stream: disputes or debts between two houses, drawn from HF ties, brought to the kahya as two-option knocks: version 1.1. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
+- A shorter notebook on phones: delivered in the owner UI follow-up, 2026-10-20; current notes lead and history opens on request. Owner acceptance remains the next playtest.
 - The Valley's HF playtester adapter: a press sent at night should be answered by the next morning's reply, and the grouped pressed line should not count as an answer. Fix in `scripts/hf-playtest.ts` by 2026-10-21.
-- A one-line first goal on the map screen for a new kahya: polish round 3 (2026-10-21).
-- Conversation the player steers at a hearth (asking about a person, a debt, a grievance): version 1.1 (2026-10-23).
-- The open hand's payoff inside the fiction beyond its letter (the valley carrying part of the shortfall for a kahya it trusts): judge after the owner's first play (2026-10-26).
+- A one-line first goal on the map screen: delivered in the owner UI follow-up, 2026-10-20, with an always-reachable charge and seasonal forecast. Owner acceptance remains the next playtest.
+- Conversation the player steers at a hearth (asking about a person, a debt, a grievance): version 1.1. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
+- The open hand's payoff inside the fiction beyond its letter (the valley carrying part of the shortfall for a kahya it trusts): judge after the owner's first play. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
 - Ledger volumes to turn back to (an abandoned future kept as crossed-out ink): polish round 2 (2026-10-21).
-- The year-three levy (the agha's rider wants men): version 1.1, after the polish rounds (2026-10-23).
-- Brokering marriages and one neighbouring valley over the pass: version 2, after the owner's first play (on or after 2026-10-26).
+- The year-three levy (the agha's rider wants men): version 1.1, after the polish rounds. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
+- Brokering marriages and one neighbouring valley over the pass: version 2, after the owner's first play. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
 - Drama-gated music in the spirit of Old World: after the first polish round (2026-10-22).
-- Hidden grain and an inspector who asks the village what it remembers (the wildcard's ledger idea): version 2.
+- Hidden grain and an inspector who asks the village what it remembers (the wildcard's ledger idea): version 2. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
+
+## Owner UI follow-up (2026-10-20)
+
+The owner could not identify the goal, controls, priority, action renewal, or next season. The follow-up changes presentation only: English dates and essential office terms are projected at render time; saved notes and the simulation remain unchanged. “Your charge” explains the purpose and can be reopened from play. One current task leads above the map, followed by a seasonal forecast. Visible house buttons, focus and hover states, and touch targets separate actions from prose. Current notes are short; history is optional. Active refusals retain visible hold-to-press controls even when their dated notes are hidden. Capacity copy follows actual travel, standing calls, the crop, and the granary, without adding action counters.
+
+The six before/after viewport captures and observed confusion are recorded in [the owner playtest](playtests/owner-2026-10-20.md). This delivery is accepted technically by passing checks, unchanged owner replay fingerprint, and a clean live release matching the signed pushed commit. Adam accepts game feel in the next owner playtest.

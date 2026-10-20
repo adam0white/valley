@@ -4,10 +4,8 @@
  * when something heavy happens, never a pause). The save is the kahya's ledger: the seed and the input log in local
  * storage, and a bound volume (the whole state, gzipped) in IndexedDB every few weeks of the valley's time.
  */
-import { FRAMEWORK_VERSION } from '@adam0white/human-framework';
 import {
   DAY,
-  dateWords,
   daylight,
   dayOfMinute,
   doyOf,
@@ -52,6 +50,14 @@ import {
   type ValleyState,
 } from '../sim/valley.ts';
 import { labScreen, mountLab } from './lab.ts';
+import {
+  dateEnglish as dateWords,
+  englishText,
+  limitsWords,
+  nextWords,
+  nowWords,
+  PURPOSE,
+} from './presentation.ts';
 
 const LOG = 'valley-log-v1';
 const SPEEDS = [30, 120, 480] as const; // sim minutes per real second
@@ -77,7 +83,9 @@ let raf = 0;
 let last = 0;
 let carry = 0;
 let selected: string | null = null;
-let tab: 'notes' | 'ledger' = 'notes';
+let tab: 'notes' | 'ledger' | 'charge' = 'notes';
+let historyOpen = false;
+let repliesOpen = false;
 let lastDay = -1;
 let lastSnapDay = -1;
 let lastSheet = 0;
@@ -90,7 +98,10 @@ let hunchCache: { key: string; lines: string[] } | null = null;
 let actions: (() => void)[] = [];
 
 const esc = (x: string) =>
-  x.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
+  englishText(x).replace(
+    /[&<>"]/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c,
+  );
 const mark = () => `<a class="mark" href="${HUB}">◇ human framework</a>`;
 const footer = () => `<div class="footer"><a href="${HUB}/games/">◇ all notebooks</a></div>`;
 const yearWord = (y: number) => ['one', 'two', 'three', 'four'][y - 1] ?? String(y);
@@ -246,16 +257,15 @@ function title() {
   app.innerHTML = `<div class="page">
     ${mark()}
     <h1>The Valley</h1>
-    <p>The agha lives in the city. You are his kahya: his seal, his ledger and his granary in a valley of two hamlets, with no kin here.</p>
-    <p>The last kahya left in the night. Three pages are cut from his book. The agha's due is fixed; the weather is not. Every house can say no.</p>
-    <p class="soft">Three years. Ask, take, give, and walk the lanes. At the end the elders will say what they remember.</p>
+    <p class="purpose">${esc(PURPOSE)}</p>
+    <p class="soft">Call households to the harvest. Read their replies. Visit to learn what they need. The rain will not wait.</p>
     ${where ? `<p class="hand">${esc(where)}</p>` : ''}
     <div class="actions">
       ${log ? '<button class="primary" data-go="open">Open the ledger</button>' : '<button class="primary" data-go="new">Take up the seal</button>'}
       ${log ? '<button data-go="new" class="hold">Begin a new term<span class="fill"></span></button><p class="soft" style="font-size:14px">Hold to begin again; the old ledger is closed for good.</p>' : ''}
       <button data-go="seed">A named valley (seed)</button>
     </div>
-    <p class="soft" style="font-size:14px">Everyone here is a person in the human framework ${esc(FRAMEWORK_VERSION)}: they weigh your asks against their own day, remember what you did, and answer in their own words.</p>
+    <p class="soft" style="font-size:14px">Every household has its own needs and memory. People can refuse your requests, and they remember how you answer.</p>
     ${footer()}
   </div>`;
   app.querySelector('[data-go="open"]')?.addEventListener('click', () => {
@@ -315,11 +325,17 @@ function enter() {
   lastSnapDay = lastDay;
   seenNote = Math.max(seenNote, (g.valley.notes.at(-1)?.id ?? 0) - 6);
   app.innerHTML = `<div class="play">
-    <div class="top">${mark()}<span class="grow"></span><span class="speed" id="speed"></span></div>
-    <div class="map"><canvas id="map" aria-label="The valley map: tap a house"></canvas><div class="caption" id="cap"></div><nav class="sr" id="houses" aria-label="The houses"></nav></div>
+    <div class="top"><button class="charge-link" data-charge>Your charge</button><span class="grow"></span><span class="speed" id="speed" aria-label="Time passing"></span></div>
+    <section class="orientation" aria-label="The work ahead"><p id="now" class="moment"></p><p id="next" class="next soft"></p></section>
+    <div class="map"><canvas id="map" aria-label="The valley map"></canvas><div class="caption" id="cap"></div><nav id="houses" aria-label="Choose a house"></nav></div>
     <div class="sheet" id="sheet"></div>
     <div class="thumbs" id="thumbs"></div>
   </div>`;
+  app.querySelector('[data-charge]')?.addEventListener('click', () => {
+    selected = null;
+    tab = 'charge';
+    drawSheet(true);
+  });
   const cv = app.querySelector('#map') as HTMLCanvasElement;
   cv.addEventListener('click', (e) => tapMap(cv, e));
   app.querySelector('#speed')?.addEventListener('click', (e) => {
@@ -337,6 +353,7 @@ function enter() {
   });
   drawTop();
   drawSheet(true);
+  drawMap();
   last = performance.now();
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(frame);
@@ -409,8 +426,6 @@ function afterQuantum(t: number) {
 
 function drawTop() {
   if (!g) return;
-  const s = g.valley;
-  const day = dayOfMinute(s.minute);
   const sp = app.querySelector('#speed');
   if (sp)
     sp.innerHTML = SPEED_NAMES.map(
@@ -606,7 +621,7 @@ function drawMap() {
     );
   }
   field('agha', 735, 470, 360, s.agha.standing, s.agha.reaped, 1, true);
-  label(ctx, 'the agha’s field', X(735), Y(470) + 52 * sc, c['ink-soft'] ?? '#666', 11);
+  label(ctx, 'the landowner’s field', X(735), Y(470) + 52 * sc, c['ink-soft'] ?? '#666', 11);
   // Konak, granary, mill, coffeehouse, spring.
   ctx.strokeStyle = c.ink ?? '#222';
   ctx.lineWidth = 1.5;
@@ -653,7 +668,20 @@ function drawMap() {
         : (c['ink-soft'] ?? '#666');
     ctx.lineWidth = 1.4;
     house(ctx, X(hh.x), Y(hh.y), 1);
-    label(ctx, hh.short, X(hh.x), Y(hh.y) + 15, empty ? (c['ink-soft'] ?? '#666') : (c.ink ?? '#222'), 12);
+    label(ctx, hh.short, X(hh.x), Y(hh.y) + 15, c.sky ?? '#3d5a73', 12);
+    ctx.strokeStyle = c.sky ?? '#3d5a73';
+    ctx.lineWidth = 1;
+    const halfLabel = ctx.measureText(hh.short).width / 2;
+    ctx.beginPath();
+    ctx.moveTo(X(hh.x) - halfLabel, Y(hh.y) + 23);
+    ctx.lineTo(X(hh.x) + halfLabel, Y(hh.y) + 23);
+    ctx.stroke();
+    // The matching native buttons expose every house without guessing at map symbols.
+    const control = app.querySelector<HTMLButtonElement>(`#houses button[data-h="${hh.id}"]`);
+    if (control) {
+      control.classList.toggle('selected', selected === hh.id);
+      control.setAttribute('aria-pressed', String(selected === hh.id));
+    }
     if (knocking.has(hh.id)) {
       ctx.fillStyle = c.rope ?? '#c2412d';
       ctx.beginPath();
@@ -785,7 +813,7 @@ function label(
   ctx.font = `${px}px Literata, Georgia, serif`;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, x, y);
+  ctx.fillText(englishText(text), x, y);
 }
 
 function tapMap(cv: HTMLCanvasElement, e: MouseEvent) {
@@ -795,7 +823,7 @@ function tapMap(cv: HTMLCanvasElement, e: MouseEvent) {
   const x = e.clientX - r.left;
   const y = e.clientY - r.top;
   let best: Household | null = null;
-  let bd = 30;
+  let bd = 22;
   for (const hh of s.households) {
     if (hh.hamlet === 'upper' && !s.flags.upper) continue;
     const d = Math.hypot(hh.x * view.sc + view.ox - x, hh.y * view.sc + view.oy - y);
@@ -823,14 +851,16 @@ function drawHouses(s: ValleyState) {
   const key = list.map((h) => h.id).join(',');
   if (nav.getAttribute('data-key') === key) return;
   nav.setAttribute('data-key', key);
-  nav.innerHTML = list.map((h) => `<button data-h="${h.id}">${esc(h.name)}</button>`).join('');
+  nav.innerHTML =
+    '<span class="house-prompt">Choose a house</span>' +
+    list.map((h) => `<button data-h="${h.id}" aria-label="${esc(h.name)}">${esc(h.short)}</button>`).join('');
 }
 
 // ---------- the sheet: knocks, the house card, the notebook, the ledger ----------
 
 function onSheetClick(e: Event) {
   const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-k]');
-  if (!b || b.classList.contains('hold')) return;
+  if (!b || b.disabled || b.classList.contains('hold')) return;
   actions[Number(b.dataset.k)]?.();
 }
 
@@ -848,7 +878,10 @@ function btn(
 function drawSheet(force = false) {
   if (!g) return;
   const s = g.valley;
-  const key = `${s.notes.at(-1)?.id ?? 0}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute).length}|${selected}|${tab}|${s.asks.length}|${s.kahyaState.visit?.back ?? 0 > s.minute}|${dayOfMinute(s.minute)}|${[...openDays].join(',')}`;
+  const key = `${s.notes.at(-1)?.id ?? 0}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}|${selected}|${tab}|${s.asks.length}|${busy(s)}|${dayOfMinute(s.minute)}|${[...openDays].join(',')}|${historyOpen}|${jobInSeason(s)}|${s.agha.granary >= s.agha.due}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${s.asks
+    .filter((a) => !a.closed && a.until > s.minute)
+    .map((a) => a.id)
+    .join(',')}`;
   if (!force && key === sheetKey) return;
   sheetKey = key;
   lastSheet = performance.now();
@@ -861,10 +894,38 @@ function drawSheet(force = false) {
     .filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute)
     .map((k) => knockCard(s, k));
   const hh = selected ? houseOf(s, selected) : undefined;
-  const body = hh ? houseCard(s, hh) : tab === 'ledger' ? ledger(s) : notebook(s);
-  sheet.innerHTML = knocks.join('') + body;
+  const body = hh
+    ? houseCard(s, hh)
+    : tab === 'ledger'
+      ? ledger(s)
+      : tab === 'charge'
+        ? charge(s)
+        : notebook(s);
+  sheet.innerHTML = englishText((tab === 'charge' ? '' : knocks.join('')) + body);
+  const now = app.querySelector('#now');
+  const next = app.querySelector('#next');
+  if (now) now.textContent = englishText(nowWords(s));
+  if (next) next.textContent = englishText(nextWords(s));
+  for (const detail of sheet.querySelectorAll<HTMLDetailsElement>('.pending-replies')) {
+    detail.addEventListener('toggle', () => {
+      repliesOpen = detail.open;
+    });
+  }
   drawHouses(s);
-  thumbs.innerHTML = hh ? houseThumbs(s, hh) : valleyThumbs(s);
+  thumbs.innerHTML = englishText(
+    hh
+      ? houseThumbs(s, hh)
+      : tab === 'charge'
+        ? btn(
+            'Back to the notebook',
+            () => {
+              tab = 'notes';
+              drawSheet(true);
+            },
+            { cls: 'wide' },
+          )
+        : valleyThumbs(s),
+  );
   for (const b of app.querySelectorAll<HTMLButtonElement>('button.hold[data-k]')) {
     const fn = actions[Number(b.dataset.k)];
     if (fn) bindHold(b, fn);
@@ -892,7 +953,7 @@ function knockCard(s: ValleyState, k: Knock): string {
       ? [
           can && s.agha.granary >= 2
             ? btn('Give from the granary', () => order({ verb: 'give', house: k.house, kile: 6 }), {
-                hint: 'a few kile',
+                hint: 'a few grain measures',
               })
             : '',
           btn('Send them away', () => order({ verb: 'turn-away', knock: k.id })),
@@ -913,92 +974,100 @@ const busy = (s: ValleyState) => !!s.kahyaState.visit && s.kahyaState.visit.back
 /** People who already have a Press button on screen: one per person, on their latest line. */
 const pressShown = new Set<string>();
 
-function notebook(s: ValleyState): string {
-  pressShown.clear();
-  const today = dayOfMinute(s.minute);
-  const byDay = new Map<number, Note[]>();
-  for (const n of s.notes) {
-    if (n.at > s.minute + QUANTUM) continue;
-    const d = dayOfMinute(n.at);
-    if (d < today - 20) continue;
-    const list = byDay.get(d) ?? [];
-    list.push(n);
-    byDay.set(d, list);
-  }
-  const days = [...byDay.keys()].sort((a, b) => b - a);
-  if (!days.length)
-    return '<p class="soft">Nothing has been written these three weeks. Tap a house on the map, or let the days pass.</p>';
-  return days
-    .map((d) => {
-      const list = byDay.get(d) ?? [];
-      const open = openDays.has(d) || d === today;
-      const ranked = [...list].sort((a, b) => b.weight - a.weight || a.at - b.at);
-      const keep = new Set((open && d === today ? ranked.slice(0, 8) : ranked.slice(0, 3)).map((n) => n.id));
-      if (openDays.has(d)) for (const n of list) keep.add(n.id);
-      const shown = list.filter((n) => keep.has(n.id)).sort((a, b) => b.at - a.at);
-      const hidden = list.length - shown.length;
-      const more = hidden
-        ? btn(
-            `${hidden} more`,
-            () => {
-              openDays.add(d);
-              drawSheet(true);
-            },
-            { cls: 'more' },
-          )
-        : '';
-      return `<div class="day"><h3>${esc(dateWords(d))}${d === today ? ', today' : ''}</h3>${shown.map((n) => noteLine(s, n)).join('')}${more}</div>`;
-    })
-    .join('');
+function charge(s: ValleyState): string {
+  return `<article class="charge card"><h2>Your charge</h2><p class="purpose">${esc(PURPOSE)}</p>
+    <h3>The work ahead</h3><p>${esc(nextWords(s))}</p>
+    <h3>Ask, listen, decide</h3><p>Call a household to work or bring its share. People weigh your request against their own fields and promises. They can refuse.</p>
+    <p>Choose a house to read its replies and visit. Walking takes time; you can visit again when you return. A visit makes your knowledge of their jars less uncertain.</p>
+    <p>Give grain to help a house through hunger. It comes from the landowner’s due. Ease a share to leave more with a house, or press a refusal and be remembered for it.</p>
+    <p class="soft">The clock keeps moving. Slow, steady, and fast change how quickly the days pass. New work opens with the crop and the valley’s needs.</p>
+    <p class="soft">Your place is kept as you play. The ledger lets you bind a volume or set the seal down.</p></article>`;
 }
 
-function noteLine(s: ValleyState, n: Note): string {
-  let extra = '';
-  // A grouped put-off line: a Press for each person in it who can still be pressed.
-  if (n.ids && n.group?.startsWith('off-') && n.ask && s.flags.verbs.includes('insist')) {
-    const a = s.asks.find((x) => x.id === n.ask);
-    if (a && !a.closed && a.until > s.minute) {
-      const can = n.ids.filter(
-        (id) => !pressShown.has(id) && !a.insisted.includes(id) && a.replies[id]?.verdict === 'deferred',
-      );
-      extra = can
-        .map((id, i) => {
-          pressShown.add(id);
-          return btn(
-            `Press ${personOf(s, id)?.name ?? 'them'}`,
-            () => order({ verb: 'insist', ask: a.id, pid: id }),
-            {
-              hold: true,
-              cls: 'press',
-              ...(i === 0 ? { hint: 'hold: they come, and remember being pushed' } : {}),
-            },
-          );
-        })
-        .join('');
-      if (extra) extra = `<div class="presses">${extra}</div>`;
-    }
-  }
-  if (n.kind === 'reply' && n.ask && n.who && s.flags.verbs.includes('insist') && !pressShown.has(n.who)) {
-    const a = s.asks.find((x) => x.id === n.ask);
-    const r = a?.replies[n.who];
+/** Keep still-actionable refusals visible even when their dated note is archived. */
+function pendingReplies(s: ValleyState, house?: Household): string {
+  if (!s.flags.verbs.includes('insist')) return '';
+  const controls: string[] = [];
+  for (const ask of [...s.asks].reverse()) {
     if (
-      a &&
-      r &&
-      !a.closed &&
-      a.until > s.minute &&
-      !a.insisted.includes(n.who) &&
-      (r.verdict === 'deferred' || r.verdict === 'refused' || r.verdict === 'modified')
-    ) {
-      const who = n.who;
-      pressShown.add(who);
-      extra = btn(
-        `Press ${personOf(s, who)?.name ?? 'them'}`,
-        () => order({ verb: 'insist', ask: a.id, pid: who }),
-        { hold: true, hint: 'hold: they come, and remember being pushed' },
+      ask.closed ||
+      ask.until <= s.minute ||
+      ask.from > s.minute ||
+      (house && !ask.houses.includes(house.id))
+    )
+      continue;
+    for (const [id, reply] of Object.entries(ask.replies)) {
+      if (
+        (house && !house.members.includes(id)) ||
+        pressShown.has(id) ||
+        ask.insisted.includes(id) ||
+        !['deferred', 'refused', 'modified'].includes(reply.verdict)
+      )
+        continue;
+      pressShown.add(id);
+      controls.push(
+        btn(
+          `Press ${personOf(s, id)?.name ?? 'them'}`,
+          () => order({ verb: 'insist', ask: ask.id, pid: id }),
+          { hold: true, hint: reply.says },
+        ),
       );
     }
   }
-  return `<div class="note${n.weight >= 2.5 ? ' heavy' : ''}"><span class="t">${esc(partOfDay(n.at))}</span>${esc(n.text)}${n.words && !n.text.toLowerCase().includes(n.words.toLowerCase()) ? `<span class="w">“${esc(n.words)}”</span>` : ''}${extra}</div>`;
+  return controls.length
+    ? `<details class="pending-replies"${repliesOpen ? ' open' : ''}><summary>Read replies to the current call</summary><p class="soft">Hold to insist. They will come, and remember being pushed.</p><div class="presses">${controls.join('')}</div></details>`
+    : '';
+}
+
+function notebook(s: ValleyState): string {
+  pressShown.clear();
+  const pending = pendingReplies(s);
+  const today = dayOfMinute(s.minute);
+  const notes = s.notes.filter((n) => n.at <= s.minute + QUANTUM && dayOfMinute(n.at) >= today - 20);
+  // Current replies and important news lead. Historical dialogue stays in the book.
+  const recent = notes
+    .filter((n) => dayOfMinute(n.at) === today)
+    .sort((a, b) => b.weight - a.weight || b.at - a.at);
+  const lead = recent.slice(0, 2).sort((a, b) => b.at - a.at);
+  const kept = new Set(lead.map((n) => n.id));
+  const earlier = notes.filter((n) => !kept.has(n.id));
+  const showHistory = earlier.length
+    ? btn(
+        historyOpen ? 'Close more notes' : 'Read more notes',
+        () => {
+          historyOpen = !historyOpen;
+          drawSheet(true);
+        },
+        { cls: 'more' },
+      )
+    : '';
+  let archive = '';
+  if (historyOpen) {
+    const days = [...new Set(earlier.map((n) => dayOfMinute(n.at)))].sort((a, b) => b - a);
+    archive = `<div class="archive">${days
+      .map((d) => {
+        const list = earlier.filter((n) => dayOfMinute(n.at) === d).sort((a, b) => b.at - a.at);
+        const shown = openDays.has(d) ? list : list.slice(0, 2);
+        const more =
+          shown.length < list.length
+            ? btn(
+                'Read the rest of this day',
+                () => {
+                  openDays.add(d);
+                  drawSheet(true);
+                },
+                { cls: 'more' },
+              )
+            : '';
+        return `<div class="day"><h3>${esc(dateWords(d))}</h3>${shown.map((n) => noteLine(n)).join('')}${more}</div>`;
+      })
+      .join('')}</div>`;
+  }
+  return `<section class="current-notes"><h2 class="section-label">${recent.length ? 'Today’s word' : 'The notebook'}</h2>${lead.length ? lead.map((n) => noteLine(n)).join('') : '<p class="soft">No new word today. Choose a house to visit, or let the days pass.</p>'}</section>${pending}${showHistory}${archive}`;
+}
+
+function noteLine(n: Note): string {
+  return `<div class="note${n.weight < 2 ? ' quiet' : ''}"><span class="t">${esc(partOfDay(n.at))}</span>${esc(n.text)}${n.words && !n.text.toLowerCase().includes(n.words.toLowerCase()) ? `<span class="w">“${esc(n.words)}”</span>` : ''}</div>`;
 }
 
 const BREAD: [number, string][] = [
@@ -1047,6 +1116,7 @@ function jobInSeason(s: ValleyState): Job | null {
 
 function houseCard(s: ValleyState, hh: Household): string {
   pressShown.clear();
+  const pending = pendingReplies(s, hh);
   const people = hh.members.map((m) => personOf(s, m)).filter((p) => !!p);
   const names = people.map((p) => p?.name ?? '').join(', ');
   const job = jobInSeason(s);
@@ -1104,7 +1174,7 @@ function houseCard(s: ValleyState, hh: Household): string {
     : '';
   const share =
     s.flags.verbs.includes('take') && underSeal(s, hh) && hh.members.length
-      ? `<p class="soft" style="font-size:15px">The agha’s book: their share is ${shareOwed(hh)} kile${hh.eased ? ' (eased)' : ''}; ${hh.paid >= shareOwed(hh) - 0.5 ? 'paid' : hh.paid > 0 ? 'part paid' : 'not yet paid'}.</p>`
+      ? `<p class="soft" style="font-size:15px">The landowner’s book: their share is ${shareOwed(hh)} grain measures${hh.eased ? ' (eased)' : ''}; ${hh.paid >= shareOwed(hh) - 0.5 ? 'paid' : hh.paid > 0 ? 'part paid' : 'not yet paid'}.</p>`
       : '';
   return `<div class="card ink-in">
     <div class="head"><b>${esc(hh.name)}</b>${btn(
@@ -1123,19 +1193,14 @@ function houseCard(s: ValleyState, hh: Household): string {
       .join('')}
     ${reeve ? `<div class="hunch reeve">${esc(reeve)}<span class="by">Osman’s guess</span></div>` : ''}
     ${share}
+    ${pending}
     ${book}
-    ${recent.map((n) => noteLine(s, n)).join('')}
+    ${recent.length ? `<details class="house-history"><summary>Earlier word from this house</summary>${recent.map((n) => noteLine(n)).join('')}</details>` : ''}
   </div>`;
 }
 
-const CRIER: Record<Job, string> = {
-  'reap-agha': 'for the agha’s barley',
-  'bring-share': 'for the shares',
-  'build-mill': 'for the mill',
-};
-
 const JOB_LABEL: Record<Job, string> = {
-  'reap-agha': 'to the agha’s barley',
+  'reap-agha': 'to the landowner’s barley',
   'bring-share': 'to bring the share',
   'build-mill': 'to the mill',
 };
@@ -1147,7 +1212,7 @@ function openAsk(s: ValleyState, job: Job, hid?: string): Ask | undefined {
 }
 
 function houseThumbs(s: ValleyState, hh: Household): string {
-  const out: string[] = [];
+  const out: string[] = [`<p class="limits">${esc(limitsWords(s, hh))}</p>`];
   const job = jobInSeason(s);
   const under = underSeal(s, hh);
   if (!hh.members.length)
@@ -1198,75 +1263,24 @@ function houseThumbs(s: ValleyState, hh: Household): string {
   if (s.flags.verbs.includes('give') && s.agha.granary >= 2)
     out.push(
       btn('Send them grain', () => order({ verb: 'give', house: hh.id, kile: 6 }), {
-        hint: 'a few kile from the granary',
+        hint: 'a few grain measures from the granary',
       }),
     );
-  if (!out.length)
-    out.push(
-      btn(
-        'Back to the notebook',
-        () => {
-          selected = null;
-          drawSheet(true);
-        },
-        { cls: 'wide' },
-      ),
-    );
+  out.push(
+    btn(
+      'Back to the notebook',
+      () => {
+        selected = null;
+        drawSheet(true);
+      },
+      { cls: 'wide' },
+    ),
+  );
   return out.join('');
 }
 
-/** The agha's due in words, for the main screen: the exact numbers stay in his ledger. */
-function dueWords(s: ValleyState): string {
-  const today = dayOfMinute(s.minute);
-  if (s.notes.some((n) => n.kind === 'due' && dayOfMinute(n.at) === today && n.at <= s.minute))
-    return 'The rider has been and gone. His book is closed for the year.';
-  const days = nextRiderDay(s) - today;
-  if (days > 120)
-    return `The rider comes again on ${dateWords(nextRiderDay(s))}. The granary rests till the harvest.`;
-  const r = s.agha.granary / Math.max(1, s.agha.due);
-  const when0 = days === 1 ? 'The rider comes tomorrow.' : `The rider comes in ${days} days.`;
-  // In the harvest the granary cannot move before the threshing: say what the field is doing instead.
-  const inField = s.agha.standing + s.agha.reaped;
-  if (r < 1 && days > 0 && inField > 5 && doyOf(today) < 262) {
-    const cutShare = s.agha.reaped / inField;
-    const field =
-      s.agha.standing < 3
-        ? 'His barley is all cut and lies in sheaves.'
-        : cutShare > 0.66
-          ? 'Most of his barley is cut; some still stands.'
-          : cutShare > 0.33
-            ? 'About half his barley is cut.'
-            : cutShare > 0.05
-              ? 'A little of his barley is cut; most still stands.'
-              : 'His barley is still standing.';
-    const goal = !s.asks.length ? ' Get it cut before the rain.' : '';
-    const thresh =
-      doyOf(today) < 216 ? ' The sheaves reach the granary at the threshing, from 5 Ağustos.' : '';
-    return `${when0} ${field}${goal}${thresh}`;
-  }
-  const fill =
-    r >= 1
-      ? 'The granary holds his due.'
-      : r > 0.8
-        ? 'The granary is nearly at his due.'
-        : r > 0.5
-          ? 'The granary is past half his due.'
-          : r > 0.2
-            ? 'The granary is well short of his due.'
-            : 'The granary is nowhere near his due.';
-  const when =
-    days <= 0
-      ? 'The rider is in the valley.'
-      : days === 1
-        ? 'The rider comes tomorrow.'
-        : `The rider comes in ${days} days.`;
-  return `${when} ${fill}`;
-}
-
 function valleyThumbs(s: ValleyState): string {
-  const out: string[] = [
-    `<p class="soft" style="margin:0;flex-basis:100%;font-size:15px">${esc(dueWords(s))}</p>`,
-  ];
+  const out: string[] = [`<p class="limits">${esc(limitsWords(s))}</p>`];
   const job = jobInSeason(s);
   const houses = s.households.filter((h) => underSeal(s, h) && h.members.length).map((h) => h.id);
   const year = yearOf(dayOfMinute(s.minute));
@@ -1286,26 +1300,19 @@ function valleyThumbs(s: ValleyState): string {
       if (year > 1 || job === 'build-mill')
         out.push(
           btn('…for a sheaf in eight', () => order({ verb: 'call', job, houses, wage: true }), {
-            hint: 'paid from the agha’s grain',
+            hint: 'paid from the landowner’s grain',
           }),
         );
     }
-  } else if (job) {
-    const a = openAsk(s, job);
-    const said = a ? Object.values(a.replies) : [];
-    const came = said.filter((r) => r.verdict === 'assented' || r.verdict === 'complied').length;
-    out.push(
-      `<p class="soft" style="margin:0;flex-basis:100%;font-size:15px">The crier has called ${CRIER[job]}. ${came ? `${came > 6 ? 'Many' : came > 2 ? 'Some' : 'A few'} have come.` : 'Nobody has come yet.'}</p>`,
-    );
   }
   if (s.flags.verbs.includes('borrow') && (!s.agha.loan || s.minute - s.agha.loan.asked > 300 * DAY))
     out.push(
       btn('Write to the agha for grain', () => order({ verb: 'borrow', kile: 80 }), {
-        hint: '80 kile in twelve days; 100 owed to him at the next rider',
+        hint: '80 grain measures in twelve days; 100 owed to him at the next rider',
       }),
     );
   out.push(
-    btn(tab === 'ledger' ? 'The notebook' : 'The agha’s ledger', () => {
+    btn(tab === 'ledger' ? 'The notebook' : 'The landowner’s ledger', () => {
       tab = tab === 'ledger' ? 'notes' : 'ledger';
       drawSheet(true);
     }),
@@ -1339,13 +1346,13 @@ function ledger(s: ValleyState): string {
       ? `<tr><td>Owed for the loan${loanOwedAt(s, s.agha.dueDay) ? '' : ', at next year’s rider'}</td><td class="n">${s.agha.loan.owe}</td></tr>`
       : '';
   return `<div class="ledger ink-in">
-    <h2 style="margin:0">The agha’s ledger</h2>
-    <p class="soft" style="font-size:14px">The only numbers in the valley are his.</p>
+    <h2 style="margin:0">The landowner’s ledger</h2>
+    <p class="soft" style="font-size:14px">Grain set aside for the due; gifts leave less for the rider.</p>
     <table>
-      <tr><td>In the granary</td><td class="n">${Math.round(s.agha.granary)} kile</td></tr>
+      <tr><td>In the granary</td><td class="n">${Math.round(s.agha.granary)} grain measures</td></tr>
       ${s.agha.reaped >= 1 ? `<tr><td>Cut, in his sheaves, not yet threshed</td><td class="n">about ${Math.round(s.agha.reaped / 5) * 5 || 1}</td></tr>` : ''}
       ${s.agha.standing >= 1 ? `<tr><td>Still standing in his field</td><td class="n">about ${Math.round(s.agha.standing / 10) * 10 || 5}</td></tr>` : ''}
-      <tr><td>The due</td><td class="n">${s.agha.due} kile</td></tr>
+      <tr><td>The due</td><td class="n">${s.agha.due} grain measures</td></tr>
       <tr><td>The rider comes</td><td class="n">${esc(riderWords(s))}</td></tr>
       ${s.agha.arrears ? `<tr><td>Written against this year</td><td class="n">${s.agha.arrears}</td></tr>` : ''}
       ${loan}
@@ -1381,7 +1388,7 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
   let timer = 0;
   let fired = false;
   b.addEventListener('contextmenu', (e) => e.preventDefault());
-  b.addEventListener('pointerdown', () => {
+  const startHold = () => {
     fired = false;
     b.classList.add('holding');
     timer = window.setTimeout(() => {
@@ -1389,7 +1396,18 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
       b.classList.remove('holding');
       fn();
     }, 650);
+  };
+  b.addEventListener('pointerdown', startHold);
+  b.addEventListener('keydown', (e) => {
+    if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+      e.preventDefault();
+      startHold();
+    }
   });
+  b.addEventListener('keyup', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') cancel();
+  });
+  b.addEventListener('blur', () => cancel());
   const cancel = () => {
     clearTimeout(timer);
     b.classList.remove('holding');
@@ -1420,7 +1438,7 @@ function ending() {
     ${mark()}
     <h1>${dismissed ? 'The second letter' : 'The elders’ gathering'}</h1>
     <p class="soft">${esc(dateWords(dayOfMinute(s.minute)))} of year ${yearWord(yearOf(dayOfMinute(s.minute)))}.</p>
-    ${dismissed ? '<p>The agha’s rider came back with a sealed letter. The elders did not gather for you; they said these things at their own doors, and the reeve wrote them down.</p>' : '<p>They sat along the wall of the konak, as they do at the end of a kahya’s term, and each said one thing.</p>'}
+    ${dismissed ? '<p>The landowner’s rider came back with a sealed letter. The elders did not gather for you; they said these things at their own doors, and the reeve wrote them down.</p>' : '<p>They sat along the wall of the konak, as they do at the end of a kahya’s term, and each said one thing.</p>'}
     ${elders.map((e) => `<div class="elder"><b>${esc(e.name)}</b>, ${esc(e.house)}<span class="w">“${esc(e.words)}”</span></div>`).join('')}
     <p>${esc(letter)}</p>
     <div class="actions">

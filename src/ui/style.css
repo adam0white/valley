@@ -57,7 +57,9 @@ body {
   flex-direction: column;
 }
 a {
-  color: var(--ink);
+  color: var(--sky);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 button {
   font: inherit;
@@ -71,14 +73,19 @@ button {
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
+  min-width: 44px;
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--ink) 25%, transparent);
 }
 button.primary {
   border-color: var(--rope);
-  color: var(--rope);
   font-weight: 600;
+  background: var(--rope);
+  color: var(--paper);
 }
 button:disabled {
   opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
 }
 .hand {
   font-family: var(--hand);
@@ -143,9 +150,9 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 12px;
   font-size: 15px;
   min-height: 44px;
+  padding: 6px 12px;
 }
 .top .grow {
   flex: 1;
@@ -161,11 +168,11 @@ button:disabled {
   gap: 4px;
 }
 .speed button {
-  min-height: 36px;
-  min-width: 40px;
   padding: 2px 6px;
   font-size: 14px;
   border-color: var(--ink-soft);
+  min-width: 44px;
+  min-height: 44px;
 }
 .speed button.on {
   border-color: var(--rope);
@@ -177,26 +184,28 @@ button:disabled {
 .map {
   position: relative;
   flex: 0 0 auto;
-  height: 40dvh;
-  min-height: 240px;
-  max-height: 460px;
   border-top: 1.5px solid var(--ink-soft);
   border-bottom: 1.5px solid var(--ink);
+  height: 32dvh;
+  min-height: 285px;
+  max-height: 370px;
+  padding-bottom: 58px;
 }
 .map canvas {
   width: 100%;
-  height: 100%;
   display: block;
   touch-action: manipulation;
+  height: 100%;
 }
 .map .caption {
   position: absolute;
   left: 10px;
-  bottom: 6px;
-  font-size: 14px;
   color: var(--ink-soft);
   pointer-events: none;
-  max-width: 70%;
+  bottom: 62px;
+  font-size: 12px;
+  max-width: 95%;
+  background: var(--paper);
 }
 .sheet {
   flex: 1 1 auto;
@@ -204,8 +213,10 @@ button:disabled {
   padding: 8px 12px 10px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
   -webkit-overflow-scrolling: touch;
+  min-height: 0;
+  gap: 10px;
+  padding-top: 12px;
 }
 .thumbs {
   flex: 0 0 auto;
@@ -214,6 +225,8 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  max-height: 42dvh;
+  overflow-y: auto;
 }
 .thumbs button {
   flex: 1 1 40%;
@@ -225,15 +238,16 @@ button:disabled {
 .thumbs button.wide {
   flex-basis: 100%;
 }
+.card .h,
 .thumbs button .h,
 .ledger button .h,
-.knock button .h,
-.card .h {
-  font-family: var(--hand);
-  font-size: 17px;
+.knock button .h {
   color: var(--ink-soft);
   display: block;
-  line-height: 1.05;
+  font-family: var(--text);
+  font-size: 12px;
+  line-height: 1.25;
+  margin-top: 3px;
 }
 .knock {
   border: 1.5px solid var(--rope);
@@ -248,6 +262,20 @@ button:disabled {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+.note button {
+  padding: 2px 10px;
+  font-size: 14px;
+  margin-top: 2px;
+  position: relative;
+  overflow: hidden;
+  min-width: 44px;
+  min-height: 44px;
+}
+.pending-replies button {
+  position: relative;
+  overflow: hidden;
+  font-size: 14px;
 }
 .knock .row button,
 .card .row button {
@@ -274,9 +302,10 @@ button:disabled {
 }
 .card .head .x {
   margin-left: auto;
-  min-height: 36px;
   padding: 2px 12px;
   font-size: 14px;
+  min-width: 44px;
+  min-height: 44px;
 }
 .card .looks {
   font-style: italic;
@@ -296,9 +325,9 @@ button:disabled {
 }
 .hunch .by {
   font-family: var(--text);
-  font-size: 12px;
   color: var(--ink-soft);
   margin-left: 4px;
+  font-size: 11px;
 }
 .day h3 {
   font-size: 14px;
@@ -309,9 +338,10 @@ button:disabled {
   border-bottom: 1px solid var(--paper-2);
 }
 .note {
-  font-size: 16px;
-  margin: 4px 0;
   max-width: 60ch;
+  font-size: 15px;
+  line-height: 1.4;
+  margin: 6px 0;
 }
 .note .t {
   font-size: 12px;
@@ -320,22 +350,12 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 .note .w {
-  font-family: var(--hand);
-  font-size: 20px;
-  line-height: 1.1;
   display: block;
-}
-.note.heavy {
-  border-left: 2px solid var(--rope);
-  padding-left: 8px;
-}
-.note button {
-  min-height: 36px;
-  padding: 2px 10px;
-  font-size: 14px;
-  margin-top: 2px;
-  position: relative;
-  overflow: hidden;
+  font: inherit;
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.4;
+  padding-left: 10px;
 }
 .note .presses {
   display: flex;
@@ -347,13 +367,15 @@ button:disabled {
   margin-top: 0;
 }
 .more {
-  background: none;
-  border: none;
-  color: var(--ink-soft);
   font-size: 14px;
-  min-height: 32px;
-  padding: 0;
-  text-decoration: underline;
+  align-self: flex-start;
+  border: 1px solid var(--ink-soft);
+  padding: 8px 12px;
+  background: var(--paper-2);
+  color: var(--sky);
+  text-decoration: none;
+  min-width: 44px;
+  min-height: 44px;
 }
 .fill {
   position: absolute;
@@ -461,4 +483,181 @@ button:disabled {
   clip-path: none;
   width: auto;
   height: auto;
+}
+
+/* Owner playtest: keep the current task above the map and controls distinct from ink. */
+@media (hover: hover) {
+  button:not(:disabled):hover,
+  summary:hover {
+    background: color-mix(in srgb, var(--sky) 15%, var(--paper));
+    border-color: var(--sky);
+    color: var(--ink);
+  }
+  a:hover {
+    color: var(--rope);
+  }
+}
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--sky);
+  outline-offset: 3px;
+}
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.charge-link {
+  font-size: 14px;
+  padding: 6px 10px;
+}
+.orientation {
+  padding: 10px 12px;
+  border-top: 1px solid var(--paper-2);
+}
+.orientation p {
+  margin: 0;
+}
+.moment {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.orientation .next {
+  font-size: 14px;
+  margin-top: 5px;
+  line-height: 1.35;
+}
+#houses {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 5px 10px 7px;
+  background: var(--paper);
+  border-top: 1px solid var(--paper-2);
+}
+#houses button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+#houses button.selected {
+  background: var(--sky);
+  color: var(--paper);
+  border-color: var(--sky);
+}
+.house-prompt {
+  font-size: 12px;
+  color: var(--ink-soft);
+  flex: 0 0 54px;
+}
+.section-label {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.note.quiet,
+.archive,
+.house-history {
+  color: var(--ink-soft);
+}
+.archive {
+  border-top: 1px solid var(--paper-2);
+  padding-top: 8px;
+}
+.limits {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.card .looks,
+.card .people {
+  font-size: 14px;
+}
+.hunch,
+.hunch.reeve {
+  font-family: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.charge h2 {
+  font-size: 21px;
+  margin: 0;
+}
+.charge h3 {
+  font-size: 15px;
+  margin: 8px 0 0;
+}
+.charge p {
+  margin: 0;
+  font-size: 15px;
+}
+.purpose {
+  font-size: 20px;
+  line-height: 1.45;
+}
+summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 10px;
+  color: var(--sky);
+  text-decoration: underline;
+}
+.house-history {
+  font-size: 14px;
+}
+.pending-replies summary {
+  border: 1px solid var(--ink-soft);
+  border-radius: 10px;
+  background: var(--paper-2);
+  margin-bottom: 8px;
+  text-decoration: none;
+  font-size: 14px;
+}
+#lab-controls summary {
+  min-height: 44px;
+}
+@media (min-width: 900px) {
+  .play {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+  .play .orientation {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+  .play .map {
+    grid-row: 3 / 5;
+    padding-bottom: 58px;
+  }
+  .play .sheet {
+    grid-row: 3;
+  }
+  .play .thumbs {
+    grid-row: 4;
+  }
+  .moment {
+    font-size: 22px;
+  }
+  #houses {
+    flex-wrap: wrap;
+  }
+}
+.pending-replies .presses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pending-replies p {
+  font-size: 13px;
+  margin: 0 0 6px;
 }
