@@ -4,6 +4,8 @@
  * when something heavy happens, never a pause). The save is the kahya's ledger: the seed and the input log in local
  * storage, and a bound volume (the whole state, gzipped) in IndexedDB every few weeks of the valley's time.
  */
+
+import { type PhoneStage, phoneStage } from '@adam0white/lab-kit';
 import {
   DAY,
   daylight,
@@ -87,6 +89,10 @@ let raf = 0;
 let last = 0;
 let carry = 0;
 let selected: string | null = null;
+let stage: PhoneStage | null = null;
+let houseAction = '';
+let valleyAction = '';
+let houseDetails = false;
 let tab: 'notes' | 'ledger' | 'charge' = 'notes';
 let historyOpen = false;
 let repliesOpen = false;
@@ -267,6 +273,8 @@ function title() {
   const where = log
     ? `Your ledger is open at ${dateWords(dayOfMinute(log.minute))} of year ${yearWord(yearOf(dayOfMinute(log.minute)))}.`
     : '';
+  stage?.destroy();
+  stage = null;
   app.innerHTML = `<div class="page">
     ${mark()}
     <h1>The Valley</h1>
@@ -337,18 +345,43 @@ function enter() {
   lastDay = dayOfMinute(g.valley.minute);
   lastSnapDay = lastDay;
   seenNote = Math.max(seenNote, (g.valley.notes.at(-1)?.id ?? 0) - 6);
-  app.innerHTML = `<div class="play">
+  stage?.destroy();
+  app.innerHTML = `<div class="play lk-stage" data-sheet="fit">
+    <section class="lk-strip" aria-label="Valley state">
     <div class="top"><button class="charge-link" data-charge>Your charge</button><span class="grow"></span><span class="speed" id="speed" aria-label="Time passing"></span></div>
     <p id="hold-feedback" class="hold-feedback" role="status" hidden></p>
     <section class="orientation" aria-label="The work ahead"><p id="now" class="moment"></p><p id="next" class="next soft"></p></section>
-    <div class="map"><canvas id="map" aria-label="The valley map"></canvas><div class="caption" id="cap"></div><nav id="houses" aria-label="Choose a house"></nav></div>
-    <div class="sheet" id="sheet"></div>
-    <div class="thumbs" id="thumbs"></div>
+    <p class="caption" id="cap"></p></section>
+    <div class="map lk-scene"><canvas id="map" aria-label="The valley map"></canvas><nav id="houses" aria-label="Choose a house"></nav></div>
+    <section class="lk-sheet" aria-label="Valley notebook">
+      <header class="lk-sheet-head" id="sheet-head" hidden></header>
+      <div id="house-answer" hidden></div>
+      <div class="sheet lk-sheet-body" id="sheet"></div>
+      <footer class="thumbs lk-commit" id="thumbs"></footer>
+    </section>
   </div>`;
   app.querySelector('[data-charge]')?.addEventListener('click', () => {
     selected = null;
     tab = 'charge';
     drawSheet(true);
+  });
+  const root = app.querySelector<HTMLElement>('.lk-stage');
+  if (root)
+    stage = phoneStage(root, {
+      observeOnly: true,
+      onSceneRect: () => {
+        root.dataset.reflow = String(
+          parseFloat(getComputedStyle(root.querySelector('#now') ?? root).fontSize) > 24,
+        );
+      },
+    });
+  app.querySelector('#sheet-head')?.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('.house-close')) closeHouse();
+    if ((e.target as HTMLElement).closest('.house-about')) {
+      houseDetails = !houseDetails;
+      drawSheet(true);
+      app.querySelector<HTMLButtonElement>('.house-about')?.focus({ preventScroll: true });
+    }
   });
   const cv = app.querySelector('#map') as HTMLCanvasElement;
   cv.addEventListener('click', (e) => tapMap(cv, e));
@@ -852,12 +885,23 @@ function tapMap(cv: HTMLCanvasElement, e: MouseEvent) {
 /** Select a house (or none): the map tap and the accessible house list both land here. */
 function pick(id: string | null) {
   selected = id && selected !== id ? id : null;
+  houseAction = '';
+  houseDetails = false;
   hunchCache = null;
   drawSheet(true);
   drawMap();
-  if (selected && matchMedia('(max-width: 899px)').matches)
-    app.querySelector('#sheet')?.scrollIntoView({ block: 'start' });
 }
+
+function closeHouse() {
+  const origin = selected;
+  selected = null;
+  drawSheet(true);
+  drawMap();
+  app.querySelector<HTMLButtonElement>(`#houses button[data-h="${origin}"]`)?.focus({ preventScroll: true });
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && selected && !document.querySelector('dialog[open]')) closeHouse();
+});
 
 /** The houses as buttons for screen readers and keyboards, kept in step with the map. */
 function drawHouses(s: ValleyState) {
@@ -865,6 +909,10 @@ function drawHouses(s: ValleyState) {
   if (!nav) return;
   const list = s.households.filter((h) => h.hamlet === 'lower' || s.flags.upper);
   const key = list.map((h) => h.id).join(',');
+  for (const b of nav.querySelectorAll<HTMLButtonElement>('button[data-h]')) {
+    b.classList.toggle('selected', b.dataset.h === selected);
+    b.setAttribute('aria-pressed', String(b.dataset.h === selected));
+  }
   if (nav.getAttribute('data-key') === key) return;
   nav.setAttribute('data-key', key);
   nav.innerHTML =
@@ -917,7 +965,25 @@ function drawSheet(force = false) {
       : tab === 'charge'
         ? charge(s)
         : notebook(s);
-  sheet.innerHTML = (tab === 'charge' ? '' : knocks.join('')) + body;
+  sheet.innerHTML =
+    (tab === 'charge' || hh ? '' : knocks.join('')) +
+    body +
+    (!hh ? `<p class="limits">${esc(limitsWords(s))}</p>` : '');
+  const header = app.querySelector<HTMLElement>('#sheet-head');
+  if (header) {
+    header.hidden = !hh;
+    header.innerHTML = hh
+      ? `<b>${esc(hh.name)}</b><button class="house-about">${houseDetails ? 'Reply' : 'About'}</button><button class="house-close" title="${esc(returnLabel())}">Close</button>`
+      : '';
+  }
+  const answer = app.querySelector<HTMLElement>('#house-answer');
+  if (answer) {
+    answer.replaceChildren();
+    const response = !houseDetails && hh ? sheet.querySelector('.house-response') : null;
+    answer.hidden = !response;
+    if (response) answer.append(response);
+  }
+  app.querySelector('.lk-sheet')?.setAttribute('aria-label', hh ? hh.name : 'Valley notebook');
   const now = app.querySelector('#now');
   const next = app.querySelector('#next');
   if (now) now.textContent = englishText(nowWords(s));
@@ -944,7 +1010,20 @@ function drawSheet(force = false) {
     const fn = actions[Number(b.dataset.k)];
     if (fn) bindHold(b, fn);
   }
+  const chooser = app.querySelector<HTMLSelectElement>('#house-action');
+  chooser?.addEventListener('change', () => {
+    houseAction = chooser.value;
+    drawSheet(true);
+    app.querySelector<HTMLSelectElement>('#house-action')?.focus({ preventScroll: true });
+  });
+  app.querySelector<HTMLSelectElement>('#valley-action')?.addEventListener('change', (e) => {
+    valleyAction = (e.target as HTMLSelectElement).value;
+    drawSheet(true);
+    app.querySelector<HTMLSelectElement>('#valley-action')?.focus({ preventScroll: true });
+  });
+  app.querySelector('.lk-sheet')?.setAttribute('data-details', String(houseDetails && !!hh));
   if (!force) sheet.scrollTop = top;
+  stage?.refresh();
 }
 
 const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -1205,15 +1284,12 @@ function houseCard(s: ValleyState, hh: Household): string {
     s.flags.verbs.includes('take') && underSeal(s, hh) && hh.members.length
       ? `<p class="soft" style="font-size:15px">The landowner’s book: their share is ${shareOwed(hh)} grain measures${hh.eased ? ' (eased)' : ''}; ${hh.paid >= shareOwed(hh) - 0.5 ? 'paid' : hh.paid > 0 ? 'part paid' : 'not yet paid'}.</p>`
       : '';
-  return `<div class="card ink-in">
-    <div class="head"><b>${esc(hh.name)}</b>${btn(
-      'close',
-      () => {
-        selected = null;
-        drawSheet(true);
-      },
-      { cls: 'x' },
-    )}</div>
+  const response = recent.find((n) => n.words && (n.kind === 'voice' || n.ask));
+  if (!houseDetails)
+    return `<div class="card">${response ? `<div class="house-response">${noteLine(response)}</div>` : ''}${pending}</div>`;
+  return `<div class="card">
+    ${response ? `<div class="house-response">${noteLine(response)}</div>` : ''}
+    <div class="house-context"><p class="limits">${esc(limitsWords(s, hh))}</p>
     <div class="looks">${esc(hh.members.length ? hh.looks : 'The door is shut and the hearth is cold.')}</div>
     <div class="people">${hh.members.length ? esc(names) : 'Nobody lives here now.'}</div>
     ${lines
@@ -1221,9 +1297,8 @@ function houseCard(s: ValleyState, hh: Household): string {
       .map((l) => `<div class="hunch">${esc(l)}<span class="by">your guess</span></div>`)
       .join('')}
     ${reeve ? `<div class="hunch reeve">${esc(reeve)}<span class="by">Osman’s guess</span></div>` : ''}
-    ${share}
+    ${share}${book}</div>
     ${pending}
-    ${book}
     ${recent.length ? `<details class="house-history"><summary>Earlier word from this house</summary>${recent.map((n) => noteLine(n)).join('')}</details>` : ''}
   </div>`;
 }
@@ -1261,7 +1336,7 @@ function visitHint(s: ValleyState): string {
 }
 
 function houseThumbs(s: ValleyState, hh: Household): string {
-  const out: string[] = [`<p class="limits">${esc(limitsWords(s, hh))}</p>`];
+  const out: string[] = [];
   const under = underSeal(s, hh);
   const empty = !hh.members.length;
   const renewal = cropReturnWords(s);
@@ -1342,17 +1417,21 @@ function houseThumbs(s: ValleyState, hh: Household): string {
           : giftHint(s),
     }),
   );
-  out.push(
-    btn(
-      returnLabel(),
-      () => {
-        selected = null;
-        drawSheet(true);
-      },
-      { cls: 'wide' },
+  return commandPicker(out, 'house-action', houseAction);
+}
+
+function commandPicker(commands: string[], id: string, selectedTitle: string): string {
+  const titles = commands.map((html) =>
+    (html.match(/^<button[^>]*>([^<]*)/)?.[1] ?? 'Action').replace(
+      'You are out on the lanes',
+      'Walk down and sit with them',
     ),
   );
-  return out.join('');
+  const index = Math.max(0, titles.indexOf(selectedTitle));
+  const label = id === 'house-action' ? 'House action' : 'Valley action';
+  return `<label class="sr" for="${id}">${label}</label>
+    <select id="${id}" aria-label="${label}">${titles.map((text, i) => `<option${i === index ? ' selected' : ''}>${text}</option>`).join('')}</select>
+    ${commands[index]}`;
 }
 
 function pauseToCover() {
@@ -1362,7 +1441,7 @@ function pauseToCover() {
 }
 
 function valleyThumbs(s: ValleyState): string {
-  const out: string[] = [`<p class="limits">${esc(limitsWords(s))}</p>`];
+  const out: string[] = [];
   const houses = s.households.filter((h) => underSeal(s, h) && h.members.length).map((h) => h.id);
   const year = yearOf(dayOfMinute(s.minute));
   const who = s.flags.upper ? 'the valley' : 'the hamlet';
@@ -1409,19 +1488,17 @@ function valleyThumbs(s: ValleyState): string {
           : 'a cart of grain arrives in twelve days; repay a quarter more at a later rider',
     }),
   );
-  out.push(
-    btn(tab === 'ledger' ? 'The notebook' : 'The landowner’s ledger', () => {
-      tab = tab === 'ledger' ? 'notes' : 'ledger';
-      drawSheet(true);
-    }),
-  );
+  const switchTab = btn(tab === 'ledger' ? 'The notebook' : 'The landowner’s ledger', () => {
+    tab = tab === 'ledger' ? 'notes' : 'ledger';
+    drawSheet(true);
+  });
   if (tab !== 'ledger')
     out.push(
       btn('Pause and return to the cover', pauseToCover, {
         hint: 'your place is kept; time stops until you open the ledger',
       }),
     );
-  return out.join('');
+  return commandPicker(out, 'valley-action', valleyAction) + switchTab;
 }
 
 /** The rider's date, with the year when it is not this one. */
@@ -1533,6 +1610,8 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
 // ---------- the ending ----------
 
 function ending() {
+  stage?.destroy();
+  stage = null;
   labScreen('ending');
   cancelAnimationFrame(raf);
   releaseWake();

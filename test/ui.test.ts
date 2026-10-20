@@ -6,6 +6,10 @@ import { act, type Input, newGame, step } from '../src/sim/game.ts';
 import { underSeal } from '../src/sim/valley.ts';
 import { startBrowserServer } from './browser-server.ts';
 
+const shots = process.env.CI
+  ? '/tmp/valley-phone-tests'
+  : '/Users/abdul/code/.lab-scratch/patterns/valley-shots/test';
+
 let server: ChildProcess;
 let browser: Browser;
 let origin: string;
@@ -95,7 +99,8 @@ it.each([
     const house = page.locator('#houses button').first();
     expect(await house.isVisible()).toBe(true);
     await house.click();
-    expect(await page.locator('.card').innerText()).toContain('Kavak');
+    expect(await page.locator('#sheet-head').innerText()).toContain('Kavak');
+    await page.getByRole('button', { name: 'About', exact: true }).click();
     expect(await page.locator('.limits').innerText()).toMatch(/visit|walk|return|request/i);
     expect(await page.locator('.thumbs').innerText()).not.toMatch(/agha|kahya|kile/);
     await page.getByRole('button', { name: 'Your charge', exact: true }).click();
@@ -146,24 +151,25 @@ it.each([
       expect(await page.locator('button.hold').count()).toBe(before);
       expect(await page.locator('.pending-replies button').first().isVisible()).toBe(true);
       await page.locator('#houses button').first().click();
+      await page.locator('#house-action').selectOption({ label: 'Walk down and sit with them' });
       await page.getByRole('button', { name: /Walk down and sit/ }).click();
       expect(await page.getByRole('button', { name: /You are out on the lanes/ }).isDisabled()).toBe(true);
-      expect(await page.locator('.limits').innerText()).toMatch(/return/);
+      expect(await page.locator('#thumbs').innerText()).toMatch(/return/);
       if (!(await page.locator('.pending-replies').evaluate((el) => (el as HTMLDetailsElement).open)))
         await page.locator('.pending-replies summary').click();
       await page.clock.runFor(700);
       expect(await page.locator('.pending-replies').evaluate((el) => (el as HTMLDetailsElement).open)).toBe(
         true,
       );
-      await page.locator('.card .head').scrollIntoViewIfNeeded();
-      mkdirSync('scratch/follow-up-ui', { recursive: true });
+      await page.locator('#sheet-head').scrollIntoViewIfNeeded();
+      mkdirSync(shots, { recursive: true });
       await page.screenshot({
-        path: `scratch/follow-up-ui/replies-${width}x${height}.png`,
+        path: `${shots}/replies-${width}x${height}.png`,
         fullPage: true,
         animations: 'disabled',
       });
       await page.screenshot({
-        path: `scratch/follow-up-ui/replies-viewport-${width}x${height}.png`,
+        path: `${shots}/replies-viewport-${width}x${height}.png`,
         animations: 'disabled',
       });
       await page.clock.runFor(12000);
@@ -175,49 +181,51 @@ it.each([
 );
 
 it.each([
-  [360, 780],
-  [412, 891],
-])('keeps mobile date, household, replies and actions in document flow at %ix%i', async (width, height) => {
-  const page = await browser.newPage({ viewport: { width, height } });
+  [360, 690],
+  [320, 690],
+  [1280, 800],
+])('keeps decision state, scene, Close and grain controls visible at %ix%i', async (width, height) => {
+  const page = await browser.newPage({ viewport: { width, height }, hasTouch: true });
   try {
     await open(page);
-    const layout = await page.evaluate(() => {
-      const element = (id: string) => {
-        const el = document.querySelector(id);
-        if (!el) throw new Error(`Missing ${id}`);
-        return el;
-      };
-      const rect = (id: string) => element(id).getBoundingClientRect();
-      return {
-        dateBottom: rect('#cap').bottom,
-        housesTop: rect('#houses').top,
-        sheetOverflow: getComputedStyle(element('#sheet')).overflowY,
-        actionsOverflow: getComputedStyle(element('#thumbs')).overflowY,
-      };
-    });
-    expect(layout.dateBottom).toBeLessThanOrEqual(layout.housesTop);
-    expect(layout.sheetOverflow).toBe('visible');
-    expect(layout.actionsOverflow).toBe('visible');
     await page.locator('#houses button').first().click();
-    await page.locator('.card .head').scrollIntoViewIfNeeded();
-    const nameY = await page.locator('.card .head').evaluate((e) => e.getBoundingClientRect().top);
-    await page.mouse.wheel(0, 120);
-    await page.clock.runFor(100);
-    const nextNameY = await page.locator('.card .head').evaluate((e) => e.getBoundingClientRect().top);
-    expect(nextNameY).toBeLessThanOrEqual(nameY);
-    expect(await page.locator('#sheet').evaluate((e) => e.scrollTop)).toBe(0);
-    mkdirSync('scratch/follow-up-ui', { recursive: true });
-    await page.clock.runFor(700);
-    await page.locator('.card .head').scrollIntoViewIfNeeded();
-    await page.screenshot({
-      path: `scratch/follow-up-ui/house-${width}x${height}.png`,
-      fullPage: true,
-      animations: 'disabled',
-    });
-    await page.screenshot({
-      path: `scratch/follow-up-ui/house-viewport-${width}x${height}.png`,
-      animations: 'disabled',
-    });
+    const visible = async (selector: string) => {
+      const box = await page.locator(selector).boundingBox();
+      expect(box, selector).not.toBeNull();
+      if (!box) throw new Error(selector);
+      expect(box.y, selector).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height, selector).toBeLessThanOrEqual(height + 1);
+    };
+    for (const selector of ['#now', '#next', '#cap', '#map', '.house-close', '#thumbs'])
+      await visible(selector);
+    expect(await page.locator('#map').evaluate((e) => e.clientHeight)).toBeGreaterThanOrEqual(90);
+    const close = page.locator('.house-close');
+    expect(
+      await close.evaluate((e) => {
+        const r = e.getBoundingClientRect();
+        return e.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+      }),
+    ).toBe(true);
+    await page.locator('#house-action').selectOption({ label: 'Send them grain' });
+    const grain = page.getByRole('button', { name: /Send them grain/ });
+    await grain.click();
+    expect(await page.locator('.house-response').innerText()).toMatch(/grain|jar|bread|gave|sack/i);
+    for (const selector of ['#now', '#next', '#cap', '#map', '.house-close', '#thumbs', '.house-response'])
+      await visible(selector);
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    await page.keyboard.press('Escape');
+    expect(await close.isVisible()).toBe(true);
+    await page.getByRole('button', { name: 'About', exact: true }).click();
+    await visible('#thumbs');
+    expect(await page.locator('.house-about').evaluate((e) => e === document.activeElement)).toBe(true);
+    await close.click();
+    expect(
+      await page
+        .locator('#houses button')
+        .first()
+        .evaluate((e) => e === document.activeElement),
+    ).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   } finally {
     await page.close();
   }
@@ -239,14 +247,17 @@ it('retains quiet unavailable actions with dated renewal and names the return de
     })()`);
     await page.getByRole('button', { name: 'The landowner’s ledger', exact: true }).click();
     await page.locator('#houses button').first().click();
+    await page.locator('#house-action').selectOption({ label: 'Ease their share' });
     const ease = page.getByRole('button', { name: /Ease their share/ });
     expect(await ease.isDisabled()).toBe(true);
     expect(await ease.innerText()).toMatch(/25 June, year two/);
+    await page.locator('#house-action').selectOption({ label: 'Send them grain' });
     const gift = page.getByRole('button', { name: /Send them grain/ });
     expect(await gift.isDisabled()).toBe(true);
     expect(await gift.innerText()).toMatch(/granary.*(low|empty)|grain.*arriv/i);
-    await page.getByRole('button', { name: /Back to the landowner’s ledger/ }).click();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
     expect(await page.locator('.ledger').isVisible()).toBe(true);
+    await page.locator('#valley-action').selectOption({ label: 'Write to the landowner for grain' });
     expect(await page.getByRole('button', { name: /Write to the landowner/ }).isDisabled()).toBe(true);
     expect(await page.getByRole('button', { name: /Pause and return to the cover/ }).isVisible()).toBe(true);
     await page.getByRole('button', { name: /Pause and return to the cover/ }).click();
@@ -302,10 +313,28 @@ it('restores a loan letter at its return time without waiting for the next day',
       s.agha.loan = { kile: 80, owe: 100, asked: s.minute - 300 * 1440 + 30, arrives: 0 };
       _debug.skipTo(0);
     })()`);
+    await page.locator('#valley-action').selectOption({ label: 'Write to the landowner for grain' });
     const letter = page.getByRole('button', { name: /Write to the landowner/ });
     expect(await letter.isDisabled()).toBe(true);
     await page.clock.runFor(2400);
     expect(await letter.isEnabled()).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps grain selected when other house actions unlock', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page);
+    await page.locator('#houses button').first().click();
+    await page.locator('#house-action').selectOption({ label: 'Send them grain' });
+    await page.evaluate(`import('/src/ui/app.ts').then(({ _debug }) => {
+      _debug.game().valley.flags.verbs.push('ease', 'seize');
+      _debug.skipTo(0);
+    })`);
+    expect(await page.locator('#house-action').inputValue()).toBe('Send them grain');
+    expect(await page.locator('#thumbs button').innerText()).toMatch(/^Send them grain/);
   } finally {
     await page.close();
   }

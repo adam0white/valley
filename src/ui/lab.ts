@@ -17,12 +17,15 @@ export function mountLab(options: RunControls): void {
   const controls = document.createElement('nav');
   controls.id = 'lab-controls';
   controls.setAttribute('aria-label', 'Game menu');
-  controls.innerHTML = `<details><summary>Game menu</summary><div class="game-menu-panel"><p>Your place is kept as you play. Bind a full copy so the ledger opens faster.</p><p data-run-status>Take up the seal or open the ledger before saving or sharing a run.</p><button type="button" data-run="bind">Bind this volume now</button><button type="button" data-run="download">Download this run</button><button type="button" data-run="send">Send this run to the notebook</button><label><input type="checkbox"> Anonymous play events</label><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></div></details>`;
+  controls.innerHTML = `<button type="button" data-menu>Game menu</button><dialog class="game-menu-panel" aria-label="Game menu"><button type="button" data-close>Close menu</button><p>Your place is kept as you play. Bind a full copy so the ledger opens faster.</p><p data-run-status>Take up the seal or open the ledger before saving or sharing a run.</p><button type="button" data-run="bind">Bind this volume now</button><button type="button" data-run="download">Download this run</button><button type="button" data-run="send">Send this run to the notebook</button><label><input type="checkbox"> Anonymous play events</label><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></dialog>`;
+  const dialog = controls.querySelector<HTMLDialogElement>('dialog');
+  const opener = controls.querySelector<HTMLButtonElement>('[data-menu]');
+  opener?.addEventListener('click', () => dialog?.showModal());
   const close = () => {
-    const details = controls.querySelector('details');
-    if (details) details.open = false;
-    controls.querySelector('summary')?.focus();
+    dialog?.close();
+    opener?.focus();
   };
+  controls.querySelector('[data-close]')?.addEventListener('click', close);
   controls.querySelector('[data-run="bind"]')?.addEventListener('click', () => {
     close();
     void options.bindVolume();
@@ -40,7 +43,11 @@ export function mountLab(options: RunControls): void {
     });
   });
   controls.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    }
   });
   syncRunControls = () => {
     const status = controls.querySelector<HTMLElement>('[data-run-status]');
