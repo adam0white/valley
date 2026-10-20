@@ -51,6 +51,7 @@ import {
   underSeal,
   type ValleyState,
 } from '../sim/valley.ts';
+import { labScreen, mountLab } from './lab.ts';
 
 const LOG = 'valley-log-v1';
 const SPEEDS = [30, 120, 480] as const; // sim minutes per real second
@@ -229,12 +230,14 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
 // ---------- the title page ----------
 
 export function start() {
+  mountLab(() => (g ? save(g, volume) : undefined));
   if ('serviceWorker' in navigator && location.hostname !== 'localhost')
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   title();
 }
 
 function title() {
+  labScreen('title');
   cancelAnimationFrame(raf);
   const log = readLog();
   const where = log
@@ -302,6 +305,7 @@ function begin(seed: number) {
 // ---------- play ----------
 
 function enter() {
+  labScreen('play');
   if (!g) return;
   if (g.valley.flags.ended) return ending();
   selected = null;
@@ -1405,6 +1409,7 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
 // ---------- the ending ----------
 
 function ending() {
+  labScreen('ending');
   cancelAnimationFrame(raf);
   releaseWake();
   if (!g) return title();
