@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { DAY, START_DOY, YEAR_DAYS } from '../src/sim/calendar.ts';
-import { fingerprint, newGame } from '../src/sim/game.ts';
+import { compactRun, fingerprint, newGame, save, volumeLabel } from '../src/sim/game.ts';
 import { call, shareOwed } from '../src/sim/valley.ts';
 import {
+  callUnavailable,
   dateEnglish,
   englishText,
   limitsWords,
@@ -35,6 +36,40 @@ describe('owner-facing presentation', () => {
     expect(PURPOSE).toMatch(/fed/);
     expect(PURPOSE).toMatch(/trust/);
     expect(PURPOSE).toMatch(/elders/);
+  });
+
+  it('glosses unfamiliar terms without changing stored words or state', () => {
+    const g = newGame(7);
+    const before = fingerprint(g.valley);
+    const stored = 'Osman the reeve: one sheaf in eight; the flock on the yayla; the pekmez cauldron.';
+    required(g.valley.notes[0]).text = stored;
+    const withNote = fingerprint(g.valley);
+    expect(englishText(stored)).toBe(
+      'Osman the reeve (local overseer): one sheaf in eight (one eighth of the harvest as pay); the flock on the yayla (summer highland pasture); the pekmez (grape syrup) cauldron.',
+    );
+    expect(required(g.valley.notes[0]).text).toBe(stored);
+    expect(fingerprint(g.valley)).toBe(withNote);
+    expect(before).not.toBe(withNote);
+    expect(englishText('Yayla')).toBe('Yayla');
+    expect(englishText('a sheaf in eight')).toBe('a sheaf in eight (one eighth of the harvest as pay)');
+    expect(englishText(englishText(stored))).toBe(englishText(stored));
+  });
+
+  it('uses English dates in run and volume export labels without changing saved state', () => {
+    const g = newGame(7);
+    for (const [day, date] of [
+      [0, '18 July'],
+      [18, '5 August'],
+      [167, '1 January'],
+    ] as const) {
+      g.valley.minute = day * DAY;
+      const before = fingerprint(g.valley);
+      const label = volumeLabel(g.valley, 1);
+      expect(label).toBe(`Volume II, ${date} of year ${day === 167 ? 'two' : 'one'}`);
+      expect(save(g, 1).label).toBe(label);
+      expect(compactRun(g, 1).label).toBe(label);
+      expect(fingerprint(g.valley)).toBe(before);
+    }
   });
 
   it('explains the seasonal calendar without moving time', () => {
@@ -142,4 +177,117 @@ describe('owner-facing presentation', () => {
     upper.members = [];
     expect(limitsWords(s, upper)).toMatch(/empty/);
   });
+});
+
+describe('remaining-work guidance', () => {
+  it.each([230, 256])('does not collect completed shares in season day %i', (doy) => {
+    const s = atDoy(doy);
+    s.flags.verbs.push('take');
+    s.agha.standing = 0;
+    s.agha.reaped = 0;
+    s.agha.granary = s.agha.due + 20;
+    for (const h of s.households) h.paid = shareOwed(h);
+    call(
+      s,
+      'bring-share',
+      s.households.map((h) => h.id),
+    );
+    const before = fingerprint(s);
+    expect(nowWords(s)).toMatch(/due is (in|ready)/);
+    expect(nowWords(s)).not.toMatch(/standing call|unpaid/);
+    expect(nextWords(s)).not.toMatch(/bring in the unpaid|Shares can be called/);
+    expect(fingerprint(s)).toBe(before);
+  });
+
+  it.each([259, 260, 270, 290, 340, 90])(
+    'uses the rider receipt after collection on season day %i',
+    (doy) => {
+      const s = atDoy(doy);
+      s.flags.verbs.push('take');
+      s.agha.standing = 0;
+      s.agha.reaped = 0;
+      s.agha.granary = 20;
+      for (const h of s.households) h.paid = shareOwed(h);
+      s.notes.push({
+        id: 999,
+        at: s.agha.dueDay * DAY + 660,
+        kind: 'due',
+        text: 'The rider loaded the whole due.',
+        weight: 3,
+      });
+      s.agha.delivered = s.agha.due;
+      expect(nowWords(s)).toMatch(/due is in/i);
+      expect(nextWords(s)).not.toMatch(/rider comes|unpaid shares/i);
+      expect(nextWords(s)).toMatch(/winter|hungry|mill|crop/i);
+      s.agha.millOpen = true;
+      expect(nowWords(s)).toMatch(/mill/);
+    },
+  );
+
+  it('does not claim a missed due was paid', () => {
+    const s = atDoy(270);
+    s.agha.missed = 1;
+    s.agha.delivered = 10;
+    s.agha.granary = 0;
+    s.notes.push({ id: 999, at: s.agha.dueDay * DAY + 660, kind: 'due', text: 'short', weight: 3 });
+    expect(nowWords(s)).not.toMatch(/due is in|due is ready/i);
+    expect(nextWords(s)).not.toMatch(/rider comes on 15 September\./);
+  });
+});
+
+it('explains completed work and open calls with full return dates', () => {
+  const s = atDoy(230);
+  s.flags.verbs.push('take');
+  const h = required(s.households[0]);
+  required(call(s, 'bring-share', [h.id]));
+  expect(callUnavailable(s, 'bring-share', h)).toMatch(/expires on.*year one/);
+  h.paid = shareOwed(h);
+  expect(callUnavailable(s, 'bring-share', h)).toMatch(/25 June, year two/);
+  expect(limitsWords(s, h)).toMatch(/25 June, year two/);
+  s.agha.standing = 0;
+  expect(callUnavailable(s, 'reap-agha')).toMatch(/cut.*30 June, year two/);
+  s.agha.millOpen = true;
+  s.agha.mill = 600;
+  expect(callUnavailable(s, 'build-mill')).toMatch(/complete.*no further/i);
+});
+
+it('does not revive collection after a rider receipt leaves the bounded notebook', () => {
+  const s = atDoy(270);
+  s.flags.verbs.push('take');
+  s.agha.standing = 0;
+  s.agha.granary = s.agha.due * 2;
+  expect(nowWords(s)).not.toMatch(/unpaid|due is ready/);
+  expect(nextWords(s)).not.toMatch(/rider comes|unpaid/);
+});
+
+it('describes late June renewal as complete and ends renewals with the term', () => {
+  const s = atDoy(178);
+  expect(nextWords(s)).toMatch(/crop.*(stands|standing)|shares.*renewed/i);
+  s.minute = (365 * 2 + 150) * DAY;
+  s.agha.standing = 0;
+  s.flags.verbs.push('take');
+  for (const h of s.households) h.paid = shareOwed(h);
+  expect(callUnavailable(s, 'reap-agha')).toMatch(/no further.*term/i);
+  expect(callUnavailable(s, 'bring-share')).toMatch(/no further.*term/i);
+  expect(limitsWords(s, s.households[0])).not.toMatch(/year four/);
+});
+
+it.each([2, 3])('uses the renewed crop rather than last year’s receipt in year %i', (year) => {
+  const s = newGame(7).valley;
+  s.flags.verbs.push('take');
+  s.agha.standing = 0;
+  const day = (year - 1) * YEAR_DAYS + 230 - START_DOY;
+  s.minute = day * DAY;
+  s.agha.dueDay = day + 29;
+  s.notes.push({ id: 999, at: (day - 336) * DAY, kind: 'due', text: 'The whole due.', weight: 3 });
+  expect(nowWords(s)).toMatch(/unpaid/);
+  expect(nextWords(s)).toMatch(/unpaid/);
+});
+
+it('does not promise another loan after the term ends', () => {
+  const s = newGame(7).valley;
+  s.minute = 800 * DAY;
+  s.agha.loan = { kile: 80, owe: 100, asked: 790 * DAY, arrives: 802 * DAY };
+  expect(limitsWords(s)).toMatch(/rest of your term/);
+  expect(limitsWords(s)).not.toMatch(/year four/);
 });

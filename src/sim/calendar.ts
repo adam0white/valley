@@ -62,6 +62,10 @@ export function dateWords(day: number): string {
   const { month, date } = monthDay(doyOf(day));
   return `${date} ${MONTHS[month]}`;
 }
+/** English date for presentation and exported run labels. */
+export function dateEnglish(day: number): string {
+  return `${monthDay(doyOf(day)).date} ${monthEnglish(day)}`;
+}
 export function monthEnglish(day: number): string {
   return MONTH_EN[monthDay(doyOf(day)).month] ?? '';
 }

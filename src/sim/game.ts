@@ -3,7 +3,7 @@
  * the term (who brings what, when), the ending at the elders' gathering, saves and the playtest export.
  */
 import { FRAMEWORK_VERSION, type Person, recall, restore, snapshot } from '@adam0white/human-framework';
-import { DAY, dateWords, dayOfMinute, doyOf, HOUR, yearOf } from './calendar.ts';
+import { DAY, dateEnglish, dateWords, dayOfMinute, doyOf, HOUR, yearOf } from './calendar.ts';
 import { KAHYA } from './people.ts';
 import { mixSeed, strHash } from './rng.ts';
 import {
@@ -558,7 +558,7 @@ const roman = (n: number): string => {
   return out;
 };
 export const volumeLabel = (s: ValleyState, n: number) =>
-  `Volume ${roman(n + 1)}, ${dateWords(dayOfMinute(s.minute))} of year ${['one', 'two', 'three', 'four'][yearOf(dayOfMinute(s.minute)) - 1] ?? yearOf(dayOfMinute(s.minute))}`;
+  `Volume ${roman(n + 1)}, ${dateEnglish(dayOfMinute(s.minute))} of year ${['one', 'two', 'three', 'four'][yearOf(dayOfMinute(s.minute)) - 1] ?? yearOf(dayOfMinute(s.minute))}`;
 
 export function save(g: Game, n = 0): SavedGame {
   return {

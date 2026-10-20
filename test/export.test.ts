@@ -42,7 +42,7 @@ describe('notebook run exports', () => {
       minute: 17550,
       inputs: ownerInputs,
       fingerprint: 'e6948b88',
-      label: 'Volume I, 30 Temmuz of year one',
+      label: 'Volume I, 30 July of year one',
     });
     expect(fingerprint(load(JSON.parse(JSON.stringify(run))).valley)).toBe('e6948b88');
   });

@@ -36,7 +36,6 @@ import {
 } from '../sim/game.ts';
 import type { Household } from '../sim/people.ts';
 import {
-  type Ask,
   type Hunch,
   houseOf,
   hunchOf,
@@ -48,13 +47,19 @@ import {
   personOf,
   shareOwed,
   underSeal,
+  V,
   type ValleyState,
 } from '../sim/valley.ts';
 import { labScreen, mountLab } from './lab.ts';
 import {
+  callUnavailable,
+  cropReturnWords,
+  currentJob,
   dateEnglish as dateWords,
   englishText,
+  fullDateEnglish,
   limitsWords,
+  loanReturnWords,
   nextWords,
   nowWords,
   PURPOSE,
@@ -263,7 +268,7 @@ function title() {
     ${where ? `<p class="hand">${esc(where)}</p>` : ''}
     <div class="actions">
       ${log ? '<button class="primary" data-go="open">Open the ledger</button>' : '<button class="primary" data-go="new">Take up the seal</button>'}
-      ${log ? '<button data-go="new" class="hold">Begin a new term<span class="fill"></span></button><p class="soft" style="font-size:14px">Hold to begin again; the old ledger is closed for good.</p>' : ''}
+      ${log ? '<button data-go="new" class="hold">Hold to begin a new term<span class="fill"></span></button><p class="soft" style="font-size:14px">Hold to begin again; the old ledger is closed for good.</p>' : ''}
       <button data-go="seed">A named valley (seed)</button>
     </div>
     <p class="soft" style="font-size:14px">Every household has its own needs and memory. People can refuse your requests, and they remember how you answer.</p>
@@ -327,6 +332,7 @@ function enter() {
   seenNote = Math.max(seenNote, (g.valley.notes.at(-1)?.id ?? 0) - 6);
   app.innerHTML = `<div class="play">
     <div class="top"><button class="charge-link" data-charge>Your charge</button><span class="grow"></span><span class="speed" id="speed" aria-label="Time passing"></span></div>
+    <p id="hold-feedback" class="hold-feedback" role="status" hidden></p>
     <section class="orientation" aria-label="The work ahead"><p id="now" class="moment"></p><p id="next" class="next soft"></p></section>
     <div class="map"><canvas id="map" aria-label="The valley map"></canvas><div class="caption" id="cap"></div><nav id="houses" aria-label="Choose a house"></nav></div>
     <div class="sheet" id="sheet"></div>
@@ -842,6 +848,8 @@ function pick(id: string | null) {
   hunchCache = null;
   drawSheet(true);
   drawMap();
+  if (selected && matchMedia('(max-width: 899px)').matches)
+    app.querySelector('#sheet')?.scrollIntoView({ block: 'start' });
 }
 
 /** The houses as buttons for screen readers and keyboards, kept in step with the map. */
@@ -879,7 +887,7 @@ function btn(
 function drawSheet(force = false) {
   if (!g) return;
   const s = g.valley;
-  const key = `${s.notes.at(-1)?.id ?? 0}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}|${selected}|${tab}|${s.asks.length}|${busy(s)}|${dayOfMinute(s.minute)}|${[...openDays].join(',')}|${historyOpen}|${jobInSeason(s)}|${s.agha.granary >= s.agha.due}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${s.asks
+  const key = `${s.notes.at(-1)?.id ?? 0}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}|${selected}|${tab}|${s.asks.length}|${busy(s)}|${dayOfMinute(s.minute)}|${[...openDays].join(',')}|${historyOpen}|${jobInSeason(s)}|${s.agha.granary >= s.agha.due}|${s.flags.verbs.join(',')}|${loanReturnWords(s)}|${s.agha.granary >= 2}|${s.asks
     .filter((a) => !a.closed && a.until > s.minute)
     .map((a) => a.id)
     .join(',')}`;
@@ -902,7 +910,7 @@ function drawSheet(force = false) {
       : tab === 'charge'
         ? charge(s)
         : notebook(s);
-  sheet.innerHTML = englishText((tab === 'charge' ? '' : knocks.join('')) + body);
+  sheet.innerHTML = (tab === 'charge' ? '' : knocks.join('')) + body;
   const now = app.querySelector('#now');
   const next = app.querySelector('#next');
   if (now) now.textContent = englishText(nowWords(s));
@@ -913,20 +921,18 @@ function drawSheet(force = false) {
     });
   }
   drawHouses(s);
-  thumbs.innerHTML = englishText(
-    hh
-      ? houseThumbs(s, hh)
-      : tab === 'charge'
-        ? btn(
-            'Back to the notebook',
-            () => {
-              tab = 'notes';
-              drawSheet(true);
-            },
-            { cls: 'wide' },
-          )
-        : valleyThumbs(s),
-  );
+  thumbs.innerHTML = hh
+    ? houseThumbs(s, hh)
+    : tab === 'charge'
+      ? btn(
+          'Back to the notebook',
+          () => {
+            tab = 'notes';
+            drawSheet(true);
+          },
+          { cls: 'wide' },
+        )
+      : valleyThumbs(s);
   for (const b of app.querySelectorAll<HTMLButtonElement>('button.hold[data-k]')) {
     const fn = actions[Number(b.dataset.k)];
     if (fn) bindHold(b, fn);
@@ -952,18 +958,20 @@ function knockCard(s: ValleyState, k: Knock): string {
   const row =
     k.what === 'grain'
       ? [
-          can && s.agha.granary >= 2
-            ? btn('Give from the granary', () => order({ verb: 'give', house: k.house, kile: 6 }), {
-                hint: 'a few grain measures',
-              })
-            : '',
+          btn('Give from the granary', () => order({ verb: 'give', house: k.house, kile: 6 }), {
+            hint: giftHint(s),
+            disabled: !can || s.agha.granary < 2,
+          }),
           btn('Send them away', () => order({ verb: 'turn-away', knock: k.id })),
         ]
       : [
           btn(
             k.what === 'death' ? 'Go and sit with them' : 'Go',
             () => order({ verb: 'visit', house: k.house, why: k.what }),
-            { disabled: busy(s) },
+            {
+              disabled: busy(s),
+              hint: busy(s) ? visitHint(s) : 'walking and sitting take time away from the residence',
+            },
           ),
           btn('Send your regrets', () => order({ verb: 'turn-away', knock: k.id })),
         ];
@@ -982,7 +990,7 @@ function charge(s: ValleyState): string {
     <p>Choose a house to read its replies and visit. Walking takes time; you can visit again when you return. A visit makes your knowledge of their jars less uncertain.</p>
     <p>Give grain to help a house through hunger. It comes from the landowner’s due. Ease a share to leave more with a house, or press a refusal and be remembered for it.</p>
     <p class="soft">The clock keeps moving. Slow, steady, and fast change how quickly the days pass. New work opens with the crop and the valley’s needs.</p>
-    <p class="soft">Your place is kept as you play. The ledger lets you bind a volume or set the seal down.</p></article>`;
+    <p class="soft">Your place is kept as you play. “Pause and return to the cover” stops time and keeps your place. Open the ledger to resume.</p></article>`;
 }
 
 /** Keep still-actionable refusals visible even when their dated note is archived. */
@@ -1006,11 +1014,27 @@ function pendingReplies(s: ValleyState, house?: Household): string {
       )
         continue;
       pressShown.add(id);
+      const household = s.households.find((h) => h.members.includes(id));
+      const complete =
+        ask.job === 'reap-agha'
+          ? s.agha.standing <= 5
+          : ask.job === 'build-mill'
+            ? s.agha.mill >= V.millHours
+            : !household ||
+              household.paid >= shareOwed(household) - 0.5 ||
+              dayOfMinute(s.minute) >= s.agha.dueDay;
       controls.push(
         btn(
-          `Press ${personOf(s, id)?.name ?? 'them'}`,
+          `Hold to press ${personOf(s, id)?.name ?? 'them'}`,
           () => order({ verb: 'insist', ask: ask.id, pid: id }),
-          { hold: true, hint: reply.says },
+          {
+            hold: true,
+            disabled: complete,
+            hint: complete
+              ? (callUnavailable(s, ask.job, household) ??
+                'This work is complete; no further insistence is needed.')
+              : reply.says,
+          },
         ),
       );
     }
@@ -1108,11 +1132,7 @@ function hunchLine(hc: Hunch | undefined, who: string): string {
 }
 
 function jobInSeason(s: ValleyState): Job | null {
-  const season = seasonOf(doyOf(dayOfMinute(s.minute)));
-  if ((season === 'harvest' || season === 'threshing') && s.agha.standing > 5) return 'reap-agha';
-  if (s.flags.verbs.includes('take') && (season === 'threshing' || season === 'autumn')) return 'bring-share';
-  if (s.agha.millOpen && s.agha.mill < 600) return 'build-mill';
-  return null;
+  return currentJob(s) ?? null;
 }
 
 function houseCard(s: ValleyState, hh: Household): string {
@@ -1206,70 +1226,117 @@ const JOB_LABEL: Record<Job, string> = {
   'build-mill': 'to the mill',
 };
 
-function openAsk(s: ValleyState, job: Job, hid?: string): Ask | undefined {
-  return s.asks.find(
-    (a) => a.job === job && !a.closed && a.until > s.minute && (!hid || a.houses.includes(hid)),
-  );
+function returnLabel(): string {
+  return tab === 'ledger'
+    ? 'Back to the landowner’s ledger'
+    : tab === 'charge'
+      ? 'Back to your charge'
+      : 'Back to the notebook';
+}
+
+function knownJobs(s: ValleyState): Job[] {
+  const jobs: Job[] = ['reap-agha', 'bring-share', 'build-mill'];
+  const current = currentJob(s);
+  return current ? [current, ...jobs.filter((j) => j !== current)] : jobs;
+}
+
+function giftHint(s: ValleyState): string {
+  return s.agha.granary < 2
+    ? 'The granary is too low. Giving returns when threshing, shares, or a loan bring grain in.'
+    : 'a small sack from the granary; leaves less grain for the due';
+}
+
+function visitHint(s: ValleyState): string {
+  return busy(s) && s.kahyaState.visit
+    ? `You can visit again when you return to the residence on ${fullDateEnglish(dayOfMinute(s.kahyaState.visit.back))}.`
+    : 'Visits open when a household puts off your call; send word through the crier first.';
 }
 
 function houseThumbs(s: ValleyState, hh: Household): string {
   const out: string[] = [`<p class="limits">${esc(limitsWords(s, hh))}</p>`];
-  const job = jobInSeason(s);
   const under = underSeal(s, hh);
-  if (!hh.members.length)
-    return btn(
-      'Back to the notebook',
-      () => {
-        selected = null;
-        drawSheet(true);
-      },
-      { cls: 'wide' },
-    );
-  if (job && under && !openAsk(s, job, hh.id))
-    out.push(
-      btn(`Call them ${JOB_LABEL[job]}`, () =>
-        order({
-          verb: 'call',
-          job,
-          houses: [hh.id],
-          wage: job !== 'bring-share' && yearOf(dayOfMinute(s.minute)) > 1,
-        }),
-      ),
-    );
-  if (s.flags.verbs.includes('visit'))
+  const empty = !hh.members.length;
+  const renewal = cropReturnWords(s);
+  for (const job of knownJobs(s)) {
+    const reason = callUnavailable(s, job, hh);
     out.push(
       btn(
-        busy(s) ? 'You are out on the lanes' : 'Walk down and sit with them',
-        () => order({ verb: 'visit', house: hh.id }),
+        `Call them ${JOB_LABEL[job]}`,
+        () =>
+          order({
+            verb: 'call',
+            job,
+            houses: [hh.id],
+            wage: job === 'reap-agha' && yearOf(dayOfMinute(s.minute)) > 1,
+          }),
         {
-          disabled: busy(s),
-          hint: hh.hamlet === 'upper' ? 'most of a morning' : 'a couple of hours',
+          disabled: !!reason,
+          hint:
+            reason ??
+            (job === 'reap-agha' && yearOf(dayOfMinute(s.minute)) > 1
+              ? 'paid work: a small share of the cut grain goes to their jars'
+              : 'the crier carries your request; they can refuse'),
         },
       ),
     );
+  }
+  const visiting = !empty && s.flags.verbs.includes('visit') && !busy(s);
+  out.push(
+    btn(
+      busy(s) ? 'You are out on the lanes' : 'Walk down and sit with them',
+      () => order({ verb: 'visit', house: hh.id }),
+      {
+        disabled: !visiting,
+        hint: empty
+          ? 'Nobody lives here. Visits return if the house is lived in again.'
+          : visiting
+            ? hh.hamlet === 'upper'
+              ? 'most of a morning away from the residence'
+              : 'a couple of hours away from the residence'
+            : visitHint(s),
+      },
+    ),
+  );
   const unpaid = hh.paid < shareOwed(hh) - 0.5;
-  if (s.flags.verbs.includes('ease') && under && unpaid && !hh.eased)
+  const blocked = empty
+    ? 'Nobody lives here; this needs a household.'
+    : !under
+      ? 'This hamlet comes under your seal on 10 June, year two.'
+      : !unpaid
+        ? `Their share is paid. ${renewal}`
+        : null;
+  if (s.flags.verbs.includes('ease'))
     out.push(
       btn('Ease their share', () => order({ verb: 'ease', house: hh.id }), {
-        hint: 'half, this year; the lanes will see',
+        disabled: !!blocked || hh.eased,
+        hint:
+          blocked ??
+          (hh.eased
+            ? `Already eased. ${renewal}`
+            : 'leave half of this year’s share in their jars; the lanes will see'),
       }),
     );
-  if (s.flags.verbs.includes('seize') && under && unpaid)
+  if (s.flags.verbs.includes('seize'))
     out.push(
-      btn('Send the reeve’s men', () => order({ verb: 'seize', house: hh.id }), {
+      btn('Hold to send the reeve’s men', () => order({ verb: 'seize', house: hh.id }), {
         hold: true,
-        hint: 'hold: they take it from the jars',
-      }),
-    );
-  if (s.flags.verbs.includes('give') && s.agha.granary >= 2)
-    out.push(
-      btn('Send them grain', () => order({ verb: 'give', house: hh.id, kile: 6 }), {
-        hint: 'a few grain measures from the granary',
+        disabled: !!blocked,
+        hint: blocked ?? 'they take the share from the jars; the lane will remember the force',
       }),
     );
   out.push(
+    btn('Send them grain', () => order({ verb: 'give', house: hh.id, kile: 6 }), {
+      disabled: empty || !s.flags.verbs.includes('give') || s.agha.granary < 2,
+      hint: empty
+        ? 'Nobody lives here; giving returns if the house is lived in again.'
+        : !s.flags.verbs.includes('give')
+          ? 'Giving opens when a household is short of food or asks at your door.'
+          : giftHint(s),
+    }),
+  );
+  out.push(
     btn(
-      'Back to the notebook',
+      returnLabel(),
       () => {
         selected = null;
         drawSheet(true);
@@ -1280,44 +1347,72 @@ function houseThumbs(s: ValleyState, hh: Household): string {
   return out.join('');
 }
 
+function pauseToCover() {
+  cancelAnimationFrame(raf);
+  writeLog();
+  bindVolume().finally(title);
+}
+
 function valleyThumbs(s: ValleyState): string {
   const out: string[] = [`<p class="limits">${esc(limitsWords(s))}</p>`];
-  const job = jobInSeason(s);
   const houses = s.households.filter((h) => underSeal(s, h) && h.members.length).map((h) => h.id);
   const year = yearOf(dayOfMinute(s.minute));
-  if (job && !openAsk(s, job)) {
-    const who = s.flags.upper ? 'the valley' : 'the hamlet';
-    if (job === 'bring-share')
+  const who = s.flags.upper ? 'the valley' : 'the hamlet';
+  for (const job of knownJobs(s)) {
+    const reason = callUnavailable(s, job);
+    out.push(
+      btn(
+        job === 'bring-share' ? `Call ${who} to bring the shares` : `Call ${who} ${JOB_LABEL[job]}`,
+        () => order({ verb: 'call', job, houses }),
+        {
+          disabled: !!reason,
+          cls: reason ? '' : 'primary',
+          hint:
+            reason ??
+            (job === 'bring-share'
+              ? `the rider comes ${riderWords(s)}`
+              : 'the crier carries your request; they can refuse'),
+        },
+      ),
+    );
+    if (job === 'reap-agha' && year > 1)
       out.push(
-        btn(`Call ${who} to bring the shares`, () => order({ verb: 'call', job, houses }), {
-          cls: 'primary wide',
-          hint: `the rider comes ${riderWords(s)}`,
+        btn('Call to cut barley for pay', () => order({ verb: 'call', job, houses, wage: true }), {
+          disabled: !!reason,
+          hint: reason ?? 'paid work: a small share of the cut grain goes to their jars',
         }),
       );
-    else {
-      out.push(
-        btn(`Call ${who} ${JOB_LABEL[job]}`, () => order({ verb: 'call', job, houses }), { cls: 'primary' }),
-      );
-      if (year > 1 || job === 'build-mill')
-        out.push(
-          btn('…for a sheaf in eight', () => order({ verb: 'call', job, houses, wage: true }), {
-            hint: 'paid from the landowner’s grain',
-          }),
-        );
-    }
   }
-  if (s.flags.verbs.includes('borrow') && (!s.agha.loan || s.minute - s.agha.loan.asked > 300 * DAY))
+  if (s.agha.millOpen)
     out.push(
-      btn('Write to the agha for grain', () => order({ verb: 'borrow', kile: 80 }), {
-        hint: '80 grain measures in twelve days; 100 owed to him at the next rider',
+      btn('Call to carry mill stone for pay', () => {}, {
+        disabled: true,
+        hint: 'Mill work asks for labour without a grain wage. No paid mill calls return this term; use the mill call above.',
       }),
     );
+  const loanBlocked = s.agha.loan && s.minute - s.agha.loan.asked < 300 * DAY;
+  out.push(
+    btn('Write to the landowner for grain', () => order({ verb: 'borrow', kile: 80 }), {
+      disabled: !s.flags.verbs.includes('borrow') || !!loanBlocked,
+      hint: loanBlocked
+        ? (loanReturnWords(s) ?? '')
+        : !s.flags.verbs.includes('borrow')
+          ? 'The letter opens when the forecast shows a shortfall or hungry houses find the granary low.'
+          : 'a cart of grain arrives in twelve days; repay a quarter more at a later rider',
+    }),
+  );
   out.push(
     btn(tab === 'ledger' ? 'The notebook' : 'The landowner’s ledger', () => {
       tab = tab === 'ledger' ? 'notes' : 'ledger';
       drawSheet(true);
     }),
   );
+  if (tab !== 'ledger')
+    out.push(
+      btn('Pause and return to the cover', pauseToCover, {
+        hint: 'your place is kept; time stops until you open the ledger',
+      }),
+    );
   return out.join('');
 }
 
@@ -1370,14 +1465,9 @@ function ledger(s: ValleyState): string {
         { hint: volumeLabel(s, volume) },
       )}
       ${btn('Export the playtest', download, { hint: 'seed, every order you gave, and the valley' })}
-      ${btn(
-        'Set the seal down for now',
-        () => {
-          writeLog();
-          bindVolume().finally(title);
-        },
-        { hint: 'your place is kept; back to the cover' },
-      )}
+      ${btn('Pause and return to the cover', pauseToCover, {
+        hint: 'your place is kept; time stops until you open the ledger',
+      })}
     </div>
     <p class="soft" style="font-size:14px">The term ends at the elders’ gathering, ${esc(dateWords(END_DAY))} of year three.</p>
   </div>`;
@@ -1389,7 +1479,20 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
   let timer = 0;
   let fired = false;
   b.addEventListener('contextmenu', (e) => e.preventDefault());
+  const feedback = () => {
+    if (fired || b.disabled) return;
+    const status = app.querySelector<HTMLElement>('#hold-feedback') ?? document.createElement('p');
+    status.id = 'hold-feedback';
+    status.className = 'hold-feedback';
+    status.setAttribute('role', 'status');
+    status.hidden = false;
+    status.textContent = 'Keep holding to press this action. Release after the ink fills the control.';
+    b.after(status);
+  };
+  b.addEventListener('click', feedback);
   const startHold = () => {
+    if (b.disabled) return;
+    clearTimeout(timer);
     fired = false;
     b.classList.add('holding');
     timer = window.setTimeout(() => {
@@ -1406,7 +1509,10 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
     }
   });
   b.addEventListener('keyup', (e) => {
-    if (e.key === ' ' || e.key === 'Enter') cancel();
+    if (e.key === ' ' || e.key === 'Enter') {
+      feedback();
+      cancel();
+    }
   });
   b.addEventListener('blur', () => cancel());
   const cancel = () => {
@@ -1439,7 +1545,7 @@ function ending() {
     ${mark()}
     <h1>${dismissed ? 'The second letter' : 'The elders’ gathering'}</h1>
     <p class="soft">${esc(dateWords(dayOfMinute(s.minute)))} of year ${yearWord(yearOf(dayOfMinute(s.minute)))}.</p>
-    ${dismissed ? '<p>The landowner’s rider came back with a sealed letter. The elders did not gather for you; they said these things at their own doors, and the reeve wrote them down.</p>' : '<p>They sat along the wall of the konak, as they do at the end of a kahya’s term, and each said one thing.</p>'}
+    ${dismissed ? '<p>The landowner’s rider came back with a sealed letter. The elders did not gather for you; they said these things at their own doors, and the local overseer wrote them down.</p>' : '<p>They sat along the wall of the residence, as they do at the end of a steward’s term, and each said one thing.</p>'}
     ${elders.map((e) => `<div class="elder"><b>${esc(e.name)}</b>, ${esc(e.house)}<span class="w">“${esc(e.words)}”</span></div>`).join('')}
     <p>${esc(letter)}</p>
     <div class="actions">
