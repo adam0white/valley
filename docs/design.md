@@ -93,7 +93,14 @@ After iteration 1 the open hand still reached the end of its term, with the ride
 - The game-design reviewer (Opus, read-only, after round 2) found the biggest first-five-minutes problem: the granary cannot move for 18 days, until the threshing, and the main line said "nowhere near his due" all that time. Two players in two rounds quit there. During the harvest the main line now describes the field: how much of his barley is cut, "Get it cut before the rain" before the first call, and when the sheaves reach the granary. The first harvest evening's tally heads the day. The giveaway word now sums a ten-day gift ledger kept in state, no longer the note text. Houses the open hand fed say so at the end ("The agha lost some barley and we kept our children").
 Replay still matches (seed 1, fingerprint 316dd7c1). The tests run with a 120 s timeout because this machine has run at a load average up to 121 with other agents' builds; HEAD timed the same under that load.
 
+## Notebook export repair (2026-10-20)
+
+The owner's seed 406153184, minute 17550 export loads and replays to its recorded fingerprint `e6948b88`. Sending the full save produced 2,977,030 bytes. The notebook now sends a 981-byte run: game, seed, version, framework, minute, inputs, fingerprint and label. Downloads still include the full state and timestamp. The loader accepts either form and checks a compact replay against its fingerprint. Regression tests reproduce the owner's actions without committing the private full-state file and require a compact run below 5 KB.
+
+Two independent code reviews found one input-aliasing issue in compact loading; the loader now clones inputs, with a regression test. `npm run check` passes all 11 tests. The production build passes. A local browser replay of the owner's file showed the compact run in the notebook preview and sent it through the real gzip client to a local request intercept (981-byte run, 1,065-byte envelope). The download remained 2,977,030 bytes with the same state and fingerprint. No external run was uploaded; the browser reported no page errors. Existing lint warnings remain outside this change's scope.
+
 ## Deferred (targets)
+- Production notebook acceptance of the compact run: verify after a separately authorized deployment, target 2026-10-21. This branch must not deploy; the lab worker and client belong to another agent.
 - The sim in a Web Worker: only if a phone measure shows stutter; decide by 2026-10-22.
 - The forecast's lever: Osman's forecast should come while barley still stands and offer something besides the loan (an early sack from houses with full jars, which they can refuse or resent). The reviewer called the loan alone a debt trap: round 3 (2026-10-21).
 - A winter decision stream: disputes or debts between two houses, drawn from HF ties, brought to the kahya as two-option knocks: version 1.1 (2026-10-23).

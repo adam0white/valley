@@ -1,9 +1,10 @@
 import { createLab } from '@adam0white/lab-client';
+import type { CompactRun } from '../sim/game.ts';
 
 export const lab = createLab({ game: 'valley' });
 
 /** The regular event names are fixed. Only a player-approved export carries the run. */
-export function mountLab(getRun: () => unknown): void {
+export function mountLab(getRun: () => CompactRun | undefined): void {
   if (document.getElementById('lab-controls')) return;
   const controls = document.createElement('details');
   controls.id = 'lab-controls';

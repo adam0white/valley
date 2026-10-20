@@ -490,6 +490,9 @@ export interface SavedGame {
   label: string;
 }
 
+/** A notebook run is replayed from seed and inputs; downloads retain the full saved state. */
+export type CompactRun = Omit<SavedGame, 'state' | 'savedAt'>;
+
 /** A detached plain-JSON copy of the valley (people through HF `snapshot`). */
 export function stateJson(s: ValleyState): ValleyState {
   syncCommunity(s);
@@ -572,8 +575,25 @@ export function save(g: Game, n = 0): SavedGame {
   };
 }
 
-export function load(saved: SavedGame): Game {
-  return { valley: restoreState(saved.state), inputs: structuredClone(saved.inputs) };
+export function compactRun(g: Game, n = 0): CompactRun {
+  return {
+    game: 'valley',
+    version: GAME_VERSION,
+    framework: FRAMEWORK_VERSION,
+    seed: g.valley.seed,
+    minute: g.valley.minute,
+    inputs: structuredClone(g.inputs),
+    fingerprint: fingerprint(g.valley),
+    label: volumeLabel(g.valley, n),
+  };
+}
+
+export function load(saved: SavedGame | CompactRun): Game {
+  if ('state' in saved) return { valley: restoreState(saved.state), inputs: structuredClone(saved.inputs) };
+  const g = replay(saved.seed, structuredClone(saved.inputs), saved.minute);
+  if (fingerprint(g.valley) !== saved.fingerprint)
+    throw new Error('The run’s replay does not match its fingerprint.');
+  return g;
 }
 
 /** Rebuild a run from its seed and inputs alone. */
