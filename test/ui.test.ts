@@ -500,3 +500,32 @@ it('holds menu and notebook time without inputs and resumes the selected speed',
     await page.close();
   }
 });
+
+it('keeps closing grain off by default and toggles it immediately only at the ending', async () => {
+  const page = await browser.newPage();
+  try {
+    await open(page);
+    const menu = page.getByText('Game menu', { exact: true });
+    await menu.click();
+    const tally = page.getByRole('checkbox', {
+      name: 'Reckon the term’s grain at the closing of the ledger',
+    });
+    expect(await tally.isChecked()).toBe(false);
+    await tally.check();
+    expect(await page.locator('[data-closing-grain]').count()).toBe(0);
+    await page.getByRole('button', { name: 'Close menu', exact: true }).click();
+    await page.evaluate(`window.__valley.game().valley.flags.ended = 'dismissed'`);
+    await page.clock.runFor(100);
+    await expect.poll(() => page.locator('[data-closing-grain]').textContent()).toContain('kile total');
+    await menu.click();
+    await tally.uncheck();
+    expect(await page.locator('[data-closing-grain]').textContent()).toBe('');
+    await tally.check();
+    expect(await page.locator('[data-closing-grain]').textContent()).toContain('kile total');
+    await page.reload();
+    await menu.click();
+    expect(await tally.isChecked()).toBe(false);
+  } finally {
+    await page.close();
+  }
+});

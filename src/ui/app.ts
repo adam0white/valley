@@ -51,6 +51,10 @@ import {
   type ValleyState,
 } from '../sim/valley.ts';
 import { labScreen, mountLab } from './lab.ts';
+import { closingGrain } from './tally.ts';
+
+let showClosingGrain = false;
+
 import {
   callUnavailable,
   cropReturnWords,
@@ -252,6 +256,10 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
 
 export function start() {
   mountLab({
+    onTallyChange: (enabled) => {
+      showClosingGrain = enabled;
+      if (g?.valley.flags.ended) drawClosingGrain();
+    },
     getRun: () => (g ? save(g, volume) : undefined),
     hasRun: () => !!g,
     download,
@@ -1732,17 +1740,25 @@ function ending() {
     ${dismissed ? '<p>The landowner’s rider came back with a sealed letter. The elders did not gather for you; they said these things at their own doors, and the local overseer wrote them down.</p>' : '<p>They sat along the wall of the residence, as they do at the end of a steward’s term, and each said one thing.</p>'}
     ${elders.map((e) => `<div class="elder"><b>${esc(e.name)}</b>, ${esc(e.house)}<span class="w">“${esc(e.words)}”</span></div>`).join('')}
     <p>${esc(letter)}</p>
+    <div data-closing-grain></div>
     <div class="actions">
       <button class="primary" data-go="title">Close the ledger</button>
     </div>
     ${footer()}
   </div>`;
+  drawClosingGrain();
   app.querySelector('[data-go="title"]')?.addEventListener('click', () => {
     clearSaves().then(() => {
       g = null;
       title();
     });
   });
+}
+
+function drawClosingGrain() {
+  const target = app.querySelector('[data-closing-grain]');
+  if (!target) return;
+  target.textContent = g ? closingGrain(g.valley, showClosingGrain) : '';
 }
 
 function download() {

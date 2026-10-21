@@ -5,6 +5,7 @@ export const lab = createLab({ game: 'valley' });
 let syncRunControls: (() => void) | undefined;
 
 type RunControls = {
+  onTallyChange?: (enabled: boolean) => void;
   getRun: () => SavedGame | undefined;
   hasRun: () => boolean;
   download: () => void;
@@ -17,7 +18,7 @@ export function mountLab(options: RunControls): void {
   const controls = document.createElement('nav');
   controls.id = 'lab-controls';
   controls.setAttribute('aria-label', 'Game menu');
-  controls.innerHTML = `<button type="button" data-menu>Game menu</button><dialog class="game-menu-panel" aria-label="Game menu"><button type="button" data-close>Close menu</button><p>Your place is kept as you play. Bind a full copy so the ledger opens faster.</p><p data-run-status>Take up the seal or open the ledger before saving or sharing a run.</p><button type="button" data-run="bind">Bind this volume now</button><button type="button" data-run="download">Download this run</button><button type="button" data-run="send">Send this run to the notebook</button><label><input type="checkbox"> Anonymous play events</label><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></dialog>`;
+  controls.innerHTML = `<button type="button" data-menu>Game menu</button><dialog class="game-menu-panel" aria-label="Game menu"><button type="button" data-close>Close menu</button><p>Your place is kept as you play. Bind a full copy so the ledger opens faster.</p><p data-run-status>Take up the seal or open the ledger before saving or sharing a run.</p><button type="button" data-run="bind">Bind this volume now</button><button type="button" data-run="download">Download this run</button><button type="button" data-run="send">Send this run to the notebook</button><label><input type="checkbox" data-tally> Reckon the term’s grain at the closing of the ledger</label><label><input type="checkbox" data-events> Anonymous play events</label><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></dialog>`;
   const dialog = controls.querySelector<HTMLDialogElement>('dialog');
   const opener = controls.querySelector<HTMLButtonElement>('[data-menu]');
   opener?.addEventListener('click', () => dialog?.showModal());
@@ -56,7 +57,10 @@ export function mountLab(options: RunControls): void {
       button.disabled = !options.hasRun();
   };
   syncRunControls();
-  const toggle = controls.querySelector('input');
+  controls.querySelector<HTMLInputElement>('[data-tally]')?.addEventListener('change', (event) => {
+    options.onTallyChange?.((event.currentTarget as HTMLInputElement).checked);
+  });
+  const toggle = controls.querySelector<HTMLInputElement>('[data-events]');
   if (toggle) {
     toggle.checked = lab.eventsOn;
     const sync = () => {
