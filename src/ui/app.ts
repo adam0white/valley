@@ -1,7 +1,7 @@
 /**
  * The Valley UI: plain DOM and a Canvas 2D ink map over the pure sim. The UI reads state and gives orders through
  * `act`; it never changes the sim directly. Real time drives sim minutes in fixed quanta (continuous, with a slowdown
- * when something heavy happens, never a pause). The save is the kahya's ledger: the seed and the input log in local
+ * when something heavy happens; menus pause time). The save is the kahya's ledger: the seed and the input log in local
  * storage, and a bound volume (the whole state, gzipped) in IndexedDB every few weeks of the valley's time.
  */
 
@@ -427,6 +427,10 @@ function frame(t: number) {
   const s = g.valley;
   const dt = Math.min(250, t - last);
   last = t;
+  if (document.querySelector('dialog[open], .hflab-veil')) {
+    raf = requestAnimationFrame(frame);
+    return;
+  }
   carry += (dt / 1000) * rateNow(t);
   const begun = performance.now();
   let moved = false;

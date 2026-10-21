@@ -468,3 +468,35 @@ it.each([false, true])(
     }
   },
 );
+
+it('holds menu and notebook time without inputs and resumes the selected speed', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const state = () =>
+    page.evaluate<{ minute: number; inputs: string }>(
+      `import('/src/ui/app.ts').then(({ _debug }) => ({ minute: _debug.game().valley.minute, inputs: JSON.stringify(_debug.game().inputs) }))`,
+    );
+  try {
+    await open(page);
+    await page.locator('#speed [data-s="2"]').click();
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    const before = await state();
+    await page.clock.runFor(2000);
+    expect(await state()).toEqual(before);
+    await page.getByRole('button', { name: 'Close menu', exact: true }).click();
+    expect(await page.locator('#speed [aria-pressed="true"]').getAttribute('data-s')).toBe('2');
+    await page.clock.runFor(100);
+    const resumed = await state();
+    expect(resumed.minute).toBeGreaterThan(before.minute);
+    expect(resumed.inputs).toBe(before.inputs);
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    await page.getByRole('button', { name: 'Send this run to the notebook', exact: true }).click();
+    const sending = await state();
+    await page.clock.runFor(2000);
+    expect(await state()).toEqual(sending);
+    await page.getByRole('button', { name: 'Not now', exact: true }).click();
+    await page.clock.runFor(1500);
+    expect((await state()).minute).toBeGreaterThan(sending.minute);
+  } finally {
+    await page.close();
+  }
+});
