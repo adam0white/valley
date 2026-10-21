@@ -1077,3 +1077,34 @@ body:has(.play[data-reflow="true"]) {
 .game-menu-panel::backdrop {
   background: color-mix(in srgb, var(--ink) 35%, transparent);
 }
+
+/* Explanations open in the top layer, with native outside-tap and Escape dismissal. */
+.office-info {
+  width: 28px;
+  min-height: 28px;
+  border-radius: 50%;
+  padding: 0;
+  font:
+    italic bold 16px Georgia,
+    serif;
+}
+.office-terms[popover] {
+  box-sizing: border-box;
+  width: min(32rem, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  padding: 20px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid currentColor;
+  border-radius: 6px;
+}
+.office-terms::backdrop {
+  background: rgb(0 0 0 / 0.2);
+}
+.until-event {
+  font-size: 0.8rem;
+}
+.closing-grain {
+  margin: 16px 0;
+}

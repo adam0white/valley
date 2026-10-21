@@ -63,10 +63,15 @@ it('keeps run controls in a reachable Game menu and explains office terms on req
     expect((await download).suggestedFilename()).toMatch(/^the-valley-.*\.json$/);
     await page.getByRole('button', { name: 'Your charge', exact: true }).click();
     const glossary = page.locator('.office-terms');
-    await glossary.locator('summary').click();
+    const info = page.getByRole('button', { name: 'Words used in the valley', exact: true });
+    await info.focus();
+    await page.keyboard.press('Space');
+    expect(await glossary.evaluate((element) => element.matches(':popover-open'))).toBe(true);
     expect(await glossary.innerText()).toMatch(/kahya.*steward/s);
     expect(await glossary.innerText()).toMatch(/agha.*landowner/s);
     expect(await glossary.innerText()).toMatch(/kile.*grain measure/s);
+    await page.keyboard.press('Escape');
+    expect(await glossary.evaluate((element) => element.matches(':popover-open'))).toBe(false);
     await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
     const box = await menu.boundingBox();
     expect(box && box.y >= 0 && box.y + box.height <= 690).toBe(true);
@@ -179,7 +184,15 @@ it.each([
         path: `${shots}/replies-viewport-${width}x${height}.png`,
         animations: 'disabled',
       });
-      await page.clock.runFor(12000);
+      // Returning is a simulation boundary; inspection now deliberately slows the live clock.
+      await page.evaluate(`(async () => {
+        const { _debug } = await import('/src/ui/app.ts');
+        const { step } = await import('/src/sim/game.ts');
+        const game = _debug.game();
+        step(game, game.valley.kahyaState.visit.back + 30);
+        _debug.skipTo(0);
+      })()`);
+      await page.clock.runFor(100);
       expect(await page.getByRole('button', { name: /Walk down and sit/ }).isEnabled()).toBe(true);
     } finally {
       await page.close();
@@ -469,7 +482,7 @@ it.each([false, true])(
   },
 );
 
-it('holds menu and notebook time without inputs and resumes the selected speed', async () => {
+it('holds menu and notebook time without inputs and resumes automatic pacing', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   const state = () =>
     page.evaluate<{ minute: number; inputs: string }>(
@@ -477,14 +490,14 @@ it('holds menu and notebook time without inputs and resumes the selected speed',
     );
   try {
     await open(page);
-    await page.locator('#speed [data-s="2"]').click();
+    expect(await page.locator('[data-s]').count()).toBe(0);
+    await page.getByRole('button', { name: 'Until something happens', exact: true }).click();
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
     const before = await state();
     await page.clock.runFor(2000);
     expect(await state()).toEqual(before);
     await page.getByRole('button', { name: 'Close menu', exact: true }).click();
-    expect(await page.locator('#speed [aria-pressed="true"]').getAttribute('data-s')).toBe('2');
-    await page.clock.runFor(100);
+    await page.clock.runFor(16000);
     const resumed = await state();
     expect(resumed.minute).toBeGreaterThan(before.minute);
     expect(resumed.inputs).toBe(before.inputs);
@@ -501,30 +514,23 @@ it('holds menu and notebook time without inputs and resumes the selected speed',
   }
 });
 
-it('keeps closing grain off by default and toggles it immediately only at the ending', async () => {
+it('offers the closing grain tally only at the ending, closed until requested', async () => {
   const page = await browser.newPage();
   try {
     await open(page);
-    const menu = page.getByText('Game menu', { exact: true });
-    await menu.click();
-    const tally = page.getByRole('checkbox', {
-      name: 'Reckon the term’s grain at the closing of the ledger',
-    });
-    expect(await tally.isChecked()).toBe(false);
-    await tally.check();
+    await page.getByText('Game menu', { exact: true }).click();
+    expect(await page.locator('[data-tally]').count()).toBe(0);
     expect(await page.locator('[data-closing-grain]').count()).toBe(0);
     await page.getByRole('button', { name: 'Close menu', exact: true }).click();
     await page.evaluate(`window.__valley.game().valley.flags.ended = 'dismissed'`);
     await page.clock.runFor(100);
-    await expect.poll(() => page.locator('[data-closing-grain]').textContent()).toContain('kile total');
-    await menu.click();
-    await tally.uncheck();
-    expect(await page.locator('[data-closing-grain]').textContent()).toBe('');
-    await tally.check();
-    expect(await page.locator('[data-closing-grain]').textContent()).toContain('kile total');
-    await page.reload();
-    await menu.click();
-    expect(await tally.isChecked()).toBe(false);
+    const tally = page.locator('[data-closing-grain]');
+    await expect.poll(() => tally.textContent()).toContain('kile total');
+    expect(await tally.isVisible()).toBe(false);
+    await page.getByText('See the tally', { exact: true }).click();
+    expect(await tally.isVisible()).toBe(true);
+    await page.getByText('See the tally', { exact: true }).click();
+    expect(await tally.isVisible()).toBe(false);
   } finally {
     await page.close();
   }

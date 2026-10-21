@@ -22,7 +22,7 @@ The brief (`scratchpad` copy, summarised: the owner's taste signals, the idea, H
 3. **The kahya's read is approximate.** Hunches come from HF `predictAs` with the kahya as observer: words, with how sure you are. A visit refreshes them (HF `glimpseOf`). The reeve's hunches come from his own impressions, which favour his kin.
 4. **Replies have reasons in the person's words.** HF `says`, filtered: no lens vocabulary, no generic line where it is wrong (The Pass, owner playtest).
 5. **Insisting is offered only on a no.** Press and hold to insist; it brings compliance under protest and costs trust through HF.
-6. **Continuous time, slowdown, not pause.** The clock runs fast through quiet days and slows by itself when a reply or a knock arrives; the player has three speeds.
+6. **Continuous time, slowdown, not pause.** The clock runs fast through quiet days and slows by itself when a reply or a knock arrives; the game sets its pace, and one quiet Until something happens action stops at the next new event (owner, 2026-10-21).
 7. **Limits come from the kahya's body and day.** A visit takes hours of walking; HF fatigue and age limit how many.
 8. **Faith is quiet.** A prayer at dusk is a journal line, never a mechanic.
 9. **Story is implied.** The empty house of the last kahya, the cut pages, the agha's letters that arrive late and sound the same.

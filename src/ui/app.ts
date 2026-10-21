@@ -1,3 +1,4 @@
+import { automaticRate, READING_MS } from './pacing.ts';
 /**
  * The Valley UI: plain DOM and a Canvas 2D ink map over the pure sim. The UI reads state and gives orders through
  * `act`; it never changes the sim directly. Real time drives sim minutes in fixed quanta (continuous, with a slowdown
@@ -51,10 +52,6 @@ import {
   type ValleyState,
 } from '../sim/valley.ts';
 import { labScreen, mountLab } from './lab.ts';
-import { closingGrain } from './tally.ts';
-
-let showClosingGrain = false;
-
 import {
   callUnavailable,
   cropReturnWords,
@@ -68,11 +65,9 @@ import {
   nowWords,
   PURPOSE,
 } from './presentation.ts';
+import { closingGrain } from './tally.ts';
 
 const LOG = 'valley-log-v1';
-const SPEEDS = [30, 120, 480] as const; // sim minutes per real second
-const SPEED_NAMES = ['slow', 'steady', 'fast'];
-const SLOW_RATE = 20;
 const HUB = 'https://human.adamwhite.work';
 
 interface Log {
@@ -87,7 +82,7 @@ interface Log {
 
 const app = document.getElementById('app') as HTMLElement;
 let g: Game | null = null;
-let speed = 0;
+let hurrying = false;
 let slowUntil = 0;
 let raf = 0;
 let last = 0;
@@ -256,10 +251,6 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
 
 export function start() {
   mountLab({
-    onTallyChange: (enabled) => {
-      showClosingGrain = enabled;
-      if (g?.valley.flags.ended) drawClosingGrain();
-    },
     getRun: () => (g ? save(g, volume) : undefined),
     hasRun: () => !!g,
     download,
@@ -334,7 +325,7 @@ function begin(seed: number) {
   setTimeout(() => {
     g = newGame(seed);
     volume = 0;
-    speed = 0;
+    hurrying = false;
     seenNote = 0;
     writeLog();
     enter();
@@ -356,7 +347,7 @@ function enter() {
   stage?.destroy();
   app.innerHTML = `<div class="play lk-stage" data-sheet="fit">
     <section class="lk-strip" aria-label="Valley state">
-    <div class="top"><button class="charge-link" data-charge>Your charge</button><span class="grow"></span><span class="speed" id="speed" aria-label="Time passing"></span></div>
+    <div class="top"><button class="charge-link" data-charge>Your charge</button><span class="grow"></span><button type="button" class="until-event" data-until>Until something happens</button></div>
     <p id="hold-feedback" class="hold-feedback" role="status" hidden></p>
     <section class="orientation" aria-label="The work ahead"><p id="now" class="moment"></p><p id="next" class="next soft"></p></section>
     <p class="caption" id="cap"></p></section>
@@ -393,10 +384,17 @@ function enter() {
   });
   const cv = app.querySelector('#map') as HTMLCanvasElement;
   cv.addEventListener('click', (e) => tapMap(cv, e));
-  app.querySelector('#speed')?.addEventListener('click', (e) => {
-    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
-    if (!b) return;
-    speed = Number(b.dataset.s);
+  app.querySelector('[data-until]')?.addEventListener('click', () => {
+    const current = g?.valley;
+    if (
+      !current ||
+      selected ||
+      tab === 'charge' ||
+      current.knocks.some((k) => !k.answered && k.at <= current.minute && k.until > current.minute)
+    )
+      return;
+    seenNote = Math.max(seenNote, current.notes.at(-1)?.id ?? 0);
+    hurrying = true;
     slowUntil = 0;
     drawTop();
   });
@@ -420,22 +418,23 @@ function enter() {
 function rateNow(t: number): number {
   if (!g) return 0;
   const s = g.valley;
-  let r: number = SPEEDS[speed] ?? 120;
-  // Nights go by faster when nobody is out.
-  if (partOfDay(s.minute) === 'night' && !s.kahyaState.visit) r *= 3;
-  if (t < slowUntil) r = Math.min(r, SLOW_RATE);
-  // Someone at the door holds the valley at the slow pace until you answer (slowdown, not a pause).
-  if (s.knocks.some((k) => !k.answered && k.what === 'grain' && k.at <= s.minute && k.until > s.minute))
-    r = Math.min(r, SPEEDS[0]);
-  return r;
+  return automaticRate({
+    night: partOfDay(s.minute) === 'night',
+    travelling: !!s.kahyaState.visit,
+    reading: t < slowUntil || selected !== null || tab === 'charge',
+    waiting: s.knocks.some((k) => !k.answered && k.at <= s.minute && k.until > s.minute),
+    hurrying,
+  });
 }
 
 function frame(t: number) {
   if (!g) return;
   const s = g.valley;
-  const dt = Math.min(250, t - last);
+  const elapsed = Math.max(0, t - last);
+  const dt = Math.min(250, elapsed);
   last = t;
-  if (document.querySelector('dialog[open], .hflab-veil')) {
+  if (document.querySelector('dialog[open], .hflab-veil, :popover-open')) {
+    if (slowUntil > t - elapsed) slowUntil += elapsed;
     raf = requestAnimationFrame(frame);
     return;
   }
@@ -446,7 +445,12 @@ function frame(t: number) {
     step(g, s.minute + QUANTUM);
     carry -= QUANTUM;
     moved = true;
-    afterQuantum(t);
+    if (afterQuantum(t)) {
+      // Stop at the first new event. Carry from the empty stretch cannot spend its reading time.
+      carry = 0;
+      drawSheet();
+      break;
+    }
   }
   // Behind on a slow phone: let time go rather than pile it up.
   carry = Math.min(carry, QUANTUM * 2);
@@ -460,18 +464,25 @@ function frame(t: number) {
   raf = requestAnimationFrame(frame);
 }
 
-function afterQuantum(t: number) {
-  if (!g) return;
+function afterQuantum(t: number): boolean {
+  if (!g) return false;
   const s = g.valley;
   // Something heavy happened: the clock slows by itself for a few seconds.
   const first = dayOfMinute(s.minute) < 1;
+  let event = false;
   for (const n of s.notes) {
     if (n.id <= seenNote) continue;
     seenNote = n.id;
-    if (n.weight >= 2.5 || (first && n.weight >= 2)) slowUntil = t + 3500;
+    if (hurrying || n.kind === 'reply' || n.weight >= 2.5 || (first && n.weight >= 2)) {
+      slowUntil = t + READING_MS;
+      event = true;
+    }
   }
-  if (s.knocks.some((k) => !k.answered && k.at <= s.minute && k.at > s.minute - QUANTUM))
-    slowUntil = t + 3500;
+  if (s.knocks.some((k) => !k.answered && k.at <= s.minute && k.at > s.minute - QUANTUM)) {
+    slowUntil = t + READING_MS;
+    event = true;
+  }
+  if (event) hurrying = false;
   const day = dayOfMinute(s.minute);
   if (day !== lastDay) {
     lastDay = day;
@@ -483,16 +494,20 @@ function afterQuantum(t: number) {
       bindVolume();
     }
   }
+  if (event) drawTop();
+  return event;
 }
 
 function drawTop() {
   if (!g) return;
-  const sp = app.querySelector('#speed');
-  if (sp)
-    sp.innerHTML = SPEED_NAMES.map(
-      (n, i) =>
-        `<button data-s="${i}" class="${i === speed ? 'on' : ''}" aria-pressed="${i === speed}">${n}</button>`,
-    ).join('');
+  const button = app.querySelector<HTMLButtonElement>('[data-until]');
+  if (button) {
+    const s = g.valley;
+    const waiting = s.knocks.some((k) => !k.answered && k.at <= s.minute && k.until > s.minute);
+    if (waiting || selected || tab === 'charge') hurrying = false;
+    button.disabled = hurrying || waiting || selected !== null || tab === 'charge';
+    button.textContent = hurrying ? 'Watching for the next event…' : 'Until something happens';
+  }
 }
 
 function order(o: Order) {
@@ -920,7 +935,7 @@ function closeHouse() {
   app.querySelector<HTMLButtonElement>(`#houses button[data-h="${origin}"]`)?.focus({ preventScroll: true });
 }
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && selected && !document.querySelector('dialog[open]')) closeHouse();
+  if (e.key === 'Escape' && selected && !document.querySelector('dialog[open], :popover-open')) closeHouse();
 });
 
 /** The houses as buttons for screen readers and keyboards, kept in step with the map. */
@@ -969,6 +984,7 @@ function btn(
 }
 
 function drawSheet(force = false) {
+  drawTop();
   if (!g) return;
   const s = g.valley;
   // Field progress can change without a new note; update the strip without replacing controls.
@@ -1106,12 +1122,12 @@ const pressShown = new Set<string>();
 
 function charge(s: ValleyState): string {
   return `<article class="charge card"><h2>Your charge</h2><p class="purpose">${esc(PURPOSE)}</p>
-    <details class="office-terms"><summary>Words used in the valley</summary><dl><dt>kahya</dt><dd>steward: your office in the valley.</dd><dt>agha</dt><dd>landowner: the absent owner whose due you collect.</dd><dt>kile</dt><dd>grain measure: the unit counted in the landowner’s ledger.</dd></dl></details>
+    <button type="button" class="office-info" popovertarget="office-terms" aria-label="Words used in the valley">i</button><div id="office-terms" class="office-terms" popover="auto"><h3>Words used in the valley</h3><dl><dt>kahya</dt><dd>steward: your office in the valley.</dd><dt>agha</dt><dd>landowner: the absent owner whose due you collect.</dd><dt>kile</dt><dd>grain measure: the unit counted in the landowner’s ledger.</dd></dl></div>
     <h3>The work ahead</h3><p>${esc(nextWords(s))}</p>
     <h3>Ask, listen, decide</h3><p>Call a household to work or bring its share. People weigh your request against their own fields and promises. They can refuse.</p>
     <p>Choose a house to read its replies and visit. Walking takes time; you can visit again when you return. A visit makes your knowledge of their jars less uncertain.</p>
     <p>Give grain to help a house through hunger. It comes from the landowner’s due. Ease a share to leave more with a house, or press a refusal and be remembered for it.</p>
-    <p class="soft">The clock keeps moving. Slow, steady, and fast change how quickly the days pass. New work opens with the crop and the valley’s needs.</p>
+    <p class="soft">The valley moves briskly through quiet stretches and slows for replies and decisions. Until something happens waits for the next event and stops there. New work opens with the crop and the valley’s needs.</p>
     <p class="soft">Your place is kept as you play. “Pause and return to the cover” stops time and keeps your place. Open the ledger to resume.</p></article>`;
 }
 
@@ -1740,7 +1756,7 @@ function ending() {
     ${dismissed ? '<p>The landowner’s rider came back with a sealed letter. The elders did not gather for you; they said these things at their own doors, and the local overseer wrote them down.</p>' : '<p>They sat along the wall of the residence, as they do at the end of a steward’s term, and each said one thing.</p>'}
     ${elders.map((e) => `<div class="elder"><b>${esc(e.name)}</b>, ${esc(e.house)}<span class="w">“${esc(e.words)}”</span></div>`).join('')}
     <p>${esc(letter)}</p>
-    <div data-closing-grain></div>
+    <details class="closing-grain"><summary>See the tally</summary><p data-closing-grain></p></details>
     <div class="actions">
       <button class="primary" data-go="title">Close the ledger</button>
     </div>
@@ -1758,7 +1774,7 @@ function ending() {
 function drawClosingGrain() {
   const target = app.querySelector('[data-closing-grain]');
   if (!target) return;
-  target.textContent = g ? closingGrain(g.valley, showClosingGrain) : '';
+  target.textContent = g ? closingGrain(g.valley, true) : '';
 }
 
 function download() {
@@ -1805,10 +1821,6 @@ document.addEventListener('visibilitychange', () => {
 export const _debug = {
   game: () => g,
   order,
-  speed: (i: number) => {
-    speed = i;
-    drawTop();
-  },
   /** Jump ahead (headless, for testing): live the valley to `day` without drawing. */
   skipTo: (day: number) => {
     if (!g) return;
