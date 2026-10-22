@@ -15,7 +15,9 @@ it('protects a reply and an unanswered door even when fast-forwarding', () => {
   );
 });
 
-it('uses the chosen quiet pace without bypassing reading', () => {
-  expect(automaticRate({ ...quiet, selectedRate: 480 })).toBe(480);
-  expect(automaticRate({ ...quiet, selectedRate: 480, reading: true })).toBe(2);
+it('uses seasonal automatic pacing while preserving reading and menu overrides', () => {
+  expect(automaticRate({ ...quiet, working: true })).toBe(120);
+  expect(automaticRate({ ...quiet, working: false })).toBe(240);
+  expect(automaticRate({ ...quiet, working: true, pace: 'fast' })).toBe(480);
+  expect(automaticRate({ ...quiet, pace: 'fast', reading: true })).toBe(2);
 });

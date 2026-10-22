@@ -140,3 +140,11 @@ Round-2 cost: the phone scene gives up geographic placement for a compact labell
 
 ## Owner speed restoration (2026-10-22)
 The original speed choices are restored. Inspection, new-event reading time and menu protections remain. The guarded Until something happens action remains. Simulation inputs, saves and replay rules are unchanged.
+
+## Approved UI sweep (2026-10-22)
+
+Owner: “All good decisions, proceed.” and “Good direction, proceed please, menu is fine. Just "until something happens" is too long, maybe Skip or Fast Forward or something else could be better.”
+
+This supersedes the phone house list, action selectors and main-screen speed controls described above. The phone shows the drawn valley, one sideways house row, current replies and a bottom action bar. House verbs are direct buttons. The ledger and complete notebook are reading sheets. One top-bar i explains the current context, and the menu holds time. Automatic pacing is the default (120 minutes per second during seasonal work, 240 otherwise); Slow, Steady and Fast remain in the menu. The guarded action is labelled “Skip ⏩”. Presentation pacing does not change replay inputs or simulation quanta.
+
+The title shelf loads full saves and compact playtest exports with a fingerprint check. Send word includes an optional remembered tester name, separate linked and consented unlinked paths, and the full run download. The simulation, HF 2.8.0 dependency, historical saves and owner replay fixture are unchanged. Delivery evidence is in the coordinator report `~/code/.lab-scratch/codex/build-valley.md`; Adam accepts the feel after the live rebuild.
