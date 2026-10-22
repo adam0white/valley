@@ -1553,3 +1553,10 @@ body:has(dialog[open], :popover-open) [data-until] {
   min-height: 44px;
   min-width: 44px;
 }
+
+.feedback-body details a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+}

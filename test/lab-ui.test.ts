@@ -98,6 +98,10 @@ it('sends linked feedback with an optional remembered name and keeps a full loca
     await fits(page);
     const panel = feedback(page);
     expect(await panel.innerText()).toContain('Your run, saves and log reach us on their own.');
+    await panel.locator('summary').click();
+    const privacy = await panel.locator('details a').boundingBox();
+    expect(privacy?.height).toBeGreaterThanOrEqual(44);
+    await panel.locator('summary').click();
     const note = panel.locator('textarea').first();
     await note.fill('The winter felt slow.');
     await panel.getByLabel('Your name or tester id', { exact: false }).fill('River tester');
