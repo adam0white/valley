@@ -6,7 +6,7 @@ import { automaticRate, READING_MS } from './pacing.ts';
  * storage, and a bound volume (the whole state, gzipped) in IndexedDB every few weeks of the valley's time.
  */
 
-import { type PhoneStage, phoneStage } from '@adam0white/lab-kit';
+import { type PhoneStage, phoneStage, telemetryNotice } from '@adam0white/lab-kit';
 import {
   DAY,
   daylight,
@@ -51,7 +51,7 @@ import {
   V,
   type ValleyState,
 } from '../sim/valley.ts';
-import { labScreen, mountLab } from './lab.ts';
+import { lab, labScreen, mountLab } from './lab.ts';
 import {
   callUnavailable,
   cropReturnWords,
@@ -83,6 +83,8 @@ interface Log {
   savedAt: string;
 }
 
+const notice = telemetryNotice();
+if (notice) Object.assign(notice.style, { position: 'static', transform: 'none', margin: '0 auto' });
 const app = document.getElementById('app') as HTMLElement;
 let g: Game | null = null;
 let hurrying = false;
@@ -143,7 +145,9 @@ function writeLog() {
     savedAt: new Date().toISOString(),
   };
   try {
-    localStorage.setItem(LOG, JSON.stringify(log));
+    const text = JSON.stringify(log);
+    localStorage.setItem(LOG, text);
+    lab.captureSave(JSON.parse(text));
   } catch {}
 }
 
@@ -187,7 +191,9 @@ async function bindVolume() {
       tx.objectStore('volumes').put(bound, 'current');
       tx.oncomplete = () => res();
       tx.onerror = () => rej(tx.error);
+      tx.onabort = () => rej(tx.error);
     });
+    lab.captureSave({ seed: bound.seed, k: bound.k, minute: bound.minute, state: JSON.parse(json) });
   } catch {}
   writeLog();
 }
@@ -253,6 +259,21 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
 // ---------- the title page ----------
 
 export function start() {
+  lab.trackRun(
+    () => {
+      try {
+        const saved = localStorage.getItem(LOG);
+        if (saved) lab.captureSave(JSON.parse(saved));
+      } catch {}
+      return g ? save(g, volume) : null;
+    },
+    {
+      runKey: () => g?.valley.seed ?? 'title',
+      getLogs: () =>
+        g?.valley.notes.slice(-40).map((line) => (line.words ? `${line.text} ${line.words}` : line.text)) ??
+        [],
+    },
+  );
   mountLab({
     getRun: () => (g ? save(g, volume) : undefined),
     hasRun: () => !!g,
@@ -291,6 +312,10 @@ function title() {
     <p class="soft" style="font-size:14px">Every household has its own needs and memory. People can refuse your requests, and they remember how you answer.</p>
     ${footer()}
   </div>`;
+  if (notice && !notice.dataset.shown) {
+    app.querySelector('.page')?.prepend(notice);
+    notice.dataset.shown = '1';
+  }
   app.querySelector('[data-go="open"]')?.addEventListener('click', () => {
     if (log) openLedger(log);
   });

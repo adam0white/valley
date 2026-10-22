@@ -24,7 +24,7 @@ async function fixture(page: Page, oversized: boolean) {
     const labPath = '/src/ui/lab.ts';
     const { save, newGame, load, fingerprint } = await import(gamePath);
     const { mountLab, lab } = await import(labPath);
-    lab.setEventsOff(true);
+    lab.setEventsOff(false);
     const run = save(newGame(7));
     if (oversized) run.padding = 'x'.repeat(4 * 1024 * 1024 + 1);
     document.querySelector('#lab-controls')?.remove();

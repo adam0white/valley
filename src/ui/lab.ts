@@ -11,13 +11,13 @@ type RunControls = {
   bindVolume: () => Promise<void>;
 };
 
-/** The regular event names are fixed. Only a player-approved export carries the run. */
+/** Existing run controls and the linked-recording preference. */
 export function mountLab(options: RunControls): void {
   if (document.getElementById('lab-controls')) return;
   const controls = document.createElement('nav');
   controls.id = 'lab-controls';
   controls.setAttribute('aria-label', 'Game menu');
-  controls.innerHTML = `<button type="button" data-menu>Game menu</button><dialog class="game-menu-panel" aria-label="Game menu"><button type="button" data-close>Close menu</button><p>Your place is kept as you play. Bind a full copy so the ledger opens faster.</p><p data-run-status>Take up the seal or open the ledger before saving or sharing a run.</p><button type="button" data-run="bind">Bind this volume now</button><button type="button" data-run="download">Download this run</button><button type="button" data-run="send">Send this run to the notebook</button><label><input type="checkbox" data-events> Anonymous play events</label><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></dialog>`;
+  controls.innerHTML = `<button type="button" data-menu>Game menu</button><dialog class="game-menu-panel" aria-label="Game menu"><button type="button" data-close>Close menu</button><p>Your place is kept as you play. Bind a full copy so the ledger opens faster.</p><p data-run-status>Take up the seal or open the ledger before saving or sharing a run.</p><button type="button" data-run="bind">Bind this volume now</button><button type="button" data-run="download">Download this run</button><button type="button" data-run="send">Send this run to the notebook</button><label><input type="checkbox" data-events> Record play for the lab</label><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></dialog>`;
   const dialog = controls.querySelector<HTMLDialogElement>('dialog');
   const opener = controls.querySelector<HTMLButtonElement>('[data-menu]');
   opener?.addEventListener('click', () => dialog?.showModal());
@@ -58,16 +58,17 @@ export function mountLab(options: RunControls): void {
   syncRunControls();
   const toggle = controls.querySelector<HTMLInputElement>('[data-events]');
   if (toggle) {
-    toggle.checked = lab.eventsOn;
+    toggle.checked = lab.telemetryOn;
     const sync = () => {
-      toggle.checked = lab.eventsOn;
+      toggle.checked = lab.telemetryOn;
     };
+    window.addEventListener('hf-lab-preference', sync);
     window.addEventListener('storage', sync);
     window.addEventListener('focus', sync);
     document.addEventListener('change', sync);
     toggle.addEventListener('change', () => {
-      lab.setEventsOff(!toggle.checked);
-      toggle.checked = lab.eventsOn;
+      lab.setTelemetryOff(!toggle.checked);
+      toggle.checked = lab.telemetryOn;
     });
   }
   document.body.prepend(controls);
