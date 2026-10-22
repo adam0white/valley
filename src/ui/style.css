@@ -1560,3 +1560,9 @@ body:has(dialog[open], :popover-open) [data-until] {
   min-height: 44px;
   min-width: 44px;
 }
+
+@media (min-width: 900px) {
+  .game-menu-panel[open] {
+    height: calc(100dvh - 56px);
+  }
+}

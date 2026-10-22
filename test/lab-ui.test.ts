@@ -71,6 +71,11 @@ it('keeps reading, pace and return controls in the menu and binds before returni
   try {
     await fixture(page);
     const menu = page.locator('.game-menu-panel');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const drawer = await menu.boundingBox();
+    expect((drawer?.y ?? 0) + (drawer?.height ?? 0)).toBeCloseTo(800, 0);
+    const resume = await menu.locator('[data-resume]').boundingBox();
+    expect((resume?.y ?? 0) + (resume?.height ?? 0)).toBeGreaterThanOrEqual(660);
     expect(await menu.getByRole('button', { name: /The notebook/ }).isVisible()).toBe(true);
     expect(
       await menu
