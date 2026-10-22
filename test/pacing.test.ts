@@ -14,3 +14,8 @@ it('protects a reply and an unanswered door even when fast-forwarding', () => {
     automaticRate({ ...quiet, reading: true }),
   );
 });
+
+it('uses the chosen quiet pace without bypassing reading', () => {
+  expect(automaticRate({ ...quiet, selectedRate: 480 })).toBe(480);
+  expect(automaticRate({ ...quiet, selectedRate: 480, reading: true })).toBe(2);
+});

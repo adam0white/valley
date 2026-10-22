@@ -68,6 +68,9 @@ import {
 import { closingGrain } from './tally.ts';
 
 const LOG = 'valley-log-v1';
+const SPEEDS = [30, 120, 480] as const;
+const SPEED_NAMES = ['slow', 'steady', 'fast'];
+let speed = 0;
 const HUB = 'https://human.adamwhite.work';
 
 interface Log {
@@ -347,7 +350,7 @@ function enter() {
   stage?.destroy();
   app.innerHTML = `<div class="play lk-stage" data-sheet="fit">
     <section class="lk-strip" aria-label="Valley state">
-    <div class="top"><button class="charge-link" data-charge>Your charge</button><span class="grow"></span><button type="button" class="until-event" data-until>Until something happens</button></div>
+    <div class="top"><button class="charge-link" data-charge>Your charge</button><span class="grow"></span><span class="speed" id="speed" role="group" aria-label="Speed"></span><button type="button" class="until-event" data-until>Until something happens</button></div>
     <p id="hold-feedback" class="hold-feedback" role="status" hidden></p>
     <section class="orientation" aria-label="The work ahead"><p id="now" class="moment"></p><p id="next" class="next soft"></p></section>
     <p class="caption" id="cap"></p></section>
@@ -384,6 +387,13 @@ function enter() {
   });
   const cv = app.querySelector('#map') as HTMLCanvasElement;
   cv.addEventListener('click', (e) => tapMap(cv, e));
+  app.querySelector('#speed')?.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
+    if (!b) return;
+    speed = Number(b.dataset.s);
+    hurrying = false;
+    drawTop();
+  });
   app.querySelector('[data-until]')?.addEventListener('click', () => {
     const current = g?.valley;
     if (
@@ -424,6 +434,7 @@ function rateNow(t: number): number {
     reading: t < slowUntil || selected !== null || tab === 'charge',
     waiting: s.knocks.some((k) => !k.answered && k.at <= s.minute && k.until > s.minute),
     hurrying,
+    selectedRate: SPEEDS[speed],
   });
 }
 
@@ -500,6 +511,12 @@ function afterQuantum(t: number): boolean {
 
 function drawTop() {
   if (!g) return;
+  const sp = app.querySelector('#speed');
+  if (sp)
+    sp.innerHTML = SPEED_NAMES.map(
+      (n, i) =>
+        `<button data-s="${i}" class="${i === speed ? 'on' : ''}" aria-pressed="${i === speed}">${n}</button>`,
+    ).join('');
   const button = app.querySelector<HTMLButtonElement>('[data-until]');
   if (button) {
     const s = g.valley;
@@ -1127,7 +1144,7 @@ function charge(s: ValleyState): string {
     <h3>Ask, listen, decide</h3><p>Call a household to work or bring its share. People weigh your request against their own fields and promises. They can refuse.</p>
     <p>Choose a house to read its replies and visit. Walking takes time; you can visit again when you return. A visit makes your knowledge of their jars less uncertain.</p>
     <p>Give grain to help a house through hunger. It comes from the landowner’s due. Ease a share to leave more with a house, or press a refusal and be remembered for it.</p>
-    <p class="soft">The valley moves briskly through quiet stretches and slows for replies and decisions. Until something happens waits for the next event and stops there. New work opens with the crop and the valley’s needs.</p>
+    <p class="soft">Slow, steady and fast set the pace. Replies and decisions slow the clock. Until something happens waits for the next event and stops there. New work opens with the crop and the valley’s needs.</p>
     <p class="soft">Your place is kept as you play. “Pause and return to the cover” stops time and keeps your place. Open the ledger to resume.</p></article>`;
 }
 

@@ -490,7 +490,7 @@ it('holds menu and notebook time without inputs and resumes automatic pacing', a
     );
   try {
     await open(page);
-    expect(await page.locator('[data-s]').count()).toBe(0);
+    expect(await page.locator('[data-s]').count()).toBe(3);
     await page.getByRole('button', { name: 'Until something happens', exact: true }).click();
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
     const before = await state();

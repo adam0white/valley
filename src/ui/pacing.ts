@@ -6,9 +6,10 @@ export function automaticRate(s: {
   reading: boolean;
   waiting: boolean;
   hurrying: boolean;
+  selectedRate?: number;
 }): number {
   if (s.waiting) return 1;
   if (s.reading) return 2;
-  const rate = s.hurrying ? 960 : 120;
+  const rate = s.hurrying ? 960 : (s.selectedRate ?? 30);
   return s.night && !s.travelling ? rate * 3 : rate;
 }
