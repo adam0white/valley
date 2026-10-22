@@ -1136,7 +1136,7 @@ function drawSheet(force = false) {
   const root = app.querySelector<HTMLElement>('.play');
   root?.setAttribute('data-house', String(!!hh));
   root?.setAttribute('data-knock', String(!!knock));
-  root?.setAttribute('data-reader', String(tab !== 'notes'));
+  root?.setAttribute('data-reader', String(tab === 'ledger' || tab === 'reader'));
   const header = app.querySelector<HTMLElement>('#sheet-head');
   if (header) {
     header.hidden = !hh && tab === 'notes';

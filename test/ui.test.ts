@@ -317,3 +317,27 @@ it('opens the completed notebook from the ending without restoring play', async 
     await page.close();
   }
 });
+
+it('keeps Other orders below the scene and house row', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page);
+    await page.getByRole('button', { name: 'Other orders ▸', exact: true }).click();
+    expect((await page.locator('.lk-sheet').boundingBox())?.y).toBeCloseTo(332, 0);
+    expect(await page.locator('#thumbs').isVisible()).toBe(false);
+  } finally {
+    await page.close();
+  }
+});
+
+it('opens the ledger directly below the state strip', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page);
+    await page.getByRole('button', { name: 'The ledger ▸', exact: true }).click();
+    expect((await page.locator('.lk-sheet').boundingBox())?.y).toBeCloseTo(80, 0);
+    expect(await page.getByText('In the granary', { exact: true }).isVisible()).toBe(true);
+  } finally {
+    await page.close();
+  }
+});

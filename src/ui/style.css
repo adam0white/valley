@@ -530,6 +530,8 @@ h3 {
   display: none;
 }
 .play[data-reader="true"] > .lk-sheet {
+  grid-row: 1 / -1;
+  grid-column: 1 / -1;
   position: absolute;
   z-index: 3;
   top: 80px;
@@ -1543,4 +1545,11 @@ body:has(dialog[open], :popover-open) [data-until] {
     width: 440px;
     height: calc(100dvh - 56px);
   }
+}
+
+.ending-actions .footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
 }
