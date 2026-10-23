@@ -99,19 +99,18 @@ it.each([
 it.each([
   [360, 690],
   [1280, 800],
-])('keeps the selected-house instruction on one line at %ix%i', async (width, height) => {
+])('keeps the selected-house instruction inside the scene at %ix%i', async (width, height) => {
   const page = await browser.newPage({ viewport: { width, height } });
   try {
     await open(page);
     await page.locator('#houses [data-h="coban"]').click();
     const instruction = await page.locator('#now').evaluate((e) => {
-      const range = document.createRange();
-      range.selectNodeContents(e);
-      return {
-        lines: new Set([...range.getClientRects()].map((r) => r.top)).size,
-      };
+      const map = e.parentElement!.getBoundingClientRect();
+      const goal = e.getBoundingClientRect();
+      const steward = document.querySelector('#steward')!.getBoundingClientRect();
+      return { inside: goal.top >= map.top && goal.bottom <= steward.top };
     });
-    expect(instruction.lines).toBe(1);
+    expect(instruction.inside).toBe(true);
   } finally {
     await page.close();
   }
@@ -403,6 +402,67 @@ it('opens the ledger directly below the state strip', async () => {
     await page.getByRole('button', { name: 'The ledger ▸', exact: true }).click();
     expect((await page.locator('.lk-sheet').boundingBox())?.y).toBeCloseTo(80, 0);
     expect(await page.getByText('In the granary', { exact: true }).isVisible()).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
+it.each([
+  [360, 690],
+  [1280, 800],
+])('keeps complete house guidance and scrollable About above actions at %ix%i', async (width, height) => {
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await open(page);
+    await page.getByRole('button', { name: 'the Ak house', exact: true }).click();
+    await page.getByRole('button', { name: 'About ▾', exact: true }).click();
+    const readable = async () =>
+      page.evaluate(() => {
+        const goal = document.querySelector<HTMLElement>('#now')!;
+        const caption = document.querySelector<HTMLElement>('.action-caption')!;
+        const body = document.querySelector<HTMLElement>('#sheet')!;
+        const actions = document.querySelector<HTMLElement>('#thumbs')!;
+        return {
+          goal: goal.scrollWidth <= goal.clientWidth && goal.scrollHeight <= goal.clientHeight,
+          caption: caption.scrollWidth <= caption.clientWidth && caption.scrollHeight <= caption.clientHeight,
+          guidance: [...body.querySelectorAll<HTMLElement>('.limits')].every(
+            (e) => e.scrollWidth <= e.clientWidth && e.scrollHeight <= e.clientHeight,
+          ),
+          body:
+            body.clientHeight >= 80 &&
+            body.getBoundingClientRect().bottom <= actions.getBoundingClientRect().top + 1,
+          actions: actions.getBoundingClientRect().bottom <= innerHeight + 1,
+        };
+      });
+    expect(await readable()).toEqual({
+      goal: true,
+      caption: true,
+      guidance: true,
+      body: true,
+      actions: true,
+    });
+    const body = page.locator('#sheet');
+    await body.evaluate((e) => {
+      e.scrollTop = e.scrollHeight;
+    });
+    expect(await body.evaluate((e) => e.scrollTop + e.clientHeight >= e.scrollHeight - 1)).toBe(true);
+    await page.getByRole('button', { name: 'Call to barley', exact: true }).click();
+    await page.clock.runFor(30000);
+    expect(
+      await page.getByRole('button', { name: 'About ▾', exact: true }).getAttribute('aria-expanded'),
+    ).toBe('true');
+    await body.evaluate((e) => {
+      e.scrollTop = e.scrollHeight;
+    });
+    expect(await body.evaluate((e) => e.scrollTop + e.clientHeight >= e.scrollHeight - 1)).toBe(true);
+    expect(await readable()).toEqual({
+      goal: true,
+      caption: true,
+      guidance: true,
+      body: true,
+      actions: true,
+    });
+    await fits(page);
   } finally {
     await page.close();
   }

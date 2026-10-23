@@ -509,8 +509,8 @@ h3 {
 }
 .play[data-house="true"] #now {
   display: block;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
 }
 .play[data-house="true"] .thumbs {
   flex-basis: 132px;
@@ -1385,7 +1385,7 @@ button[aria-pressed="true"] {
   gap: 4px;
 }
 .play[data-house="true"] .action-caption {
-  flex: 0 0 20px;
+  flex: 0 0 auto;
 }
 .verb-grid {
   display: grid;
@@ -1454,15 +1454,24 @@ button[aria-pressed="true"] {
   }
 }
 
-/* Override the kit's generic prose rules for the compact state and commit rows. */
+/* Guidance determines the commit row height; the body scrolls above it. */
 .play .action-caption {
   width: 100%;
-  height: 20px;
+  height: auto;
   min-height: 20px;
-  max-height: 20px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-height: none;
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.4;
+}
+.play .thumbs {
+  flex: 0 0 auto;
+  height: auto;
+  grid-template-rows: auto 52px 44px;
+}
+.play[data-house="true"] .thumbs {
+  flex-basis: auto;
+  height: auto;
 }
 .play[data-house="true"] .thumbs {
   flex-wrap: nowrap;
