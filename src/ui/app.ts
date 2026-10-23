@@ -1081,7 +1081,10 @@ function drawHouses(s: ValleyState) {
           ),
       );
       const news = s.notes.some(
-        (n) => dayOfMinute(n.at) === today && (n.house === h.id || (n.who && h.members.includes(n.who))),
+        (n) =>
+          n.at <= s.minute &&
+          dayOfMinute(n.at) === today &&
+          (n.house === h.id || (n.who && h.members.includes(n.who))),
       );
       return `${h.hamlet === 'upper' && list[i - 1]?.hamlet !== 'upper' ? '<span class="hamlet-divider">upper</span>' : ''}<button data-h="${h.id}" class="${selected === h.id ? 'selected' : ''}" aria-pressed="${selected === h.id}" aria-label="${esc(h.name)}"><span class="house-icon" aria-hidden="true">⌂</span>${esc(h.short)}${waiting ? '<span class="reply-mark" aria-label="reply waiting">●</span>' : news ? '<span aria-label="new word today">○</span>' : ''}</button>`;
     })
@@ -1116,7 +1119,8 @@ function drawSheet(force = false) {
   drawTop();
   if (!g || (!force && app.querySelector('button.holding'))) return;
   const s = g.valley;
-  const key = `${s.notes.at(-1)?.id}|${selected}|${tab}|${houseDetails}|${s.asks.length}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}`;
+  // Count newly due scheduled notes, and retain IDs when the capped log replaces an old note.
+  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${s.asks.length}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}`;
   if (!force && sheetKey === key) return;
   sheetKey = key;
   lastSheet = performance.now();
@@ -1257,7 +1261,7 @@ function notebook(s: ValleyState): string {
   const pending = pendingReplies(s);
   const today = dayOfMinute(s.minute);
   const recent = s.notes
-    .filter((n) => dayOfMinute(n.at) === today && n.at <= s.minute + QUANTUM)
+    .filter((n) => dayOfMinute(n.at) === today && n.at <= s.minute)
     .sort((a, b) => b.weight - a.weight || b.at - a.at)
     .slice(0, 3)
     .sort((a, b) => b.at - a.at);
@@ -1265,14 +1269,14 @@ function notebook(s: ValleyState): string {
 }
 
 function reader(s: ValleyState): string {
-  const days = [
-    ...new Set(s.notes.filter((n) => n.at <= s.minute + QUANTUM).map((n) => dayOfMinute(n.at))),
-  ].sort((a, b) => b - a);
+  const days = [...new Set(s.notes.filter((n) => n.at <= s.minute).map((n) => dayOfMinute(n.at)))].sort(
+    (a, b) => b - a,
+  );
   return days
     .map(
       (d) =>
         `<section class="day"><h3>${esc(fullDateEnglish(d))}</h3>${s.notes
-          .filter((n) => dayOfMinute(n.at) === d && n.at <= s.minute + QUANTUM)
+          .filter((n) => dayOfMinute(n.at) === d && n.at <= s.minute)
           .slice()
           .reverse()
           .map(noteLine)
@@ -1418,7 +1422,7 @@ function houseCard(s: ValleyState, hh: Household): string {
     reeve = hunchCache.lines[1] ?? '';
   }
   const recent = s.notes
-    .filter((n) => n.house === hh.id || (n.who && hh.members.includes(n.who)))
+    .filter((n) => n.at <= s.minute && (n.house === hh.id || (n.who && hh.members.includes(n.who))))
     .slice(-4)
     .reverse();
   // The kahya's own book: what he last did to this house, in his words (he knows his acts, not their feelings).

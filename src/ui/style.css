@@ -508,7 +508,9 @@ h3 {
   grid-template-rows: 44px 36px 120px 52px minmax(0, 1fr);
 }
 .play[data-house="true"] #now {
-  -webkit-line-clamp: 1;
+  display: block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .play[data-house="true"] .thumbs {
   flex-basis: 132px;

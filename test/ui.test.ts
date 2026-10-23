@@ -96,6 +96,72 @@ it.each([
   }
 });
 
+it.each([
+  [360, 690],
+  [1280, 800],
+])('keeps the selected-house instruction on one line at %ix%i', async (width, height) => {
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await open(page);
+    await page.locator('#houses [data-h="coban"]').click();
+    const instruction = await page.locator('#now').evaluate((e) => {
+      const range = document.createRange();
+      range.selectNodeContents(e);
+      return {
+        lines: new Set([...range.getClientRects()].map((r) => r.top)).size,
+      };
+    });
+    expect(instruction.lines).toBe(1);
+  } finally {
+    await page.close();
+  }
+});
+
+it('shows a visit conversation only when its scheduled time arrives', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page, 360, 7);
+    await page.evaluate(
+      `import('/src/ui/app.ts').then(({ _debug }) => _debug.order({ verb: 'visit', house: 'coban' }))`,
+    );
+    await page.clock.runFor(50);
+    expect(await page.locator('#steward').innerText()).toMatch(/walking to/);
+    expect(await page.locator('.house-response').count()).toBe(0);
+    await page.locator('.house-about').click();
+    expect(await page.locator('#sheet').innerText()).not.toContain('at the hearth');
+    // Keep the sheet open: it must redraw when the existing future note becomes due.
+    await page.clock.runFor(35000);
+    expect(await page.locator('.house-response').count()).toBe(1);
+  } finally {
+    await page.close();
+  }
+});
+
+it('refreshes current word when a new note replaces one at the note cap', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page);
+    await page.evaluate(`(async () => {
+      const { _debug } = await import('/src/ui/app.ts');
+      const { note } = await import('/src/sim/valley.ts');
+      const s = _debug.game().valley;
+      for (let i = 0; i < 400; i++) note(s, { at: s.minute, kind: 'voice', text: 'Old word', weight: 3 });
+      _debug.skipTo(0);
+    })()`);
+    expect(await page.locator('.current-notes').innerText()).toContain('Old word');
+    await page.evaluate(`(async () => {
+      const { _debug } = await import('/src/ui/app.ts');
+      const { note } = await import('/src/sim/valley.ts');
+      const s = _debug.game().valley;
+      note(s, { at: s.minute, kind: 'voice', text: 'A new word at the door', weight: 4 });
+    })()`);
+    await page.clock.runFor(1000);
+    expect(await page.locator('.current-notes').innerText()).toContain('A new word at the door');
+  } finally {
+    await page.close();
+  }
+});
+
 it('replaces a call with Skip and opens replies without a fold', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
