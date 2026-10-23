@@ -1,22 +1,21 @@
 /**
  * The valley's households and their people. Everyone is an HF `Person`; this module only says who they are at the
  * start (traits, values, norms, habits, ties, trust in the kahya's office) and never keeps a parallel model of their
- * minds. The lower hamlet is written by hand so that its stories are reliable (the reeve and his brother, the
- * shepherd whose wife is near her time, the widow the last kahya wronged); the upper hamlet is rolled from the seed.
+ * minds. The lower hamlet is written by hand so that its stories are reliable (incidental household roles and the
+ * canonical builder whose wife is near her time); the upper hamlet is rolled from the seed.
  */
 import {
   createPerson,
-  enablePromptings,
   MINUTES_PER_YEAR,
   MUSLIM_CUSTOM,
   marry,
   type Person,
   type PersonSpec,
   promise,
-  remember,
   seedTie,
 } from '@adam0white/human-framework';
 import { DAY } from './calendar.ts';
+import { canonicalOpening } from './cast.ts';
 import { hashUnit, mixSeed } from './rng.ts';
 
 export const KAHYA = 'kahya';
@@ -74,17 +73,21 @@ interface Who {
   devout?: boolean;
   skills?: Record<string, number>;
   body?: PersonSpec['body'];
+  christian?: boolean;
 }
 
-const NORMS = (devout: boolean, honesty: number) => [
+const NORMS = (devout: boolean, honesty: number, christian = false) => [
   { normId: 'theft', standing: 'forbidden' as const, conviction: 0.6 + 0.35 * honesty },
-  { normId: 'salah', standing: 'obligatory' as const, conviction: devout ? 0.85 : 0.35 },
+  ...(christian
+    ? []
+    : [{ normId: 'salah', standing: 'obligatory' as const, conviction: devout ? 0.85 : 0.35 }]),
   // Engineering assumption: the share is an agreed obligation (fulfilling contracts), held as each person understands it.
   { normId: 'dues', standing: 'obligatory' as const, conviction: 0.1 + 0.5 * honesty },
 ];
 
 export function makePerson(w: Who, seed: number, now: number, household: string): Person {
-  const honesty = w.traits?.honesty ?? 0.5;
+  const canonical = canonicalOpening(w.id);
+  const honesty = canonical?.traits.honesty ?? w.traits?.honesty ?? 0.5;
   const spec: PersonSpec = {
     id: w.id,
     name: w.name,
@@ -92,9 +95,15 @@ export function makePerson(w: Who, seed: number, now: number, household: string)
     now,
     bornAt: now - Math.round((w.age + hashUnit(seed, w.age, w.id.length) * 0.9) * MINUTES_PER_YEAR),
     sex: w.sex,
-    traits: { ...w.traits },
-    values: { tradition: 0.6, security: 0.7, conformity: 0.55, benevolence: 0.6, ...w.values },
-    norms: w.age >= 12 ? NORMS(w.devout ?? false, honesty) : [],
+    traits: canonical?.traits ?? { ...w.traits },
+    values: canonical?.values ?? {
+      tradition: 0.6,
+      security: 0.7,
+      conformity: 0.55,
+      benevolence: 0.6,
+      ...w.values,
+    },
+    norms: w.age >= 12 ? NORMS(w.devout ?? false, honesty, w.christian) : [],
     skills: { farming: w.age >= 14 ? 0.45 + 0.3 * Math.min(1, (w.age - 14) / 20) : 0.1, ...w.skills },
     voices: [{ voiceId: KAHYA, trust: w.trust ?? 0.45 }],
     retention: { trace: 0, chronicleDays: 31 },
@@ -159,7 +168,7 @@ const LOWER: HouseSpec[] = [
     people: [
       {
         id: 'osman',
-        name: 'Osman',
+        name: 'the reeve',
         age: 52,
         sex: 'male',
         trust: 0.6,
@@ -169,7 +178,7 @@ const LOWER: HouseSpec[] = [
       },
       {
         id: 'hatice',
-        name: 'Hatice',
+        name: 'a household member',
         age: 47,
         sex: 'female',
         trust: 0.5,
@@ -178,7 +187,7 @@ const LOWER: HouseSpec[] = [
       },
       {
         id: 'ali',
-        name: 'Ali',
+        name: 'a household member',
         age: 22,
         sex: 'male',
         trust: 0.5,
@@ -186,7 +195,7 @@ const LOWER: HouseSpec[] = [
       },
       {
         id: 'emine',
-        name: 'Emine',
+        name: 'a child',
         age: 17,
         sex: 'female',
         trust: 0.5,
@@ -205,11 +214,11 @@ const LOWER: HouseSpec[] = [
     size: 114,
     store: 10,
     share: 23,
-    looks: 'Osman’s brother’s house. Three boys’ shirts on the line.',
+    looks: 'The Ak household. Three boys’ shirts on the line.',
     people: [
       {
         id: 'hasan',
-        name: 'Hasan',
+        name: 'a household member',
         age: 44,
         sex: 'male',
         trust: 0.55,
@@ -217,16 +226,16 @@ const LOWER: HouseSpec[] = [
       },
       {
         id: 'fatma',
-        name: 'Fatma',
+        name: 'a household member',
         age: 40,
         sex: 'female',
         trust: 0.5,
         devout: true,
         traits: { conscientiousness: 0.7 },
       },
-      { id: 'ismail', name: 'İsmail', age: 15, sex: 'male', trust: 0.5 },
-      { id: 'kadir', name: 'Kadir', age: 12, sex: 'male' },
-      { id: 'sultan', name: 'Sultan', age: 8, sex: 'female' },
+      { id: 'ismail', name: 'a child', age: 15, sex: 'male', trust: 0.5 },
+      { id: 'kadir', name: 'a child', age: 12, sex: 'male' },
+      { id: 'sultan', name: 'a child', age: 8, sex: 'female' },
     ],
   },
   {
@@ -240,20 +249,22 @@ const LOWER: HouseSpec[] = [
     size: 76,
     store: 3,
     share: 15,
-    looks: 'The shepherd’s house at the edge, a dog on a chain, the flock up on the yayla.',
+    looks:
+      'Yusuf, 34, builds for the valley and tends the flock part-time. Zehra is his wife; their pregnancy is near term. His mother Maryam, 68, is visiting to cook. Tariq, his son from an earlier household chapter, is away at the Well; Zehra is Tariq’s stepmother.',
     people: [
       {
         id: 'yusuf',
         name: 'Yusuf',
-        age: 38,
+        age: 34,
+        devout: true,
+        skills: { building: 0.75 },
         sex: 'male',
         trust: 0.4,
-        traits: { honesty: 0.75, agreeableness: 0.4, extraversion: 0.3, emotionality: 0.55 },
-        values: { benevolence: 0.8, autonomy: 0.7 } as PersonSpec['values'],
       },
       { id: 'zehra', name: 'Zehra', age: 31, sex: 'female', trust: 0.4, body: { fitness: 0.4 } },
-      { id: 'cemal', name: 'Cemal', age: 9, sex: 'male' },
-      { id: 'gul', name: 'Gül', age: 6, sex: 'female' },
+      { id: 'cemal', name: 'a child', age: 9, sex: 'male' },
+      { id: 'gul', name: 'a child', age: 6, sex: 'female' },
+      { id: 'maryam', name: 'Hajja Maryam', age: 68, sex: 'female', devout: true, skills: { cooking: 0.85 } },
     ],
   },
   {
@@ -267,11 +278,11 @@ const LOWER: HouseSpec[] = [
     size: 34,
     store: 4,
     share: 7,
-    looks: 'Widow Saliha’s house by the stream. The ox stall is empty.',
+    looks: 'The Dere household by the stream. The ox stall is empty.',
     people: [
       {
         id: 'saliha',
-        name: 'Saliha',
+        name: 'a household member',
         age: 58,
         sex: 'female',
         trust: 0.22,
@@ -280,7 +291,7 @@ const LOWER: HouseSpec[] = [
       },
       {
         id: 'musa',
-        name: 'Musa',
+        name: 'a household member',
         age: 26,
         sex: 'male',
         trust: 0.3,
@@ -303,15 +314,22 @@ const LOWER: HouseSpec[] = [
     people: [
       {
         id: 'mustafa',
-        name: 'Mustafa',
+        name: 'a household member',
         age: 30,
         sex: 'male',
         trust: 0.5,
         traits: { honesty: 0.55, conscientiousness: 0.45, extraversion: 0.7, openness: 0.7 },
         values: { achievement: 0.75, stimulation: 0.6 } as PersonSpec['values'],
       },
-      { id: 'elif', name: 'Elif', age: 26, sex: 'female', trust: 0.45, traits: { emotionality: 0.65 } },
-      { id: 'bebek', name: 'Nuri', age: 1, sex: 'male' },
+      {
+        id: 'elif',
+        name: 'a household member',
+        age: 26,
+        sex: 'female',
+        trust: 0.45,
+        traits: { emotionality: 0.65 },
+      },
+      { id: 'bebek', name: 'a child', age: 1, sex: 'male' },
     ],
   },
   {
@@ -329,7 +347,7 @@ const LOWER: HouseSpec[] = [
     people: [
       {
         id: 'ibrahim',
-        name: 'İbrahim',
+        name: 'a household member',
         age: 63,
         sex: 'male',
         trust: 0.5,
@@ -337,18 +355,18 @@ const LOWER: HouseSpec[] = [
         traits: { honesty: 0.8, conscientiousness: 0.8, agreeableness: 0.65 },
         skills: { smithing: 0.85 },
       },
-      { id: 'havva', name: 'Havva', age: 60, sex: 'female', trust: 0.5, devout: true },
+      { id: 'havva', name: 'a household member', age: 60, sex: 'female', trust: 0.5, devout: true },
       {
         id: 'halil',
-        name: 'Halil',
+        name: 'a household member',
         age: 31,
         sex: 'male',
         trust: 0.45,
         skills: { smithing: 0.6 },
         traits: { conscientiousness: 0.6 },
       },
-      { id: 'meryem', name: 'Meryem', age: 24, sex: 'female', trust: 0.45 },
-      { id: 'ahmet', name: 'Ahmet', age: 2, sex: 'male' },
+      { id: 'meryem', name: 'a household member', age: 24, sex: 'female', trust: 0.45 },
+      { id: 'ahmet', name: 'a child', age: 2, sex: 'male' },
     ],
   },
   {
@@ -366,22 +384,22 @@ const LOWER: HouseSpec[] = [
     people: [
       {
         id: 'omer',
-        name: 'Ömer',
+        name: 'a household member',
         age: 48,
         sex: 'male',
         trust: 0.45,
         traits: { honesty: 0.6, conscientiousness: 0.55, agreeableness: 0.7 },
       },
-      { id: 'gulsum', name: 'Gülsüm', age: 45, sex: 'female', trust: 0.45, devout: true },
+      { id: 'gulsum', name: 'a household member', age: 45, sex: 'female', trust: 0.45, devout: true },
       {
         id: 'esma',
-        name: 'Esma',
+        name: 'a household member',
         age: 19,
         sex: 'female',
         trust: 0.5,
         traits: { extraversion: 0.65, openness: 0.65 },
       },
-      { id: 'hanife', name: 'Hanife', age: 15, sex: 'female', trust: 0.5 },
+      { id: 'hanife', name: 'a child', age: 15, sex: 'female', trust: 0.5 },
     ],
   },
   {
@@ -399,7 +417,7 @@ const LOWER: HouseSpec[] = [
     people: [
       {
         id: 'recep',
-        name: 'Recep',
+        name: 'a household member',
         age: 29,
         sex: 'male',
         trust: 0.4,
@@ -407,7 +425,7 @@ const LOWER: HouseSpec[] = [
       },
       {
         id: 'serife',
-        name: 'Şerife',
+        name: 'a household member',
         age: 63,
         sex: 'female',
         trust: 0.45,
@@ -416,7 +434,7 @@ const LOWER: HouseSpec[] = [
       },
       {
         id: 'zeynep',
-        name: 'Zeynep',
+        name: 'a household member',
         age: 21,
         sex: 'female',
         trust: 0.45,
@@ -549,6 +567,53 @@ function upperHouses(seed: number): HouseSpec[] {
   return out;
 }
 
+/** Visiting roles; departure mechanics remain pending the released chapter contract. No inferred host-family kinship. */
+const VISITORS: HouseSpec[] = [
+  {
+    id: 'guests',
+    short: 'Guest',
+    hamlet: 'lower',
+    x: 590,
+    y: 540,
+    fx: 590,
+    fy: 540,
+    size: 0,
+    store: 9,
+    share: 0,
+    looks:
+      'Visitors staying for the survey season: Yusuf Usta, 74, advises on digging; Meryem, 19, his granddaughter, assists with surveys. Samira, 29, gathers and advises on stores; her husband Idris and children Lena and Pell remain at home with agreed care. They brought provisions for a season. No return day or paid survey work has yet been agreed here. They are guests, not one family.',
+    people: [
+      {
+        id: 'yusuf-usta',
+        name: 'Yusuf Usta',
+        age: 74,
+        sex: 'male',
+        body: { fitness: 0.3 },
+        skills: { digging: 0.85 },
+      },
+      { id: 'meryem-visitor', name: 'Meryem', age: 19, sex: 'female', skills: { surveying: 0.3 } },
+      { id: 'samira', name: 'Samira', age: 29, sex: 'female', skills: { gathering: 0.7 } },
+    ],
+  },
+  {
+    id: 'water-guest',
+    short: 'Water guest',
+    hamlet: 'lower',
+    x: 650,
+    y: 500,
+    fx: 650,
+    fy: 500,
+    size: 0,
+    store: 3,
+    share: 0,
+    looks:
+      'Danyal, 52, is a visiting well keeper and Christian widower. He lodges separately with his own grain. He and Maryam are old friends. He brought provisions for a season; the water-work visit and return chapter still need their own arrangements.',
+    people: [
+      { id: 'danyal', name: 'Danyal', age: 52, sex: 'male', christian: true, skills: { waterwork: 0.8 } },
+    ],
+  },
+];
+
 export interface Founded {
   households: Household[];
   people: Person[];
@@ -556,7 +621,7 @@ export interface Founded {
 
 /** Found the valley at minute `now`. */
 export function foundValley(seed: number, now: number): Founded {
-  const specs = [...LOWER, ...upperHouses(seed)];
+  const specs = [...LOWER, ...VISITORS, ...upperHouses(seed)];
   const households: Household[] = [];
   const people: Person[] = [];
   for (const h of specs) {
@@ -566,6 +631,7 @@ export function foundValley(seed: number, now: number): Founded {
     for (const a of hp) {
       for (const b of hp) {
         if (a === b) continue;
+        if (h.id === 'guests' || a.id === 'maryam' || b.id === 'maryam') continue;
         const roles: string[] = [];
         const wa = h.people.find((w) => w.id === a.id);
         const wb = h.people.find((w) => w.id === b.id);
@@ -613,15 +679,6 @@ export function foundValley(seed: number, now: number): Founded {
     });
   }
   const byId = new Map(people.map((p) => [p.id, p]));
-  const tie = (a: string, b: string, roles: string[], affection: number, trust: number) => {
-    const pa = byId.get(a);
-    const pb = byId.get(b);
-    if (!pa || !pb) return;
-    seedTie(pa, { otherId: b, roles, affection, familiarity: 0.9, trust });
-    seedTie(pb, { otherId: a, roles, affection, familiarity: 0.9, trust });
-  };
-  // Osman and Hasan are brothers.
-  tie('osman', 'hasan', ['sibling'], 0.6, 0.6);
   // Neighbours in the lower hamlet know each other well.
   const lower = households.filter((h) => h.hamlet === 'lower');
   for (const a of lower) {
@@ -634,8 +691,6 @@ export function foundValley(seed: number, now: number): Founded {
       seedTie(ha, { otherId: hb, roles: ['neighbor'], affection: 0.3, familiarity: 0.7, trust: 0.5 });
     }
   }
-  // Ali and Esma: the whole lane knows.
-  tie('ali', 'esma', ['neighbor'], 0.55, 0.6);
   // Zehra is near her time: it is due in the first days.
   const zehra = byId.get('zehra');
   if (zehra) {
@@ -649,33 +704,21 @@ export function foundValley(seed: number, now: number): Founded {
       },
     };
   }
-  // The last kahya took Saliha's ox for the agha's arrears, the spring her husband died.
-  const saliha = byId.get('saliha');
-  if (saliha) {
-    remember(saliha, {
-      at: now - 120 * DAY,
-      kind: 'harm',
-      actorId: KAHYA,
-      targetId: 'saliha',
-      valence: -0.8,
-      salience: 0.9,
-      summary: 'the kahya took our ox for the agha’s arrears',
-      tags: ['kahya', 'loss'],
-    });
+  // Explicit canonical family; visitor arrangements never infer spouse/parent from ages.
+  for (const [a, b, role] of [
+    ['maryam', 'yusuf', 'child'],
+    ['yusuf', 'maryam', 'parent'],
+    ['yusuf-usta', 'meryem-visitor', 'grandchild'],
+    ['meryem-visitor', 'yusuf-usta', 'grandparent'],
+  ]) {
+    const p = byId.get(a ?? '');
+    if (p && b && role)
+      seedTie(p, { otherId: b, roles: [role], affection: 0.7, familiarity: 0.95, trust: 0.75 });
   }
-  // Recep's coffeehouse habit.
-  const recep = byId.get('recep');
-  if (recep)
-    recep.habits.push({
-      cue: { placeId: 'coffeehouse' },
-      action: 'chat',
-      strength: 0.55,
-      repetitions: 1500,
-      lastAt: now,
-    });
-  // Mustafa has heard what the city pays. A pull he holds back from, for now.
-  const mustafa = byId.get('mustafa');
-  if (mustafa) enablePromptings(mustafa, { reading: 'inclination', readingSource: 'host:mustafa' });
+  // Absent relatives are references, not simulated visitors or invented encounters.
+  const samira = byId.get('samira');
+  if (samira)
+    seedTie(samira, { otherId: 'idris', roles: ['spouse'], affection: 0.8, familiarity: 0.95, trust: 0.75 });
   return { households, people };
 }
 

@@ -66,6 +66,7 @@ import {
   weatherOf,
   yearOf,
 } from './calendar.ts';
+import { DISCLOSURES } from './cast.ts';
 import { foundValley, type Household, KAHYA, makeKahya } from './people.ts';
 import { DRAW, hashUnit, mixSeed, strHash } from './rng.ts';
 import {
@@ -552,7 +553,7 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
       tags: ['work', 'outdoors'],
     });
   }
-  if (light && !weak && season === 'sowing' && h.field.sown < 1) {
+  if (light && !weak && h.field.size > 0 && season === 'sowing' && h.field.sown < 1) {
     out.push({
       id: 'sow',
       action: 'sow',
@@ -586,7 +587,7 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
       out.push({
         id: 'build-mill',
         action: 'build-mill',
-        label: 'carry stone for the mill',
+        label: p.id === 'yusuf' ? 'build the mill wall' : 'carry stone for the mill',
         placeId: 'mill',
         duration: 120,
         effort: 0.8,
@@ -634,7 +635,12 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
   // Quiet worship, for those who keep it.
   if (
     p.agenda.commitments.some(
-      (c) => c.kind === 'worship' && c.status === 'pending' && c.from <= at && c.until > at,
+      (c) =>
+        c.kind === 'worship' &&
+        c.normId === 'salah' &&
+        c.status === 'pending' &&
+        c.from <= at &&
+        c.until > at,
     )
   ) {
     out.push({
@@ -1134,7 +1140,11 @@ function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ende
       return out;
     }
     case 'build-mill': {
-      s.agha.mill = Math.min(V.millHours, s.agha.mill + hours * (act.protest ? 0.6 : 1));
+      s.agha.mill = Math.min(
+        V.millHours,
+        s.agha.mill +
+          hours * (act.protest ? 0.6 : 1) * (1 + Math.min(1, p.skills.building?.level ?? 0) * 0.25),
+      );
       const ask = openAsksFor(s, p.id, act.startedAt).find((a) => a.job === 'build-mill');
       if (ask) ask.hours[p.id] = (ask.hours[p.id] ?? 0) + hours;
       return { ...base, needs: { competence: 0.03 } };
@@ -1422,7 +1432,7 @@ function dies(s: ValleyState, p: Person, h: Household, at: number) {
   note(s, {
     at,
     kind: 'death',
-    text: `${p.name} of ${h.name} died${age >= 60 ? ', old' : age < 5 ? ', a small child' : ''}${hungry ? ', after weeks with nothing in the jar' : ''}. They buried ${p.life.sex === 'female' ? 'her' : 'him'} before the evening prayer.`,
+    text: `${p.name} of ${h.name} died${age >= 60 ? ', old' : age < 5 ? ', a small child' : ''}${hungry ? ', after weeks with nothing in the jar' : ''}. They buried ${p.life.sex === 'female' ? 'her' : 'him'} ${p.id === 'danyal' ? 'with his Christian observance respected' : 'before the evening prayer'}.`,
     who: p.id,
     house: h.id,
     weight: 3,
@@ -1722,7 +1732,7 @@ const LANE: Record<string, [number, string][]> = {
   ],
 };
 
-function laneLife(s: ValleyState, day: number) {
+export function laneLife(s: ValleyState, day: number) {
   const season = seasonOf(doyOf(day));
   const quiet = !s.notes.some((n) => dayOfMinute(n.at) >= day - 2 && n.kind !== 'weather');
   if (season !== 'winter' && !quiet) return;
@@ -1752,6 +1762,11 @@ function laneLife(s: ValleyState, day: number) {
   const start = Math.floor(hashUnit(s.seed, DRAW.line, 80, day) * pool.length);
   for (let i = 0; i < pool.length; i++) {
     const [hour, line] = pool[(start + i) % pool.length] ?? [0, ''];
+    if (
+      line.includes('mosque') &&
+      !p.agenda.commitments.some((c) => c.kind === 'worship' && c.normId === 'salah')
+    )
+      continue;
     if (said[line] !== undefined && day - (said[line] ?? 0) < 45) continue;
     said[line] = day;
     note(s, {
@@ -1777,7 +1792,7 @@ function inflow(s: ValleyState, k: 'threshed' | 'shares', kile: number) {
 
 const about = (k: number) => (k < 15 ? 'a few sacks' : `about ${Math.round(k / 10) * 10} kile`);
 
-/** Once a week while grain is coming in, Osman says where the granary's new sacks came from. */
+/** Once a week while grain is coming in, The reeve says where the granary's new sacks came from. */
 function inflowWord(s: ValleyState, day: number) {
   const f = s.inflow;
   if (!f || day - f.from < 6 || f.threshed + f.shares < 5) return;
@@ -1789,14 +1804,14 @@ function inflowWord(s: ValleyState, day: number) {
   note(s, {
     at: day * DAY + 18 * 60,
     kind: 'harvest',
-    text: `Osman’s tally for the week: ${parts.join(', and ')}. It is all in the granary.`,
+    text: `The reeve’s tally for the week: ${parts.join(', and ')}. It is all in the granary.`,
     who: 'osman',
     weight: 1.5,
   });
 }
 
 /**
- * Twenty-five days before the rider, Osman does the sums aloud: what the granary will hold if every unpaid share
+ * Twenty-five days before the rider, the reeve does the sums aloud: what the granary will hold if every unpaid share
  * comes in and the agha's sheaves are threshed, against the due, and what the gap is made of. A short forecast opens
  * the agha's loan as a lever (it costs a quarter more next year).
  */
@@ -1809,8 +1824,8 @@ function forecastWord(s: ValleyState, day: number) {
   const loan = s.agha.loan?.arrived ? loanOwedAt(s, s.agha.dueDay) : 0;
   const text =
     gap <= 5
-      ? `Osman did the sums on the threshing floor: with the shares still owed and the agha’s sheaves threshed, the granary will hold his due, ${gap < -40 ? 'with room to spare' : 'just'}.`
-      : `Osman did the sums on the threshing floor: with every share in and every sheaf threshed, the granary will still be ${about(gap)} short when the rider comes.${loan ? ` The loan is ${loan} of what he wants.` : ''}${s.agha.standing > 20 ? ' There is barley still standing in his field.' : ''} The agha lends, if you write: it would be owed at next year’s rider, with a quarter more.`;
+      ? `The reeve did the sums on the threshing floor: with the shares still owed and the agha’s sheaves threshed, the granary will hold his due, ${gap < -40 ? 'with room to spare' : 'just'}.`
+      : `The reeve did the sums on the threshing floor: with every share in and every sheaf threshed, the granary will still be ${about(gap)} short when the rider comes.${loan ? ` The loan is ${loan} of what he wants.` : ''}${s.agha.standing > 20 ? ' There is barley still standing in his field.' : ''} The agha lends, if you write: it would be owed at next year’s rider, with a quarter more.`;
   note(s, { at: day * DAY + 17 * 60, kind: 'story', text, who: 'osman', weight: gap > 5 ? 3 : 2 });
   if (gap > 5 && !s.flags.verbs.includes('borrow')) s.flags.verbs.push('borrow');
 }
@@ -1823,7 +1838,8 @@ function hungerWord(s: ValleyState, day: number) {
     if (s.flags.beats.includes(key)) continue;
     s.flags.beats.push(key);
     const osman = personOf(s, 'osman');
-    const by = osman?.body.alive && h.id !== 'kavak' ? 'Osman, at your door:' : 'Talk at the coffeehouse:';
+    const by =
+      osman?.body.alive && h.id !== 'kavak' ? 'The reeve, at your door:' : 'Talk at the coffeehouse:';
     note(s, {
       at: day * DAY + 17 * 60,
       kind: 'knock',
@@ -1843,7 +1859,7 @@ function granaryMilestones(s: ValleyState, day: number) {
     [
       0.5,
       `half-${y}`,
-      'The granary is past half the agha’s due. Osman stood in the doorway and counted the sacks twice.',
+      'The granary is past half the agha’s due. the reeve stood in the doorway and counted the sacks twice.',
     ],
     [
       1,
@@ -2098,7 +2114,7 @@ export function call(
     const who = job === 'bring-share' ? h.members.slice(0, 1) : h.members;
     for (const m of who) {
       const p = personOf(s, m);
-      if (p?.body.alive && ageYears(p) >= 15) personIds.push(m);
+      if (p?.body.alive && ageYears(p) >= 15 && p.id !== 'yusuf-usta') personIds.push(m);
     }
   }
   if (personIds.length === 0) return undefined;
@@ -2235,7 +2251,7 @@ function actOn(s: ValleyState, hid: string, what: string) {
 }
 
 /**
- * A giveaway is noticed: when thirty kile or more of the agha's grain went down the lanes in ten days, Osman says
+ * A giveaway is noticed: when thirty kile or more of the agha's grain went down the lanes in ten days, The reeve says
  * so at the granary door, the spring talks about it the next morning, and for ten days houses come to the door long
  * before they are hungry (an edge kept playable: owner direction 2026-10-19).
  */
@@ -2254,7 +2270,7 @@ function openHandWord(s: ValleyState, amt: number) {
   note(s, {
     at: s.minute + 30,
     kind: 'story',
-    text: `Osman, at the granary door: “That’s ${about(recent)} gone down the lanes since ${dateWords(day - 10)}, kahya. I’m only counting. The rider will count too.”`,
+    text: `The reeve, at the granary door: “That’s ${about(recent)} gone down the lanes since ${dateWords(day - 10)}, kahya. I’m only counting. The rider will count too.”`,
     who: 'osman',
     weight: 2.5,
   });
@@ -2565,6 +2581,31 @@ export function visit(s: ValleyState, hid: string, why: Knock['what'] | 'call' =
     (ctx, p) => visitWords(ctx, p, firstTime, why === 'grain' ? 'call' : why, since),
     why === 'wedding' ? 'at the wedding' : 'at the hearth',
   );
+  // A later social visit offers room for one volunteered disclosure. Neither an imported
+  // biography nor an initial greeting establishes player familiarity with a private fact.
+  if (why === 'call' && since !== undefined && since >= 1) {
+    const speaker = h.members
+      .map((id) => personOf(s, id))
+      .find(
+        (p) =>
+          p?.body.alive &&
+          DISCLOSURES[p.id] &&
+          !s.flags.beats.includes(`cast-disclosed:${p.id}`) &&
+          !openAsksFor(s, p.id, arrive + 45).length,
+      );
+    if (speaker) {
+      s.flags.beats.push(`cast-disclosed:${speaker.id}`);
+      note(s, {
+        at: arrive + 45,
+        kind: 'voice',
+        who: speaker.id,
+        house: h.id,
+        text: `${speaker.name}, after sitting with you again:`,
+        words: DISCLOSURES[speaker.id],
+        weight: 3,
+      });
+    }
+  }
   // What the kahya will remember of their jars: the read is as old as the visit.
   ks.guess ??= {};
   ks.guess[hid] = { at: arrive, bread: Math.round(daysOfBread(s, h)) };

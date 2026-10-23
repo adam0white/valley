@@ -232,6 +232,8 @@ async function gunzip(b: Blob): Promise<string> {
 
 /** Read the ledger back: the bound volume, then the days written after it, quantum by quantum. */
 async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> {
+  if (log.version !== GAME_VERSION)
+    throw new Error('This ledger uses an older Valley edition. Start fresh from the title page.');
   const bound = await readVolume();
   let game: Game;
   let rest: Input[];
@@ -306,7 +308,7 @@ function infoWords(): string {
   if (g.valley.flags.ended)
     return `<h2>The tally</h2><p>The elders speak from what they remember. The grain tally is the game’s own convention: grain delivered, gifts and arrears are counted separately.</p>`;
   if (selected)
-    return `<h2>Knowing a house</h2><p>Your guess comes from what you last saw. Osman’s guess is his own read of a person; neither is certain.</p><p>A lower-hamlet visit takes a couple of hours. The upper hamlet takes most of a morning. You can go again when you return.</p>`;
+    return `<h2>Knowing a house</h2><p>Your guess comes from what you last saw. The reeve’s guess is his own read of a person; neither is certain.</p><p>A lower-hamlet visit takes a couple of hours. The upper hamlet takes most of a morning. You can go again when you return.</p>`;
   const s = g.valley;
   return `<h2>Your charge</h2><p>${esc(nextWords(s))}</p><p>Calls go through the crier; people weigh them against their own fields and can refuse. Hold a refusal to press it: they come, and they remember.</p><p>A visit takes walking time. Ease a share to leave more in a house’s jars; the lanes will see.</p><p>The grain bar: solid is in the granary, hatched is cut and waiting for threshing, outline is still standing, and the tick is the due.</p><p>The clock slows for replies and knocks. The menu and this i stop it. ${esc(limitsWords(s))}</p>${seasonOf(doyOf(dayOfMinute(s.minute))) === 'winter' ? '<p>Mill work asks for labour without a grain wage. The letter for grain opens when the forecast shows a shortfall.</p>' : ''}<p>Words: <b>kahya</b>, steward (you); <b>agha</b>, landowner; <b>kile</b>, grain measure.</p>`;
 }
@@ -315,9 +317,12 @@ function title() {
   labScreen('title');
   cancelAnimationFrame(raf);
   const log = readLog();
-  const where = log
-    ? `Your ledger is open at ${dateWords(dayOfMinute(log.minute))} of year ${yearWord(yearOf(dayOfMinute(log.minute)))}.`
-    : '';
+  const where =
+    log && log.version !== GAME_VERSION
+      ? 'This ledger uses an older Valley edition. Start fresh to play the new cast. Your old ledger stays here until you begin a new term.'
+      : log
+        ? `Your ledger is open at ${dateWords(dayOfMinute(log.minute))} of year ${yearWord(yearOf(dayOfMinute(log.minute)))}.`
+        : '';
   stage?.destroy();
   stage = null;
   app.innerHTML = `<div class="page title-page">
@@ -326,7 +331,7 @@ function title() {
     <button data-ways>Other ways in ▸</button>
     <div class="vignette" aria-hidden="true"><svg viewBox="0 0 360 140"><path d="M0 95Q80 15 160 90T360 70M0 130Q90 50 180 120T360 95M250 0Q200 70 260 140" fill="none" stroke="currentColor"/><g fill="none" stroke="currentColor" stroke-width="2"><path d="M70 95v-18l12-12 12 12v18zM130 105V87l12-12 12 12v18zM190 90V72l12-12 12 12v18zM280 100V82l12-12 12 12v18z"/></g></svg></div>
     <footer class="title-actions">${where ? `<p class="hand">${esc(where)}</p>` : ''}
-    ${log ? '<button class="primary" data-go="open">Open the ledger</button><button data-go="new" class="hold">Hold to begin a new term<span class="fill"></span></button><p class="soft">Hold: the old ledger is closed for good.</p>' : '<button class="primary" data-go="new">Take up the seal</button>'}${mark()}</footer>
+    ${log ? `${log.version === GAME_VERSION ? '<button class="primary" data-go="open">Open the ledger</button>' : ''}<button data-go="new" class="hold">Hold to begin a new term<span class="fill"></span></button><p class="soft">Hold: the old ledger is closed for good.</p>` : '<button class="primary" data-go="new">Take up the seal</button>'}${mark()}</footer>
     <dialog class="ways-panel" aria-label="Other ways in"><header><h2>Other ways in</h2><button data-ways-close aria-label="Close other ways in">×</button></header><label for="valley-name">A named valley</label><input id="valley-name" placeholder="Kuyulu" maxlength="80"><p>The same name gives the same valley.</p><button data-seed${log ? ' class="hold"' : ''}>Begin this valley${log ? '<span class="fill"></span>' : ''}</button>${log ? '<p class="soft">Hold: the old ledger is closed for good.</p>' : ''}<label for="load-run">Load a playtest run</label><input id="load-run" type="file" accept=".json,application/json"><p id="load-result" role="status"></p></dialog>
   </div>`;
   if (notice && !notice.dataset.shown) {
@@ -334,7 +339,7 @@ function title() {
     notice.dataset.shown = '1';
   }
   app.querySelector('[data-go="open"]')?.addEventListener('click', () => {
-    if (log) openLedger(log);
+    if (log && log.version === GAME_VERSION) openLedger(log);
   });
   const fresh = (seed: number) => {
     clearSaves().then(() => begin(seed));
@@ -1460,7 +1465,7 @@ function houseCard(s: ValleyState, hh: Household): string {
       .filter(Boolean)
       .map((l) => `<div class="hunch">${esc(l)}<span class="by">your guess</span></div>`)
       .join('')}
-    ${reeve ? `<div class="hunch reeve">${esc(reeve)}<span class="by">Osman’s guess</span></div>` : ''}
+    ${reeve ? `<div class="hunch reeve">${esc(reeve)}<span class="by">The reeve’s guess</span></div>` : ''}
     <p class="limits">${esc(limitsWords(s, hh))}</p><div class="looks">${esc(hh.members.length ? hh.looks : 'The door is shut and the hearth is cold.')}</div><div class="people">${hh.members.length ? esc(names) : 'Nobody lives here now.'}</div>${share}${book}</div>
     ${pending}
     ${recent.length ? `<details class="house-history"><summary>Earlier word from this house</summary>${recent.map((n) => noteLine(n)).join('')}</details>` : ''}

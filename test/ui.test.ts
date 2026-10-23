@@ -25,7 +25,7 @@ async function open(page: Page, minute = 360, seed = 406153184, inputs: Input[] 
     ({ minute, seed, inputs }) =>
       localStorage.setItem(
         'valley-log-v1',
-        JSON.stringify({ game: 'valley', version: '0.1.0', seed, inputs, minute, volume: 0 }),
+        JSON.stringify({ game: 'valley', version: '0.2.0', seed, inputs, minute, volume: 0 }),
       ),
     { minute, seed, inputs },
   );
@@ -69,7 +69,7 @@ it.each([
         return { y: r.y, w: r.width, h: r.height };
       }),
     );
-    expect(houses).toHaveLength(8);
+    expect(houses).toHaveLength(10);
     expect(new Set(houses.map((h) => Math.round(h.y))).size).toBe(1);
     expect(houses.every((h) => h.w >= 44 && h.h >= 44)).toBe(true);
     if (width === 360)
@@ -182,24 +182,14 @@ it('replaces a call with Skip and opens replies without a fold', async () => {
 });
 
 it('keeps the exact Çoban reply readable and requires a hold before insisting', async () => {
-  const inputs: Input[] = [
-    {
-      verb: 'call',
-      job: 'reap-agha',
-      houses: ['kavak', 'ak', 'coban', 'dere', 'kara', 'demirci', 'kuyucu', 'tepe'],
-      at: 750,
-    },
-    { verb: 'visit', house: 'ak', at: 2520 },
-    { verb: 'give', house: 'ak', kile: 6, at: 3000 },
-    { verb: 'visit', house: 'coban', at: 3330 },
-  ];
+  const inputs: Input[] = [{ verb: 'call', job: 'reap-agha', houses: ['coban'], at: 750 }];
   const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
   try {
-    await open(page, 3390, 905871269, inputs);
+    await open(page, 1020, 42, inputs);
     await page.locator('#houses [data-h="coban"]').click();
-    const reply = page.locator('.house-response');
-    expect(await reply.innerText()).toContain('Or are you?');
-    expect(await reply.innerText()).toMatch(/20 July, year one/);
+    const reply = page.locator('.decision-reply');
+    expect(await reply.innerText()).toContain('own barley');
+    expect(await reply.innerText()).toMatch(/18 July, year one/);
     expect(await reply.evaluate((e) => e.scrollHeight <= e.clientHeight + 2)).toBe(true);
     const press = page.locator('.decision-reply .hold');
     const box = await press.boundingBox();

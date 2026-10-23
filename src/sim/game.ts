@@ -33,7 +33,7 @@ import {
   visit,
 } from './valley.ts';
 
-export const GAME_VERSION = '0.1.0';
+export const GAME_VERSION = '0.2.0';
 
 export type Input =
   | { at: number; verb: 'call'; job: Job; houses: string[]; wage?: boolean }
@@ -192,7 +192,7 @@ export function beats(g: Game) {
   }
   // The first put-off reply opens insisting and visiting.
   if (
-    s.notes.some((n) => n.kind === 'reply' && n.text.includes('put') && n.text.includes('off')) &&
+    s.asks.some((a) => Object.values(a.replies).some((r) => r.verdict === 'deferred')) &&
     beat(g, 'insist')
   ) {
     reveal(g, 'insist');
@@ -200,7 +200,7 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'story',
-      text: 'Osman the reeve, at your elbow: “Send word again and they’ll come, kahya. Or walk down and ask them yourself. Some houses only open the door to a face.”',
+      text: 'The reeve, at your elbow: “Send word again and they’ll come, kahya. Or walk down and ask them yourself. Some houses only open the door to a face.”',
       words: 'Some houses only open the door to a face.',
       who: 'osman',
       weight: 2,
@@ -210,7 +210,7 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'story',
-      text: 'Osman says he knows every house in the lower lanes. His guesses are written beside yours now, in his hand.',
+      text: 'The reeve says he knows every house in the lower lanes. His guesses are written beside yours now, in his hand.',
       who: 'osman',
       weight: 1.5,
     });
@@ -233,7 +233,7 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'story',
-      text: 'Osman the reeve, low: “The granary is the agha’s, kahya, but the key is on your belt. What you give, the rider will count as missing.”',
+      text: 'The reeve, low: “The granary is the agha’s, kahya, but the key is on your belt. What you give, the rider will count as missing.”',
       words: 'The key is on your belt.',
       who: 'osman',
       weight: 2,
@@ -248,7 +248,7 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'story',
-      text: 'Osman the reeve came by at dusk. Two houses are scraping the jars, he said, and the granary is low. The agha lends, if you write to him, and his rider takes it back with a quarter more.',
+      text: 'The reeve came by at dusk. Two houses are scraping the jars, he said, and the granary is low. The agha lends, if you write to him, and his rider takes it back with a quarter more.',
       words: 'He lends. He never forgets that he lent.',
       who: 'osman',
       weight: 2.5,
@@ -277,7 +277,7 @@ export function beats(g: Game) {
   }
   // The mill rising, in what can be seen at the stream.
   const MILL_SIGHTS: [number, string][] = [
-    [0.25, 'The race is dug at the stream. Osman paced it out twice and pronounced it straight.'],
+    [0.25, 'The race is dug at the stream. the reeve paced it out twice and pronounced it straight.'],
     [0.5, 'The mill walls are up to a man’s chest. Children dare each other to walk along them.'],
     [0.75, 'The millstones came up on the sledge, two days for the pair. The whole valley went to look.'],
   ];
@@ -601,6 +601,8 @@ export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
 }
 
 export function load(saved: SavedGame | CompactRun): Game {
+  if (saved.version !== GAME_VERSION || saved.framework !== FRAMEWORK_VERSION)
+    throw new Error('This run uses an older Valley edition. Export it for safekeeping and start fresh.');
   if ('state' in saved) return { valley: restoreState(saved.state), inputs: structuredClone(saved.inputs) };
   const g = replay(saved.seed, structuredClone(saved.inputs), saved.minute);
   if (fingerprint(g.valley) !== saved.fingerprint)

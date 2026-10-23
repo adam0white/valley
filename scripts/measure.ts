@@ -20,9 +20,9 @@ const iron = BOT === 'iron';
 const openHand = BOT === 'open';
 // Lines worth counting over the whole term (the notebook keeps only the last 400).
 const WATCH: [string, RegExp][] = [
-  ['forecast', /^Osman did the sums/],
+  ['forecast', /^The reeve did the sums/],
   ['open-hand', /gone down the lanes since/],
-  ['tally', /^Osman’s tally/],
+  ['tally', /^The reeve’s tally/],
   ['mill-sight', /mill/i],
   ['grouped-press', /came when you pressed/],
 ];
