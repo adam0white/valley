@@ -1577,3 +1577,206 @@ body:has(dialog[open], :popover-open) [data-until] {
     height: calc(100dvh - 56px);
   }
 }
+
+/* Width-based reading sizes also cover descendants that formerly fixed small px text. */
+body {
+  font-size: clamp(17px, 1.2vw + 8px, 22px);
+}
+.title-premise .purpose,
+#now,
+.w,
+.reply-words,
+.hunch,
+.looks,
+.people,
+.lk-sheet-body,
+.feedback-body,
+.menu-body,
+.action-caption,
+.limits {
+  font-size: clamp(17px, 1vw + 10px, 22px);
+  line-height: 1.45;
+}
+.soft,
+.note .t,
+.reply-date,
+.grain-label,
+#steward,
+#houses button,
+.by,
+.verb-grid button,
+.thumbs button,
+.title-premise .soft,
+.mark,
+.footer {
+  font-size: clamp(14px, 0.7vw + 9px, 18px);
+}
+button,
+input,
+textarea,
+select {
+  font-size: inherit;
+}
+.title-page {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  overflow-y: auto;
+}
+.title-page:not(:has([data-ways])) {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+.title-actions .hold {
+  overflow: visible;
+}
+.notice-footer {
+  position: relative;
+  z-index: 2;
+  background: var(--paper);
+}
+.notice-footer:empty {
+  display: none;
+}
+.notice-footer [role] {
+  font-size: 14px;
+}
+[hidden] {
+  display: none !important;
+}
+@media (min-width: 768px) {
+  .play,
+  .play.lk-stage,
+  .play[data-house="true"] {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 45%);
+    grid-template-rows: 56px minmax(0, 1fr) auto;
+  }
+  .play > .topbar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .play > .map {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 220px;
+  }
+  .play > #houses {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .play > .lk-sheet {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    min-height: 0;
+  }
+  .play[data-reader="true"] > .lk-sheet {
+    width: 45%;
+    min-width: 360px;
+    top: 56px;
+    left: auto;
+    bottom: 0;
+  }
+  .play > .grain-bar {
+    position: absolute;
+    top: 10px;
+    right: 112px;
+    width: min(30%, 320px);
+    z-index: 1;
+  }
+  .play > .topbar {
+    padding-right: min(45%, 440px);
+  }
+  .lk-sheet-head,
+  #houses {
+    height: auto;
+    min-height: 52px;
+  }
+}
+.play .reply-words {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.card .looks,
+.card .people,
+.hunch.reeve,
+.house-response .note .w,
+.play .action-caption {
+  font-size: clamp(17px, 1vw + 10px, 22px);
+}
+.lk-sheet-head b {
+  font-size: clamp(16px, 0.8vw + 10px, 21px);
+}
+#house-answer {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 48%;
+  overflow-y: auto;
+}
+.play .thumbs {
+  min-height: 0;
+}
+.play[data-house="true"] .action-caption {
+  flex-shrink: 0;
+}
+.play[data-house="true"] .thumbs {
+  flex-shrink: 0;
+}
+.verb-grid {
+  grid-template-rows: none;
+  grid-auto-rows: minmax(52px, auto);
+}
+.play[data-house="true"] .thumbs button {
+  font-size: clamp(14px, 0.7vw + 9px, 18px);
+  height: auto;
+}
+@media (min-width: 768px) {
+  .play > .grain-bar {
+    grid-row: 1;
+    grid-column: 1 / -1;
+  }
+  .play > .topbar .topbar-actions {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+  }
+}
+.play > .grain-bar {
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+.play .grain-track {
+  width: 100%;
+  flex: 0 0 10px;
+}
+.play .grain-label {
+  width: 100%;
+  max-width: none;
+  text-align: center;
+  font-size: 14px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+/* The first-visit footer owns its actual height, including wrapped text and Dismiss. */
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+#app {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+#app > .page,
+#app > .play,
+#app > .play.lk-stage {
+  height: 100%;
+}
+.notice-footer {
+  flex: 0 0 auto;
+}
+@media (min-width: 900px) {
+  .play > .grain-bar {
+    right: 144px;
+  }
+}

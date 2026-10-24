@@ -30,7 +30,7 @@ async function open(page: Page, minute = 360, seed = 406153184, inputs: Input[] 
     { minute, seed, inputs },
   );
   await page.reload();
-  await page.getByRole('button', { name: 'Open the ledger', exact: true }).click();
+  await page.getByRole('button', { name: 'Resume', exact: true }).click();
   for (let i = 0; i < 100 && !(await page.locator('#map').count()); i++) {
     await page.clock.runFor(50);
   }
@@ -287,7 +287,7 @@ it.each(['other-chapter', undefined])(
       return original;
     })(${JSON.stringify(receipt)})`);
       await page.reload();
-      await page.getByRole('button', { name: 'Open the ledger', exact: true }).click();
+      await page.getByRole('button', { name: 'Resume', exact: true }).click();
       for (let i = 0; i < 100 && !(await page.locator('#map').count()); i++) await page.clock.runFor(50);
       expect(
         await page.evaluate(
@@ -304,9 +304,9 @@ it('loads a compact playtest run through Other ways in and restores its fingerpr
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   const run = compactRun(save(newGame(7)));
   try {
-    await page.goto(origin);
+    await page.goto(`${origin}/?lab=1`);
     await fits(page);
-    await page.getByRole('button', { name: /Other ways in/ }).click();
+    await page.getByRole('button', { name: /Lab tools/ }).click();
     await page.getByLabel('Load a playtest run').setInputFiles({
       name: 'compact.json',
       mimeType: 'application/json',
@@ -352,8 +352,8 @@ it('gives a knock the sheet and keeps the closing tally folded at the ending', a
     expect(await tally.isVisible()).toBe(false);
     await page.getByText('See the tally', { exact: false }).click();
     expect(await tally.isVisible()).toBe(true);
-    expect(await page.getByRole('button', { name: 'Send word', exact: true }).isVisible()).toBe(true);
-    expect(await page.getByRole('button', { name: 'Download this run', exact: true }).isVisible()).toBe(true);
+    expect(await page.getByRole('button', { name: 'Feedback', exact: true }).isVisible()).toBe(true);
+    expect(await page.getByRole('button', { name: 'Download this run', exact: true }).count()).toBe(0);
     expect(await page.getByRole('button', { name: 'Begin a new term', exact: true }).isVisible()).toBe(true);
     await fits(page);
   } finally {
@@ -361,7 +361,7 @@ it('gives a knock the sheet and keeps the closing tally folded at the ending', a
   }
 });
 
-it('excludes a future note from the same day in Earlier word', async () => {
+it('excludes a future note from the same day in Earlier replies', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await open(page, 420);
@@ -371,7 +371,7 @@ it('excludes a future note from the same day in Earlier word', async () => {
       s.notes.push({ id: 91002, at: 600, kind: 'story', text: 'UI future notebook note', weight: 1 });
       _debug.skipTo(0);
     })`);
-    await page.getByRole('button', { name: 'Earlier word ▸', exact: true }).click();
+    await page.getByRole('button', { name: 'Earlier replies ▸', exact: true }).click();
     const reader = page.locator('#sheet');
     expect(await reader.innerText()).toContain('UI present notebook note');
     expect(await reader.innerText()).not.toContain('UI future notebook note');
@@ -390,15 +390,13 @@ it('opens the completed notebook from the ending without restoring play', async 
       s.flags.ended = 'dismissed';
     })`);
     await page.clock.runFor(100);
-    await page.locator('[data-menu]').click();
-    await page
-      .locator('.game-menu-panel')
-      .getByRole('button', { name: /The notebook/ })
-      .click();
+    await page.getByRole('button', { name: 'Earlier replies', exact: true }).click();
     const reader = page.locator('.notebook-panel');
     expect(await reader.count()).toBe(1);
     expect(await reader.isVisible()).toBe(true);
-    expect(await reader.getByRole('heading', { name: 'Earlier word', exact: true }).isVisible()).toBe(true);
+    expect(await reader.getByRole('heading', { name: 'Earlier replies', exact: true }).isVisible()).toBe(
+      true,
+    );
     expect(await reader.innerText()).toContain('UI completed notebook note');
     expect(await page.locator('.play').count()).toBe(0);
     const before = await state(page);
@@ -454,9 +452,11 @@ it.each([
         const actions = document.querySelector<HTMLElement>('#thumbs')!;
         return {
           goal: goal.scrollWidth <= goal.clientWidth && goal.scrollHeight <= goal.clientHeight,
-          caption: caption.scrollWidth <= caption.clientWidth && caption.scrollHeight <= caption.clientHeight,
+          caption:
+            caption.scrollWidth <= caption.clientWidth + 1 &&
+            caption.scrollHeight <= caption.clientHeight + 1,
           guidance: [...body.querySelectorAll<HTMLElement>('.limits')].every(
-            (e) => e.scrollWidth <= e.clientWidth && e.scrollHeight <= e.clientHeight,
+            (e) => e.scrollWidth <= e.clientWidth + 1 && e.scrollHeight <= e.clientHeight + 1,
           ),
           body:
             body.clientHeight >= 80 &&

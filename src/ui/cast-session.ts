@@ -394,6 +394,10 @@ export class CastSession {
       this.render();
     }
   }
+  connect(saveLocal: () => void) {
+    this.saveLocal = saveLocal;
+    watchPersonaCheckpoint(() => this.checkpoint());
+  }
   mount(host: HTMLElement, saveLocal: () => void) {
     this.saveLocal = saveLocal;
     this.panel = document.createElement('section');
@@ -462,7 +466,6 @@ export class CastSession {
     window.addEventListener('storage', (event) => {
       if (event.key === null) changed();
     });
-    watchPersonaCheckpoint(() => this.checkpoint());
     void this.shelf.ready.then(() => this.render());
     this.render();
   }

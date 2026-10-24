@@ -4,6 +4,127 @@ import { END_DAY } from '../sim/game.ts';
 import type { Household } from '../sim/people.ts';
 import { type Job, nextRiderDay, shareOwed, underSeal, V, type ValleyState } from '../sim/valley.ts';
 
+const DISPLAY_COPY: Record<string, string> = {
+  'Kahya. Sit, if you’re staying.': 'Kahya, sit down if you’re staying.',
+  'Kahya. {Spouse} is in the field.': 'Kahya, {Spouse} is in the field.',
+  'We would have paid, given time.': 'We would have paid if you had given us time.',
+  'Come and see {child}. He has his grandfather’s ears, poor thing.':
+    'Come and see {child}. He has his grandfather’s ears, poor thing.',
+  'Not on your word. Not today.': 'I will not come just because you ask. I will not come today.',
+  'No. Not for you.': 'No. I will not do it for you.',
+  'Not yet. Winter is long.': 'I cannot bring it yet. Winter is long.',
+  'Who feeds mine while I cut his?': 'Who will feed my family while I cut his barley?',
+  'For a sheaf, yes. Thank you.': 'I will come for a sheaf. Thank you.',
+  'After the threshing.': 'I can come after the threshing.',
+  'There. We owe nothing.': 'Here is our share. We owe nothing now.',
+  'The world is turning.': 'Things are changing.',
+  'The whole lane saw.': 'Everyone in the lane saw what happened.',
+  'You did the work of the seal.': 'You did the work of the kahya.',
+  'Nobody bites here.': 'You are safe here.',
+  'Look who walked down. Mind the dog, he has opinions.':
+    'You have come to visit. Be careful of the dog. He may bark at you.',
+  'I’ll put it by.': 'I’ll keep it for later.',
+  'Too quiet.': 'It is too quiet.',
+  'The reeve, at the granary door:': 'The reeve speaks at the granary door:',
+
+  'The reeve’s house: whitewashed, the only one with glass in a window.':
+    'The reeve lives in this whitewashed house. It is the only house with a glass window.',
+  'Osman’s brother’s house. Three boys’ shirts on the line.':
+    'Osman’s brother lives here. Three boys’ shirts hang on the line.',
+  'The shepherd’s house at the edge, a dog on a chain, the flock up on the yayla.':
+    'The shepherd lives at the edge of the hamlet. A dog is chained outside. The flock is on the yayla.',
+  'A young house, roof half-mended. A baby crying most evenings.':
+    'A young family lives here. The roof is partly repaired. A baby cries most evenings.',
+  'The smithy. The old man still swings the hammer; his son does the rest.':
+    'This is the smithy. The old man still swings the hammer. His son does the rest.',
+  'The well-digger’s house. Two daughters, and the whole lane knows it.':
+    'The well-digger lives here with his two daughters. Everyone in the lane knows them.',
+  'Up the slope. The son is at the coffeehouse more than at the plough.':
+    'This house is up the slope. The son spends more time at the coffeehouse than working in the fields.',
+  'Highest house in the valley; they come down only for the mill.':
+    'This is the highest house in the valley. The family comes down only for the mill.',
+  'An old walnut over the door, and a feud with someone below.':
+    'An old walnut tree grows over the door. This family has a feud with someone in the lower hamlet.',
+  'By the upper spring. The women of the upper lanes meet here.':
+    'This house is by the upper spring. The women of the upper lanes meet here.',
+  'Tall men, all of them, and a mother who decides.':
+    'All the men in this house are tall. Their mother makes the decisions.',
+  'New roof tiles. Someone sends money from the city.':
+    'The roof has new tiles. Someone sends money from the city.',
+  'You again. Sit, then.': 'You have come again. Sit down, then.',
+  'Kahya. Is it the share? We are trying.': 'Kahya, have you come for the share? We are trying to pay it.',
+  'Please. Whatever it is, not in front of the children.':
+    'Please do not discuss this in front of the children.',
+  'The kahya in our lane. The neighbours will think we’re rich.':
+    'The kahya has come to our lane. The neighbours will think we’re rich.',
+  'The agha’s man at our hearth. Should I hide the barley?':
+    'The agha’s man has come to our house. Should I hide the barley?',
+  'Come for our health, kahya, or the agha’s?':
+    'Have you come to ask about our health, kahya, or the agha’s?',
+  'Come to count our spoons?': 'Have you come to count our spoons?',
+  'Kahya.': 'You are here, kahya.',
+  'There’s barley in the house. More than we need, for once.':
+    'There’s barley in the house. We have more than we need, for once.',
+  'The boys ate till they groaned last night. A good year.':
+    'The boys ate till they groaned last night. It has been a good year.',
+  'Full jars. My mother says it won’t last, she says that every year.':
+    'The jars are full. My mother says it won’t last. She says that every year.',
+  'Enough in the jar, if we’re careful.': 'There is enough in the jar if we’re careful.',
+  'Not rich, not hungry. That’s a good year here.':
+    'We are not rich, but we are not hungry. That’s a good year here.',
+  'Enough, God be thanked. Not more than enough.':
+    'We have enough, God be thanked. We have no more than that.',
+  'We gave our girl away this month. The house is quieter. Too quiet.':
+    'Our daughter married this month. The house is quieter. It is too quiet.',
+  'The kahya at our wedding. My father will tell this for a year.':
+    'The kahya has come to our wedding. My father will talk about this for a year.',
+  'Back so soon. Sit, then. The kettle hasn’t cooled.':
+    'You have come back so soon. Sit down, then. The kettle hasn’t cooled.',
+  'Twice in a week. Either you like our bread or you want something.':
+    'You have visited twice in a week. Either you like our bread or you want something.',
+  'Half. God bless you, kahya. Half we can carry.':
+    'You have halved our share. God bless you, kahya. We can afford half.',
+  'Fine. Before the rain.': 'I’ll come before the rain.',
+  'I’ll carry. Once.': 'I’ll carry stone this once.',
+  'A sheaf in eight. I’ll count them.': 'You promise a sheaf in eight. I’ll count them.',
+  'Paid work. That I’ll do.': 'I’ll do the work if it is paid.',
+  'A mill. Imagine. I’ll carry.': 'We could have a mill. I’ll carry stone.',
+  'Stones for the agha. Why not.': 'I’ll carry stones for the agha. Why not?',
+  'Paid, even. Is the agha unwell?': 'We will even be paid. Is the agha unwell?',
+  'A sheaf in eight. The world is turning.': 'We will receive a sheaf in eight. Things are changing.',
+  'For the agha, then. He’ll thank us personally, I’m sure.':
+    'I’ll work for the agha, then. He’ll thank us personally, I’m sure.',
+  'There. Our gift to the agha’s horses.': 'There is our share. It will feed the agha’s horses.',
+  'Since you insist.': 'I’ll come because you insist.',
+  'Half now. The rest when I can.': 'I can bring half now. I’ll bring the rest when I can.',
+  'Take half. We have mouths.': 'Take half. We have people to feed.',
+  'Our own barley first. Then the agha’s.': 'We must cut our own barley first. Then we can cut the agha’s.',
+  'After our own field. It’s ripe too.': 'We must finish our own field first. It’s ripe too.',
+  'My barley will rot, kahya. After.': 'My barley will rot, kahya. I must cut it first.',
+  'I’m dead on my feet.': 'I am too tired to work.',
+  'I can’t. My back’s gone.': 'I can’t work. My back hurts too much.',
+  'Come back in the spring. Not as kahya.': 'Come back in the spring, but do not come as kahya.',
+  'Nothing to complain of. Nothing to sing about either.':
+    'I have nothing to complain about. I have nothing to praise either.',
+  'The rain will not wait.': 'Rain can damage the barley before it is cut.',
+  'The lanes will see.': 'The neighbours will notice.',
+  'No new word from this house.': 'There is no new reply from this house.',
+  'The key is on your belt.': 'You control who receives grain from the granary.',
+  'Some houses only open the door to a face.': 'Some households will only listen if you visit them.',
+  'Six hundred hours of backs': 'The work needs six hundred hours of labour',
+  'Winter will bring hungry doors': 'People will ask for grain in winter',
+  'Watch for hungry doors': 'Watch for people who need grain',
+  'watch for hungry doors': 'watch for people who need grain',
+  'Keep grain for hungry doors': 'Keep grain for people who need it',
+  'keep grain for hungry doors': 'keep grain for people who need it',
+  'The upper hamlet comes under your seal': 'You gain authority over the upper hamlet',
+  'This house is outside your seal': 'You have no authority over this house',
+  'Your seal reaches the houses through the crier first.':
+    'At first, you can only send requests through the crier.',
+};
+
+const DISPLAY_REPLACEMENTS = Object.entries(DISPLAY_COPY).sort(([a], [b]) => b.length - a.length);
+
 const ENGLISH: Record<string, string> = {
   ocak: 'January',
   şubat: 'February',
@@ -32,6 +153,28 @@ const TERM =
 
 /** Translate calendar and office terms; gloss unfamiliar words without changing saved copy. */
 export function englishText(text: string): string {
+  for (const [before, after] of DISPLAY_REPLACEMENTS) text = text.replaceAll(before, after);
+  text = text
+    .replace(/\. After\.$/, '. I can come after that.')
+    .replace(/^Put (.+) off today: (.+)\.$/, '$2 postponed $1 today.')
+    .replace(/^Came (.+): (.+)\.$/, '$2 came $1.')
+    .replace(/^Carried stone for the mill today: (.+)\.$/, '$1 carried stone for the mill today.')
+    .replace(/^Brought their share today: (.+)\.$/, '$1 brought their share today.')
+    .replace(/Bread baked at the (.+) oven today;/, 'People baked bread at the $1 oven today;')
+    .replace(
+      /The agha’s letter came up the valley with you: his barley in before the rains, his due of (.+) by (.+)\. The last/,
+      'The agha’s letter came up the valley with you. He wants his barley cut before the rains. His due of $1 must be ready by $2. The last',
+    )
+    .replace(/Osman the reeve, at your elbow:/, 'Osman the reeve stands beside you and says:')
+    .replace(/Osman the reeve, low:/, 'Osman the reeve says quietly:')
+    .replace(/Osman, at the granary door:/, 'Osman speaks at the granary door:')
+    .replace(/His own field, every house’s share/, 'This includes his own field and every house’s share')
+    .replace(/The old men say rain in two days\./, 'The old men say it will rain in two days.')
+    .replace(/\. the reeve /g, '. The reeve ')
+    .replace(/^Snow on the upper lanes\./, 'Snow covers the upper lanes.')
+    .replace(/^Washing day at the spring\./, 'People are washing clothes at the spring.')
+    .replace(/^Too hot to work at noon\./, 'It was too hot to work at noon.')
+    .replace(/^(.+ of .+), ([^:]+):$/, '$1 speaks $2:');
   return text.replace(TERM, (word: string, _term: string, offset: number) => {
     if (word === 'Yayla') return word; // A household name, not the pasture term.
     // A sheet may project text already projected by a smaller component.
@@ -107,7 +250,7 @@ export function nextWords(s: ValleyState): string {
     return `${rider} The households turn to sowing before winter.`;
   switch (seasonOf(doy)) {
     case 'harvest':
-      return `About ${Math.round(s.agha.reaped / 5) * 5} cut; ${Math.round(s.agha.standing / 10) * 10} standing. ${day < 2 ? 'Rain: 20 July. ' : day < 18 ? 'First rain: 20 July. ' : 'Cut before more rain. '}Sheaves become grain: 5 August. Due: ${dateEnglish(nextRiderDay(s))}. ${s.flags.verbs.includes('take') ? 'Shares during threshing.' : 'Shares: 9 August.'}`;
+      return `About ${Math.round(s.agha.reaped / 5) * 5} kile are cut. About ${Math.round(s.agha.standing / 10) * 10} kile are still standing. ${day < 18 ? 'Rain is expected on 20 July.' : 'Cut the barley before more rain.'} Threshing turns the cut barley into grain from 5 August. The due must be ready by ${dateEnglish(nextRiderDay(s))}. ${s.flags.verbs.includes('take') ? 'Collect shares during threshing.' : 'You can collect shares from 9 August.'}`;
     case 'threshing':
       return doy < 220 && !s.flags.verbs.includes('take')
         ? `Cut sheaves are becoming grain. Shares can be called in from 9 August. ${rider}`
@@ -160,7 +303,7 @@ export function nowWords(s: ValleyState): string {
       ? 'Someone waits at your door for grain; answer them.'
       : 'Someone waits at your door with family news; answer them.';
   if (s.kahyaState.visit && s.kahyaState.visit.back > s.minute)
-    return 'Visit underway; you will return to the residence.';
+    return 'Your visit is underway. You will return to the residence.';
   const job = currentJob(s);
   const ask =
     job && s.asks.find((a) => a.job === job && !a.closed && a.from <= s.minute && a.until > s.minute);

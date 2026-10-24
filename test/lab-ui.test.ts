@@ -29,7 +29,7 @@ async function fixture(page: Page, mode: 'linked' | 'off' | 'dnt' | 'title' | 'u
       body: "import '/src/ui/style.css'; import '/node_modules/@adam0white/lab-kit/stage.css';",
     }),
   );
-  await page.goto(origin);
+  await page.goto(`${origin}/?lab=1`);
   await page.evaluate(`(async (mode) => {
     const { save, newGame, load, fingerprint } = await import('/src/sim/game.ts');
     const { mountLab, lab, labScreen } = await import('/src/ui/lab.ts');
@@ -58,7 +58,7 @@ const feedback = (page: Page) => page.locator('.feedback-panel');
 async function sendWord(page: Page) {
   await page
     .locator('.game-menu-panel')
-    .getByRole('button', { name: /Send word/ })
+    .getByRole('button', { name: /Feedback/ })
     .click();
 }
 async function counts(page: Page) {
@@ -74,30 +74,18 @@ async function fits(page: Page) {
   expect(panel && panel.y >= 0 && panel.y + panel.height <= 691).toBe(true);
 }
 
-it('keeps reading, pace and return controls in the menu and binds before returning to title', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+it('keeps notebook and pace tools behind exact lab=1', async () => {
+  const page = await browser.newPage({ viewport: { width: 820, height: 1180 } });
   try {
     await fixture(page);
     const menu = page.locator('.game-menu-panel');
-    await page.setViewportSize({ width: 1280, height: 800 });
-    const drawer = await menu.boundingBox();
-    expect((drawer?.y ?? 0) + (drawer?.height ?? 0)).toBeCloseTo(800, 0);
-    const resume = await menu.locator('[data-resume]').boundingBox();
-    expect((resume?.y ?? 0) + (resume?.height ?? 0)).toBeGreaterThanOrEqual(660);
-    expect(await menu.getByRole('button', { name: /The notebook/ }).isVisible()).toBe(true);
-    expect(
-      await menu
-        .getByRole('button', { name: /Bind this volume|Download this run|Send this run to the notebook/ })
-        .count(),
-    ).toBe(0);
+    expect(await menu.locator('[data-notebook]').isVisible()).toBe(true);
     await menu.getByRole('button', { name: 'Fast', exact: true }).click();
     expect(await page.evaluate('window.speed')).toBe('fast');
-    const bound = await page.evaluate<number>('window.bindCount');
-    await menu.getByRole('button', { name: 'To the title page', exact: true }).click();
-    expect(await page.evaluate('({bind: window.bindCount, title: window.titleCount})')).toEqual({
-      bind: bound + 1,
-      title: 1,
-    });
+    await menu.locator('[data-new]').click();
+    expect(await menu.locator('[data-new-confirm]').isVisible()).toBe(true);
+    await menu.locator('[data-cancel-new]').click();
+    expect(await menu.locator('[data-new-confirm]').isVisible()).toBe(false);
   } finally {
     await page.close();
   }
@@ -183,7 +171,7 @@ it('sends a privacy-signal note on the same page without a run-consent step', as
   }
 });
 
-it('offers Send word before starting a run', async () => {
+it('offers Feedback before starting a run', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await fixture(page, 'title');

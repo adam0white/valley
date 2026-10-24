@@ -330,12 +330,32 @@ it('keeps harvest results, rain deadline and grain date together through calls a
   s.agha.standing = 123;
   call(s, 'reap-agha', ['coban']);
   const before = fingerprint(s);
-  expect(nextWords(s)).toMatch(/about 185 cut.*120 standing/i);
+  expect(nextWords(s)).toMatch(/about 185 kile are cut.*120 kile are still standing/i);
   expect(nextWords(s)).toMatch(/rain.*20 July/i);
   expect(nextWords(s)).toMatch(/5 August.*grain|grain.*5 August/i);
   expect(nowWords(s)).toMatch(/call.*underway|replies.*available/i);
   s.kahyaState.visit = { house: 'coban', arrive: 30, leave: 90, back: 120 };
-  expect(nextWords(s)).toMatch(/185 cut.*120 standing/);
+  expect(nextWords(s)).toMatch(/185 kile are cut.*120 kile are still standing/);
   delete s.kahyaState.visit;
   expect(fingerprint(s)).toBe(before);
+});
+
+it('projects complete dialogue before shorter fragments without changing the saved run', () => {
+  const g = newGame(7);
+  const before = fingerprint(g.valley);
+  expect(englishText('A sheaf in eight. The world is turning.')).toBe(
+    'We will receive a sheaf in eight (one eighth of the harvest as pay). Things are changing.',
+  );
+  expect(englishText('We gave our girl away this month. The house is quieter. Too quiet.')).toBe(
+    'Our daughter married this month. The house is quieter. It is too quiet.',
+  );
+  expect(englishText('Come back in the spring. Not as kahya.')).toBe(
+    'Come back in the spring, but do not come as steward.',
+  );
+  expect(englishText('Put the mill off today: Yusuf and Zehra.')).toBe(
+    'Yusuf and Zehra postponed the mill today.',
+  );
+  expect(englishText('Brought their share today: Yusuf.')).toBe('Yusuf brought their share today.');
+  expect(englishText(g.valley.notes[0]?.text ?? '')).toContain('He wants his barley cut before the rains.');
+  expect(fingerprint(g.valley)).toBe(before);
 });

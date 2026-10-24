@@ -2,6 +2,7 @@ import { createLab } from '@adam0white/lab-client';
 import { feedbackPersonaControl, feedbackSharePlay } from '@adam0white/lab-kit';
 import type { SavedGame } from '../sim/game.ts';
 
+export const LAB_TOOLS = new URLSearchParams(location.search).get('lab') === '1';
 export const lab = createLab({ game: 'valley' });
 lab.setPersonaRecording(`valley-startup-${crypto.randomUUID()}`);
 export type GameSpeed = 'automatic' | 'slow' | 'steady' | 'fast';
@@ -13,6 +14,7 @@ type RunControls = {
   bindVolume: () => Promise<void>;
   notebook: () => void;
   toTitle: () => void;
+  newGame?: () => void;
   getSpeed: () => GameSpeed;
   setSpeed: (speed: GameSpeed) => void;
   date: () => string;
@@ -45,22 +47,26 @@ export function mountLab(options: RunControls): void {
   controls.innerHTML = `<dialog class="game-menu-panel" aria-labelledby="valley-menu-title">
     <header class="menu-head"><h2 id="valley-menu-title">Game menu <small data-menu-date></small></h2><button type="button" data-close-menu aria-label="Close menu">×</button></header>
     <div class="menu-body"><p>The valley waits while this is open. Your place is kept as you play.</p>
-    <button type="button" data-notebook>The notebook <span aria-hidden="true">▸</span></button>
+    ${
+      LAB_TOOLS
+        ? `<button type="button" data-notebook>The notebook <span aria-hidden="true">▸</span></button>
     <fieldset class="menu-speed"><legend>Time</legend><div role="group" aria-label="Time control">${(['automatic', 'slow', 'steady', 'fast'] as const).map((speed) => `<button type="button" data-speed="${speed}" aria-pressed="false">${speed.charAt(0).toUpperCase() + speed.slice(1)}</button>`).join('')}</div></fieldset>
-    <button type="button" data-feedback>Send word <span aria-hidden="true">▸</span></button>
-    <button type="button" data-fullscreen class="phone-only">Full screen</button>
-    <button type="button" data-title>To the title page</button>
-    <a href="https://human.adamwhite.work/">All games</a></div>
-    <footer class="menu-footer"><label><input type="checkbox" data-events> Record play for the lab</label><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a><button type="button" class="primary" data-resume>Back to the valley</button></footer>
+    `
+        : ''
+    }<button type="button" data-feedback>Feedback <span aria-hidden="true">▸</span></button>
+    <button type="button" data-fullscreen>Full screen</button>
+    <button type="button" data-new>New game</button><span data-new-confirm hidden>Replace your saved game? <button type="button" data-confirm-new>Start new game</button><button type="button" data-cancel-new>Cancel</button></span>
+    <a href="https://human.adamwhite.work/games/" target="_top">All games</a></div>
+    <footer class="menu-footer"><label><input type="checkbox" data-events> Recording</label><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a><button type="button" class="primary" data-resume>Resume</button></footer>
   </dialog>
   <dialog class="feedback-panel" aria-labelledby="valley-feedback-title">
-    <header class="feedback-head"><button type="button" data-feedback-back aria-label="Back to menu">←</button><h2 id="valley-feedback-title">Send word</h2><button type="button" data-close-feedback aria-label="Close Send word">×</button></header>
+    <header class="feedback-head"><button type="button" data-feedback-back aria-label="Back to menu">←</button><h2 id="valley-feedback-title">Feedback</h2><button type="button" data-close-feedback aria-label="Close Feedback">×</button></header>
     <form class="feedback-form"><div class="feedback-body"><p data-feedback-lead>Send a note about this game. You can send a note with or without sharing play.</p>
     <div class="feedback-verdicts" role="group" aria-label="Would you keep playing?"><button type="button" data-verdict="keep" aria-pressed="false">I'd keep playing</button><button type="button" data-verdict="mixed" aria-pressed="false">Not sure</button><button type="button" data-verdict="quit" aria-pressed="false">I'd stop here</button></div>
     <label for="valley-feedback-note">What happened in the valley, what you wanted, what got in the way.</label><textarea id="valley-feedback-note" rows="4" maxlength="12000"></textarea>
     <label for="valley-feedback-name">Your name or tester id <small>(optional)</small></label><input id="valley-feedback-name" type="text" maxlength="60" autocomplete="nickname"><p class="soft">A name labels your player id and its past and future linked history on this device. Leave it empty to stay pseudonymous.</p>
     <details><summary>What is sent</summary><p data-send-preview>Your note, optional verdict and name, with your current linked run, saves and log.</p><p>Long runs use a shorter replay: the seed and every input, without the full state.</p><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a></details>
-    <button type="button" data-download>Keep a copy of this run</button><p data-feedback-status role="status" aria-live="polite"></p></div>
+    ${LAB_TOOLS ? '<button type="button" data-download>Keep a copy of this run</button>' : ''}<p data-feedback-status role="status" aria-live="polite"></p></div>
     <footer class="feedback-actions"><button type="submit" class="primary" data-send>Submit</button></footer></form>
   </dialog>`;
   document.body.append(controls);
@@ -102,16 +108,12 @@ export function mountLab(options: RunControls): void {
         ? 'Your note, verdict and optional name only. No run or linked history is sent.'
         : 'Your note, verdict and optional name. Available run details are included when recording permits them.';
     send.disabled = !sent && busy;
-    find<HTMLButtonElement>('[data-download]').disabled = !options.hasRun();
-    find<HTMLButtonElement>('[data-notebook]').hidden = !options.hasRun();
-    find<HTMLButtonElement>('[data-title]').hidden = currentScreen === 'title';
+    const download = find<HTMLButtonElement>('[data-download]');
+    if (download) download.disabled = !options.hasRun();
+    const notebook = find<HTMLButtonElement>('[data-notebook]');
+    if (notebook) notebook.hidden = !options.hasRun();
     find('[data-menu-date]').textContent = options.hasRun() ? `· ${options.date()}` : '';
-    find('[data-resume]').textContent =
-      currentScreen === 'title'
-        ? 'Close'
-        : currentScreen === 'ending'
-          ? 'Back to the gathering'
-          : 'Back to the valley';
+    find('[data-resume]').textContent = 'Resume';
     for (const button of controls.querySelectorAll<HTMLButtonElement>('[data-speed]'))
       button.setAttribute('aria-pressed', String(button.dataset.speed === options.getSpeed()));
   };
@@ -153,18 +155,20 @@ export function mountLab(options: RunControls): void {
   find('[data-feedback]').addEventListener('click', openFeedback);
   find('[data-close-feedback]').addEventListener('click', closeFeedback);
   find('[data-feedback-back]').addEventListener('click', openMenu);
-  find('[data-notebook]').addEventListener('click', () => {
+  find('[data-notebook]')?.addEventListener('click', () => {
     menu.close();
     options.notebook();
   });
-  find('[data-title]').addEventListener('click', async () => {
-    try {
-      await options.bindVolume();
-    } catch {
-      lab.log('warn', 'Could not bind the volume before returning to the title.');
-    }
+  find('[data-new]').addEventListener('click', () => {
+    find('[data-new-confirm]').hidden = false;
+  });
+  find('[data-cancel-new]').addEventListener('click', () => {
+    find('[data-new-confirm]').hidden = true;
+  });
+  find('[data-confirm-new]').addEventListener('click', () => {
+    find('[data-new-confirm]').hidden = true;
     menu.close();
-    options.toTitle();
+    options.newGame?.();
   });
   find('[data-fullscreen]').addEventListener('click', async () => {
     try {
@@ -188,7 +192,7 @@ export function mountLab(options: RunControls): void {
       for (const chip of controls.querySelectorAll<HTMLButtonElement>('[data-verdict]'))
         chip.setAttribute('aria-pressed', String(chip.dataset.verdict === verdict));
     });
-  find('[data-download]').addEventListener('click', options.download);
+  find('[data-download]')?.addEventListener('click', options.download);
   find<HTMLInputElement>('[data-events]').addEventListener('change', (event) => {
     const on = (event.target as HTMLInputElement).checked;
     lab.setTelemetryOff(!on);
@@ -221,7 +225,11 @@ export function mountLab(options: RunControls): void {
       status.textContent = sentMessage;
       send.textContent = 'Back to the game';
     } catch (error) {
-      status.textContent = error instanceof Error ? error.message : 'Could not send. Please try again.';
+      console.error(error);
+      status.textContent =
+        LAB_TOOLS && error instanceof Error
+          ? error.message
+          : 'Your feedback could not be sent. Please try again.';
     } finally {
       busy = false;
       sync();
