@@ -260,6 +260,46 @@ it('holds the clock for the menu and info, and slows the ledger for reading', as
   }
 });
 
+it.each(['other-chapter', undefined])(
+  'ignores a same-seed bound volume without the current receipt (%s)',
+  async (receipt) => {
+    const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+    try {
+      await open(page);
+      const originalStore = await page.evaluate(`(async (receipt) => {
+      const { _debug } = await import('/src/ui/app.ts');
+      const { stateJson } = await import('/src/sim/game.ts');
+      const g = _debug.game();
+      const state = stateJson(g.valley);
+      const original = state.households[0].store;
+      state.households[0].store = 9999;
+      const gz = await new Response(new Blob([JSON.stringify(state)]).stream().pipeThrough(new CompressionStream('gzip'))).blob();
+      const db = await new Promise((res, rej) => {
+        const r = indexedDB.open('valley', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('volumes');
+        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+      });
+      await new Promise((res, rej) => {
+        const tx = db.transaction('volumes', 'readwrite');
+        tx.objectStore('volumes').put({ seed: g.valley.seed, k: g.inputs.length, minute: g.valley.minute, runId: receipt, gz }, 'current');
+        tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+      });
+      return original;
+    })(${JSON.stringify(receipt)})`);
+      await page.reload();
+      await page.getByRole('button', { name: 'Open the ledger', exact: true }).click();
+      for (let i = 0; i < 100 && !(await page.locator('#map').count()); i++) await page.clock.runFor(50);
+      expect(
+        await page.evaluate(
+          `import('/src/ui/app.ts').then(({_debug}) => _debug.game().valley.households[0].store)`,
+        ),
+      ).toBe(originalStore);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
 it('loads a compact playtest run through Other ways in and restores its fingerprint', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   const run = compactRun(save(newGame(7)));

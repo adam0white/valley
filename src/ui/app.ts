@@ -177,6 +177,7 @@ function db(): Promise<IDBDatabase> {
 }
 
 interface Bound {
+  runId: string;
   seed: number;
   k: number;
   minute: number;
@@ -193,7 +194,13 @@ async function bindVolume() {
     g === boundGame && castSession.game === boundGame && castSession.generation === boundGeneration;
   const s = g.valley;
   const json = JSON.stringify(stateJson(s));
-  const bound: Bound = { seed: s.seed, k: g.inputs.length, minute: s.minute, gz: await gzip(json) };
+  const bound: Bound = {
+    runId: castSession.runId,
+    seed: s.seed,
+    k: g.inputs.length,
+    minute: s.minute,
+    gz: await gzip(json),
+  };
   if (!current()) return;
   volume++;
   try {
@@ -254,7 +261,15 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
   const bound = await readVolume();
   let game: Game;
   let rest: Input[];
-  if (bound && bound.seed === log.seed && bound.k <= log.inputs.length && bound.minute <= log.minute) {
+  if (
+    bound &&
+    typeof bound.runId === 'string' &&
+    bound.runId.length > 0 &&
+    bound.runId === log.continuity?.runId &&
+    bound.seed === log.seed &&
+    bound.k <= log.inputs.length &&
+    bound.minute <= log.minute
+  ) {
     game = {
       valley: restoreState(JSON.parse(await gunzip(bound.gz)) as ValleyState),
       inputs: log.inputs.slice(0, bound.k),
