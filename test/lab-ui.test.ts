@@ -110,7 +110,7 @@ it('sends linked feedback with an optional remembered name and keeps a full loca
     await sendWord(page);
     await fits(page);
     const panel = feedback(page);
-    expect(await panel.innerText()).toContain('Your run, saves and log reach us on their own.');
+    expect(await panel.innerText()).toContain('Send a note about this game.');
     await panel.locator('summary').click();
     const privacy = await panel.locator('details a').boundingBox();
     expect(privacy?.height).toBeGreaterThanOrEqual(44);
@@ -127,7 +127,9 @@ it('sends linked feedback with an optional remembered name and keeps a full loca
     const sent = await counts(page);
     expect(sent.feedback).toHaveLength(1);
     expect(sent.feedback[0]?.[0]).toContain('The winter felt slow.');
-    expect(sent.feedback[0]?.[1]).toEqual({ name: 'River tester' });
+    expect(sent.feedback[0]?.[1]).toEqual(
+      expect.objectContaining({ name: 'River tester', run: expect.any(Object) }),
+    );
     expect(sent.runs).toHaveLength(0);
     await panel.getByRole('button', { name: 'Back to the game', exact: true }).click();
     await page.locator('[data-menu]').click();
@@ -140,15 +142,15 @@ it('sends linked feedback with an optional remembered name and keeps a full loca
   }
 });
 
-it('blocks every send while recording is off and allows download and explicit re-enable', async () => {
+it('allows notes while recording is off and keeps download and explicit re-enable', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await fixture(page, 'off');
     await sendWord(page);
     const panel = feedback(page);
-    expect(await panel.innerText()).toContain('Recording is off, so nothing is sent.');
+    expect(await panel.innerText()).toContain('Recording is off. You can still send your note.');
     const send = panel.getByRole('button', { name: 'Send', exact: true });
-    expect(await send.isDisabled()).toBe(true);
+    expect(await send.isDisabled()).toBe(false);
     await panel.getByRole('button', { name: 'Keep a copy of this run', exact: true }).click();
     expect(await page.evaluate('window.downloadCount')).toBe(1);
     expect(await counts(page)).toEqual({ feedback: [], runs: [] });
@@ -161,14 +163,14 @@ it('blocks every send while recording is off and allows download and explicit re
   }
 });
 
-it('requires privacy-signal consent and sends a compact replay that restores exactly', async () => {
+it('offers optional privacy-signal run consent and sends a compact replay that restores exactly', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await fixture(page, 'dnt');
     await sendWord(page);
     const panel = feedback(page);
     const send = panel.getByRole('button', { name: 'Send', exact: true });
-    expect(await send.isDisabled()).toBe(true);
+    expect(await send.isDisabled()).toBe(false);
     const consent = panel.getByRole('checkbox', { name: 'Send this run with my note', exact: true });
     expect(await consent.isChecked()).toBe(false);
     await consent.check();
