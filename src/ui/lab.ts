@@ -1,6 +1,6 @@
 import { createLab } from '@adam0white/lab-client';
 import { feedbackPersonaControl } from '@adam0white/lab-kit';
-import { compactRun, type SavedGame } from '../sim/game.ts';
+import type { SavedGame } from '../sim/game.ts';
 
 export const lab = createLab({ game: 'valley' });
 lab.setPersonaRecording(`valley-startup-${crypto.randomUUID()}`);
@@ -60,8 +60,6 @@ export function mountLab(options: RunControls): void {
     <div class="feedback-verdicts" role="group" aria-label="Would you keep playing?"><button type="button" data-verdict="keep" aria-pressed="false">I'd keep playing</button><button type="button" data-verdict="mixed" aria-pressed="false">Not sure</button><button type="button" data-verdict="quit" aria-pressed="false">I'd stop here</button></div>
     <label for="valley-feedback-note">What happened in the valley, what you wanted, what got in the way.</label><textarea id="valley-feedback-note" rows="4" maxlength="12000"></textarea>
     <label for="valley-feedback-name">Your name or tester id <small>(optional)</small></label><input id="valley-feedback-name" type="text" maxlength="60" autocomplete="nickname"><p class="soft">A name labels your player id and its past and future linked history on this device. Leave it empty to stay pseudonymous.</p>
-    <div data-recording-off><p>Recording is off. You can still send your note.</p><label><input type="checkbox" data-feedback-events> Record play for the lab</label></div>
-    <div data-privacy-consent><p>Your browser asks not to track. This sends one run and your note without linking your history.</p><label><input type="checkbox" data-consent> Send this run with my note</label></div>
     <details><summary>What is sent</summary><p data-send-preview>Your note, optional verdict and name, with your current linked run, saves and log.</p><p>Long runs use a shorter replay: the seed and every input, without the full state.</p><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a></details>
     <button type="button" data-download>Keep a copy of this run</button><p data-feedback-status role="status" aria-live="polite"></p></div>
     <footer class="feedback-actions"><button type="submit" class="primary" data-send>Send</button></footer></form>
@@ -73,7 +71,6 @@ export function mountLab(options: RunControls): void {
   const name = find<HTMLInputElement>('#valley-feedback-name');
   const note = find<HTMLTextAreaElement>('#valley-feedback-note');
   const send = find<HTMLButtonElement>('[data-send]');
-  const consent = find<HTMLInputElement>('[data-consent]');
   const status = find('[data-feedback-status]');
   const feedbackRun = () => {
     try {
@@ -89,7 +86,6 @@ export function mountLab(options: RunControls): void {
   let sent = false;
   let busy = false;
   let menuOpener: HTMLElement | null = null;
-  const unlinked = () => lab.privacySignalOn && !lab.privacyOverride;
   const closeMenu = () => {
     menu.close();
     menuOpener?.focus();
@@ -101,23 +97,14 @@ export function mountLab(options: RunControls): void {
   const sync = () => {
     const off = recordingOff();
     find<HTMLInputElement>('[data-events]').checked = !off && (!lab.privacySignalOn || lab.privacyOverride);
-    find<HTMLInputElement>('[data-feedback-events]').checked = !off;
-    find('[data-recording-off]').hidden = !off;
-    find('[data-privacy-consent]').hidden = off || !unlinked();
-    find('[data-feedback-lead]').textContent = off
-      ? 'Recording is off. You can still send your note.'
-      : unlinked()
-        ? 'Tell us what happened. You can choose to send this run with your note.'
-        : 'Send a note about this game. Recording and continuing-person choices are optional.';
+    find('[data-feedback-lead]').textContent =
+      'Send a note about this game. Recording and continuing-person choices are optional.';
     find('[data-send-preview]').textContent = off
       ? 'Your note, verdict and optional name only. No run or linked history is sent.'
-      : unlinked()
-        ? 'Your note, verdict and optional name. Add the run only if you select the run checkbox. This copy is unlinked.'
-        : 'Your note, optional verdict and name, with your current linked run, saves and log.';
+      : 'Your note, verdict and optional name. Available run details are included when recording permits them.';
     send.disabled = !sent && busy;
     find<HTMLButtonElement>('[data-download]').disabled = !options.hasRun();
     find<HTMLButtonElement>('[data-notebook]').hidden = !options.hasRun();
-    find<HTMLButtonElement>('[data-feedback]').hidden = !options.hasRun();
     find<HTMLButtonElement>('[data-title]').hidden = currentScreen === 'title';
     find('[data-menu-date]').textContent = options.hasRun() ? `· ${options.date()}` : '';
     find('[data-resume]').textContent =
@@ -145,7 +132,6 @@ export function mountLab(options: RunControls): void {
       busy = false;
       note.value = '';
       name.value = readLocal(NAME_KEY);
-      consent.checked = false;
       status.textContent = '';
       send.textContent = 'Send';
       for (const button of controls.querySelectorAll('[data-verdict]'))
@@ -204,11 +190,6 @@ export function mountLab(options: RunControls): void {
     if (lab.privacySignalOn) lab.setPrivacyOverride(on);
     sync();
   });
-  find<HTMLInputElement>('[data-feedback-events]').addEventListener('change', (event) => {
-    lab.setTelemetryOff(!(event.target as HTMLInputElement).checked);
-    sync();
-  });
-  consent.addEventListener('change', sync);
   find<HTMLFormElement>('form').addEventListener('submit', async (event) => {
     event.preventDefault();
     if (sent) {
@@ -222,11 +203,9 @@ export function mountLab(options: RunControls): void {
     const chosenName = name.value.trim().slice(0, 60);
     const text = [verdict ? `Verdict: ${verdict}.` : '', note.value.trim()].filter(Boolean).join('\n\n');
     try {
-      if (!recordingOff() && unlinked() && consent.checked && lab.personaRecordingAllowed) {
-        const run = options.getRun();
-        if (!run) throw new Error('Open a ledger before sending this run.');
-        await lab.sendRun(compactRun(run), { note: text, name: chosenName });
-      } else await lab.sendFeedback(text, { name: chosenName, run: feedbackRun() });
+      const noteOnly = !lab.telemetryOn || (lab.privacySignalOn && !lab.privacyOverride);
+      const receipt = await lab.sendFeedback(text, { name: chosenName, run: feedbackRun() });
+      const sentMessage = `${noteOnly ? 'Note and verdict queued without a run or history linkage' : 'Note and verdict queued. Run details depend on recording and availability; continuing-person history links only after explicit consent'} · ${receipt}`;
       try {
         if (chosenName) localStorage.setItem(NAME_KEY, chosenName);
         else localStorage.removeItem(NAME_KEY);
@@ -234,7 +213,7 @@ export function mountLab(options: RunControls): void {
         /* Private storage may be unavailable. */
       }
       sent = true;
-      status.textContent = 'Sent. Thank you.';
+      status.textContent = sentMessage;
       send.textContent = 'Back to the game';
     } catch (error) {
       status.textContent = error instanceof Error ? error.message : 'Could not send. Please try again.';

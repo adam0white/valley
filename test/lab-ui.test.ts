@@ -15,7 +15,7 @@ afterAll(async () => {
   await browser?.close();
 }, 30000);
 
-async function fixture(page: Page, mode: 'linked' | 'off' | 'dnt' = 'linked') {
+async function fixture(page: Page, mode: 'linked' | 'off' | 'dnt' | 'title' = 'linked') {
   page.setDefaultTimeout(4000);
   await page.route('https://human.adamwhite.work/**', (route) => route.fulfill({ status: 204, body: '' }));
   if (mode === 'dnt')
@@ -43,14 +43,14 @@ async function fixture(page: Page, mode: 'linked' | 'off' | 'dnt' = 'linked') {
     target.replayFingerprint = (value) => fingerprint(load(value).valley);
     lab.sendFeedback = async (...args) => { target.feedbackCalls.push(args); return 'feedback-test'; };
     lab.sendRun = async (...args) => { target.runCalls.push(args); return 'run-test'; };
-    mountLab({ getRun: () => run, hasRun: () => true,
+    mountLab({ getRun: () => mode === 'title' ? undefined : run, hasRun: () => mode !== 'title',
       download: () => { target.downloadCount++; target.downloadedRun = run; },
       bindVolume: async () => { target.bindCount++; },
       notebook: () => { target.notebookCount++; },
       toTitle: () => { target.titleCount++; },
       getSpeed: () => target.speed ?? 'automatic', setSpeed: value => { target.speed = value; },
       date: () => '18 July, year one' });
-    labScreen('play');
+    labScreen(mode === 'title' ? 'title' : 'play');
   })(${JSON.stringify(mode)})`);
   await page.locator('[data-menu]').click();
 }
@@ -123,7 +123,7 @@ it('sends linked feedback with an optional remembered name and keeps a full loca
     expect(await page.evaluate('window.downloadCount')).toBe(1);
     expect(await page.evaluate('!!window.downloadedRun.state && !!window.downloadedRun.savedAt')).toBe(true);
     await panel.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect.poll(() => panel.innerText()).toContain('Sent. Thank you.');
+    await expect.poll(() => panel.innerText()).toContain('queued');
     const sent = await counts(page);
     expect(sent.feedback).toHaveLength(1);
     expect(sent.feedback[0]?.[0]).toContain('The winter felt slow.');
@@ -142,19 +142,20 @@ it('sends linked feedback with an optional remembered name and keeps a full loca
   }
 });
 
-it('allows notes while recording is off and keeps download and explicit re-enable', async () => {
+it('allows notes while recording is off and keeps download', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await fixture(page, 'off');
     await sendWord(page);
     const panel = feedback(page);
-    expect(await panel.innerText()).toContain('Recording is off. You can still send your note.');
     const send = panel.getByRole('button', { name: 'Send', exact: true });
     expect(await send.isDisabled()).toBe(false);
     await panel.getByRole('button', { name: 'Keep a copy of this run', exact: true }).click();
     expect(await page.evaluate('window.downloadCount')).toBe(1);
     expect(await counts(page)).toEqual({ feedback: [], runs: [] });
-    await panel.getByRole('checkbox', { name: 'Record play for the lab', exact: true }).check();
+    expect(await panel.getByRole('checkbox', { name: 'Record play for the lab', exact: true }).count()).toBe(
+      0,
+    );
     await expect.poll(() => send.isEnabled()).toBe(true);
     await send.click();
     await expect.poll(async () => (await counts(page)).feedback.length).toBe(1);
@@ -163,30 +164,34 @@ it('allows notes while recording is off and keeps download and explicit re-enabl
   }
 });
 
-it('offers optional privacy-signal run consent and sends a compact replay that restores exactly', async () => {
+it('sends a privacy-signal note on the same page without a run-consent step', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await fixture(page, 'dnt');
     await sendWord(page);
     const panel = feedback(page);
-    const send = panel.getByRole('button', { name: 'Send', exact: true });
-    expect(await send.isDisabled()).toBe(false);
-    const consent = panel.getByRole('checkbox', { name: 'Send this run with my note', exact: true });
-    expect(await consent.isChecked()).toBe(false);
-    await consent.check();
+    expect(
+      await panel.getByRole('checkbox', { name: 'Send this run with my note', exact: true }).count(),
+    ).toBe(0);
     await panel.locator('textarea').first().fill('I wanted to visit another house.');
-    await send.click();
-    await expect.poll(async () => (await counts(page)).runs.length).toBe(1);
-    const sent = await counts(page);
-    expect(sent.feedback).toHaveLength(0);
-    const entry = sent.runs[0];
-    if (!entry) throw new Error('Missing privacy-consented run');
-    const [run, extra] = entry;
-    expect(run).not.toHaveProperty('state');
-    expect(run).not.toHaveProperty('savedAt');
-    expect(extra.note).toContain('I wanted to visit another house.');
-    expect(await page.evaluate(`window.replayFingerprint(${JSON.stringify(run)})`)).toBe(run.fingerprint);
-    await expect.poll(() => panel.innerText()).toContain('Sent. Thank you.');
+    await panel.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect.poll(async () => (await counts(page)).feedback.length).toBe(1);
+    expect((await counts(page)).runs).toHaveLength(0);
+    await expect.poll(() => panel.innerText()).toContain('queued');
+  } finally {
+    await page.close();
+  }
+});
+
+it('offers Send word before starting a run', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await fixture(page, 'title');
+    await sendWord(page);
+    await feedback(page).locator('textarea').first().fill('A note from the title page.');
+    await feedback(page).getByRole('button', { name: 'Send', exact: true }).click();
+    await expect.poll(async () => (await counts(page)).feedback.length).toBe(1);
+    expect((await counts(page)).runs).toHaveLength(0);
   } finally {
     await page.close();
   }
