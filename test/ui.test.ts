@@ -444,6 +444,8 @@ it.each([
     await open(page);
     await page.getByRole('button', { name: 'the Ak house', exact: true }).click();
     await page.getByRole('button', { name: 'About ▾', exact: true }).click();
+    // About first uses Literata italic. Measure and scroll after that font has settled.
+    await page.evaluate(() => document.fonts.ready);
     const readable = async () =>
       page.evaluate(() => {
         const goal = document.querySelector<HTMLElement>('#now')!;
@@ -472,6 +474,7 @@ it.each([
       actions: true,
     });
     const body = page.locator('#sheet');
+    await page.evaluate(() => document.fonts.ready);
     await body.evaluate((e) => {
       e.scrollTop = e.scrollHeight;
     });
@@ -481,6 +484,7 @@ it.each([
     expect(
       await page.getByRole('button', { name: 'About ▾', exact: true }).getAttribute('aria-expanded'),
     ).toBe('true');
+    await page.evaluate(() => document.fonts.ready);
     await body.evaluate((e) => {
       e.scrollTop = e.scrollHeight;
     });
