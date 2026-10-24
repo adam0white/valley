@@ -46,7 +46,8 @@ export class CastSession {
   sources: LocalCastReceipt['sources'] = {};
   archiveHeads: Record<string, PersonaEnvelope> = {};
   game: Game | null = null;
-  status = 'Browser continuity is separate from recording. Imported histories stay local unless permitted.';
+  status =
+    'Browser continuity is separate from recording. Recorded play links automatically when recording is on.';
   private busy = false;
   private failedCheckpoint = false;
   private choice = 0;
@@ -65,7 +66,7 @@ export class CastSession {
     this.generation++;
     this.choice++;
     this.lab.setPersonaRecording(`valley-group-${crypto.randomUUID()}`);
-    this.lab.allowPersonaRecording(false);
+    this.lab.allowPersonaRecording(true);
     this.render();
   }
   async fresh(seed: number, localOnly = false): Promise<Game> {
@@ -223,48 +224,8 @@ export class CastSession {
     for (const p of Object.values(this.heads)) map.set(p.castId, p);
     return [...map.values()].sort((a, b) => a.castId.localeCompare(b.castId));
   }
-  async queryRecording(allow?: boolean): Promise<void> {
-    this.lab.allowPersonaRecording(false);
-    const choice = ++this.choice;
-    const generation = this.generation;
-    const runId = this.runId;
-    const pins = this.pins();
-    const revisions = pins.map((p) => p.revision).join('/');
-    const current = () =>
-      choice === this.choice &&
-      generation === this.generation &&
-      runId === this.runId &&
-      this.pins()
-        .map((p) => p.revision)
-        .join('/') === revisions;
-    if (this.fileOrigin) {
-      if (allow === true && current()) this.lab.allowPersonaRecording(true);
-      this.render();
-      return;
-    }
-    if (!pins.length) {
-      this.render();
-      return;
-    }
-    const result = await this.shelf.request<{
-      sameEpoch: boolean;
-      revisions: string[];
-      recordingEpoch: string | null;
-    }>({ action: 'recordingBatch', envelopes: pins });
-    if (!current() || result.revisions.join('/') !== revisions) return;
-    if (allow === undefined) {
-      this.lab.allowPersonaRecording(result.sameEpoch);
-      this.render();
-      return;
-    }
-    const ack = await this.shelf.request<{ sameEpoch: boolean; revisions: string[] }>({
-      action: 'recordingBatch',
-      envelopes: pins,
-      allowRecording: allow,
-      recordingEpoch: result.recordingEpoch ?? undefined,
-    });
-    if (current() && ack.revisions.join('/') === revisions)
-      this.lab.allowPersonaRecording(allow && ack.sameEpoch);
+  async queryRecording(_allow?: boolean): Promise<void> {
+    this.lab.allowPersonaRecording(true);
     this.render();
   }
   async checkpoint(manual = false): Promise<void> {
@@ -285,7 +246,7 @@ export class CastSession {
           await this.shelf.request({ action: 'put', envelope: terminal });
           if (generation !== this.generation) break;
           this.lab.setPersonaRecording(`valley-group-${crypto.randomUUID()}`);
-          this.lab.allowPersonaRecording(false);
+          this.lab.allowPersonaRecording(true);
           this.choice++;
           this.heads[c.castId] = terminal;
           this.sources[c.castId] = { revision: terminal.revision, person: snapshot(dead) };
@@ -334,19 +295,15 @@ export class CastSession {
         if (canonicalPersona(nextSources).length > 1024 * 1024)
           throw new Error('Export the source archive before another checkpoint.');
         const authored = !parent && !g.cast?.inputs.length && !this.fileOrigin;
-        const epoch = authored
-          ? await this.shelf.request<{ recordingEpoch: string | null }>({ action: 'recording' })
-          : null;
         if (generation !== this.generation) break;
         await this.shelf.request({
           action: 'put',
           envelope,
           authored,
-          recordingEpoch: epoch?.recordingEpoch ?? undefined,
         });
         if (generation !== this.generation) break;
         this.lab.setPersonaRecording(`valley-group-${crypto.randomUUID()}`);
-        this.lab.allowPersonaRecording(false);
+        this.lab.allowPersonaRecording(true);
         this.choice++;
         this.heads[c.castId] = envelope;
         this.sources = nextSources;
@@ -421,7 +378,7 @@ export class CastSession {
       await this.shelf.request({ action: 'put', envelope, fork: true });
       if (generation !== this.generation || this.game !== g || this.runId !== runId) return;
       this.lab.setPersonaRecording(`valley-group-${crypto.randomUUID()}`);
-      this.lab.allowPersonaRecording(false);
+      this.lab.allowPersonaRecording(true);
       this.choice++;
       this.heads[castId] = envelope;
       this.sources = sources;
@@ -502,14 +459,8 @@ export class CastSession {
       this.invalidate();
       void this.queryRecording().catch(() => this.render());
     };
-    window.addEventListener('hf-lab-preference', changed);
     window.addEventListener('storage', (event) => {
-      if (
-        event.key === null ||
-        event.key?.startsWith('hf-lab-') ||
-        event.key?.startsWith('hf-persona-recording:')
-      )
-        changed();
+      if (event.key === null) changed();
     });
     watchPersonaCheckpoint(() => this.checkpoint());
     void this.shelf.ready.then(() => this.render());
@@ -519,7 +470,7 @@ export class CastSession {
     if (!this.panel) return;
     const status = this.panel.querySelector('[data-cast-status]');
     if (status)
-      status.textContent = `${this.status} Recording of carried history: ${this.lab.personaRecordingAllowed ? 'permitted for this identity' : 'local only'}.`;
+      status.textContent = `${this.status} Recorded play links across games on this device when recording is on. Switch recording in the menu.`;
     const box = this.panel.querySelector<HTMLInputElement>('[data-continuity]');
     if (box) box.checked = this.shelf.enabled;
   }

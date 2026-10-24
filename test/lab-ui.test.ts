@@ -221,3 +221,27 @@ for (const mode of ['off', 'dnt'] as const) {
     });
   }
 }
+
+it('does not cancel a pending valley when recording identity acknowledges', async () => {
+  const page = await browser.newPage();
+  try {
+    await fixture(page);
+    const result = await page.evaluate(`(async () => {
+      const {CastSession} = await import('/src/ui/cast-session.ts');
+      const {lab} = await import('/src/ui/lab.ts');
+      let release;
+      const ready = new Promise(resolve => {release=resolve;});
+      const session = new CastSession(lab, {ready,enabled:false,setEnabled(){},request:async()=>null});
+      session.mount(document.body,()=>{});
+      const pending = session.fresh(42,true);
+      window.dispatchEvent(new Event('hf-lab-preference'));
+      window.dispatchEvent(new StorageEvent('storage',{key:'hf-lab-player'}));
+      release(true);
+      await pending;
+      return true;
+    })()`);
+    expect(result).toBe(true);
+  } finally {
+    await page.close();
+  }
+});

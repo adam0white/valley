@@ -29,9 +29,7 @@ function readLocal(key: string): string {
     return '';
   }
 }
-function recordingOff(): boolean {
-  return readLocal('hf-lab-recording-off') === '1' || readLocal('hf-lab-recording-off:valley') === '1';
-}
+
 export function openMenu(): void {
   showMenu?.();
 }
@@ -96,13 +94,13 @@ export function mountLab(options: RunControls): void {
     menuOpener?.focus();
   };
   const sync = () => {
-    const off = recordingOff();
-    find<HTMLInputElement>('[data-events]').checked = !off && (!lab.privacySignalOn || lab.privacyOverride);
+    find<HTMLInputElement>('[data-events]').checked = lab.telemetryOn;
     find('[data-feedback-lead]').textContent =
       'Send a note about this game. You can send a note with or without sharing play.';
-    find('[data-send-preview]').textContent = off
-      ? 'Your note, verdict and optional name only. No run or linked history is sent.'
-      : 'Your note, verdict and optional name. Available run details are included when recording permits them.';
+    find('[data-send-preview]').textContent =
+      !lab.telemetryOn && !feedbackSharePlay(personaChoice)
+        ? 'Your note, verdict and optional name only. No run or linked history is sent.'
+        : 'Your note, verdict and optional name. Available run details are included when recording permits them.';
     send.disabled = !sent && busy;
     find<HTMLButtonElement>('[data-download]').disabled = !options.hasRun();
     find<HTMLButtonElement>('[data-notebook]').hidden = !options.hasRun();
@@ -139,7 +137,10 @@ export function mountLab(options: RunControls): void {
         button.setAttribute('aria-pressed', 'false');
       personaChoice?.remove();
       personaChoice = feedbackPersonaControl(lab);
-      if (personaChoice) feedback.querySelector('textarea')?.after(personaChoice);
+      if (personaChoice) {
+        feedback.querySelector('textarea')?.after(personaChoice);
+        personaChoice.addEventListener('change', sync);
+      }
       sync();
       feedback.showModal();
     }

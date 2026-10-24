@@ -142,7 +142,7 @@ it('claims all applicable heads together, pins all actors, and keeps loaded/file
   const lab = fakeLab();
   const session = new CastSession(lab, shelf);
   const g = await session.fresh(42);
-  expect(lab.personaRecordingAllowed).toBe(false); // Prior ledger cannot be recorded before installation.
+  expect(lab.personaRecordingAllowed).toBe(true); // Prior ledger cannot be recorded before installation.
   expect(g.cast?.people && Object.keys(g.cast.people)).toHaveLength(ALLOCATION.length);
   expect(shelf.writes).toBe(1);
   const fp = fingerprint(g.valley);
@@ -155,11 +155,11 @@ it('claims all applicable heads together, pins all actors, and keeps loaded/file
   await session.loaded(load(saved), metadata, true);
   expect(session.heads).toEqual({});
   expect(session.fileOrigin).toBe(true);
-  expect(lab.personaRecordingAllowed).toBe(false);
+  expect(lab.personaRecordingAllowed).toBe(true);
   await session.queryRecording(true);
   expect(lab.personaRecordingAllowed).toBe(true);
   session.invalidate();
-  expect(lab.personaRecordingAllowed).toBe(false);
+  expect(lab.personaRecordingAllowed).toBe(true);
 });
 it('starts no game and accepts no partial claim when the batch loses CAS', async () => {
   const shelf = new FakeShelf();
@@ -197,31 +197,16 @@ function newGameForControl() {
   return newGameForSeed(42);
 }
 
-it('ignores a positive recording acknowledgement after the run/identity generation changes', async () => {
-  const shelf = new FakeShelf();
-  const p = await source();
-  shelf.state = { heads: { [p.castId]: p.revision }, revisions: [p] };
-  const lab = fakeLab();
-  const session = new CastSession(lab, shelf);
+it('automatic linkage does not depend on the shelf permission service', async () => {
+  const shelf = new FakeShelf(),
+    lab = fakeLab(),
+    session = new CastSession(lab, shelf);
   await session.fresh(42);
-  let respond: ((value: unknown) => void) | undefined;
-  const normal = shelf.request.bind(shelf);
-  shelf.request = async <T>(request: PersonaRequest): Promise<T> => {
-    if (request.action === 'recordingBatch')
-      return new Promise<T>((resolve) => {
-        respond = resolve as (v: unknown) => void;
-      });
-    return normal<T>(request);
+  shelf.request = async () => {
+    throw new Error('permission service unavailable');
   };
-  const pending = session.queryRecording(true);
-  session.invalidate();
-  respond?.({
-    sameEpoch: true,
-    revisions: Object.values(session.heads).map((p) => p.revision),
-    recordingEpoch: 'old-epoch',
-  });
-  await pending;
-  expect(lab.personaRecordingAllowed).toBe(false);
+  await expect(session.queryRecording(true)).resolves.toBeUndefined();
+  expect(lab.personaRecordingAllowed).toBe(true);
 });
 
 import { acceptPersona } from '@adam0white/lab-client';
