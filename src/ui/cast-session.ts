@@ -189,7 +189,7 @@ export class CastSession {
       this.lab.setPersonaRecording(null);
     else if (!fileOrigin) await this.queryRecording();
     this.status = fileOrigin
-      ? 'File-origin chapter: local play/export only until you permit recording for this loaded run. Embedded receipts grant no ownership.'
+      ? 'File-origin chapter: embedded receipts grant no ownership. Recorded play links automatically when recording is on.'
       : 'Loaded pinned chapter and validated local receipts. No latest shelf state was read.';
     this.render();
   }
@@ -441,7 +441,7 @@ export class CastSession {
     this.saveLocal = saveLocal;
     this.panel = document.createElement('section');
     this.panel.className = 'cast-controls';
-    this.panel.innerHTML = `<h3>People between chapters</h3><label><input type="checkbox" data-continuity> Continue people in this browser</label><p>All applicable allocated people enter together at a fresh start. A loaded chapter stays pinned. This device’s shelf is separate from recording and analysis.</p><label>Checkpoint person <select data-cast-person>${ALLOCATION.map((c) => `<option value="${c.castId}">${c.name}</option>`).join('')}</select></label><button data-cast-close>Close this person’s visiting chapter</button><p>Continue play until the person finishes current work. Five visitors have a thirty-day stay; Yusuf’s household care has no supported departure agreement. No duty or health restriction is cleared.</p><button data-cast-publish>Save eligible people to the browser shelf</button><button data-cast-alternative>Create a new alternative branch from this played person</button><p>An explicit alternative keeps the prior branch in history and makes a NEW NULL-parent branch from the selected person’s actual paused state. Imported receipts never become ownership. Current work, goals, care and clinical restrictions must still permit a checkpoint.</p><button data-cast-download>Download selected native checkpoint</button><button data-cast-allow>Permit recording of this complete loaded history</button><button data-cast-deny>Keep this history local</button><p data-cast-status role="status"></p>`;
+    this.panel.innerHTML = `<h3>People between chapters</h3><label><input type="checkbox" data-continuity> Continue people in this browser</label><p>All applicable allocated people enter together at a fresh start. A loaded chapter stays pinned. This device’s shelf is separate from recording and analysis.</p><label>Checkpoint person <select data-cast-person>${ALLOCATION.map((c) => `<option value="${c.castId}">${c.name}</option>`).join('')}</select></label><button data-cast-close>Close this person’s visiting chapter</button><p>Continue play until the person finishes current work. Five visitors have a thirty-day stay; Yusuf’s household care has no supported departure agreement. No duty or health restriction is cleared.</p><button data-cast-publish>Save eligible people to the browser shelf</button><button data-cast-alternative>Create a new alternative branch from this played person</button><p>An explicit alternative keeps the prior branch in history and makes a NEW NULL-parent branch from the selected person’s actual paused state. Imported receipts never become ownership. Current work, goals, care and clinical restrictions must still permit a checkpoint.</p><button data-cast-download>Download selected native checkpoint</button><p data-cast-status role="status"></p>`;
     host.append(this.panel);
     const box = this.panel.querySelector<HTMLInputElement>('[data-continuity]');
     box?.addEventListener('change', () => {
@@ -497,18 +497,6 @@ export class CastSession {
       link.download = `valley-${localRole(head.castId)}-native-person.json`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-    });
-    this.panel.querySelector('[data-cast-allow]')?.addEventListener(
-      'click',
-      () =>
-        void this.queryRecording(true).catch((e) => {
-          this.status = String(e);
-          this.render();
-        }),
-    );
-    this.panel.querySelector('[data-cast-deny]')?.addEventListener('click', () => {
-      this.lab.allowPersonaRecording(false);
-      void this.queryRecording(false).catch(() => this.render());
     });
     const changed = () => {
       this.invalidate();

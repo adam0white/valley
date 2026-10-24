@@ -122,7 +122,7 @@ it('sends linked feedback with an optional remembered name and keeps a full loca
     await panel.getByRole('button', { name: 'Keep a copy of this run', exact: true }).click();
     expect(await page.evaluate('window.downloadCount')).toBe(1);
     expect(await page.evaluate('!!window.downloadedRun.state && !!window.downloadedRun.savedAt')).toBe(true);
-    await panel.getByRole('button', { name: 'Send', exact: true }).click();
+    await panel.getByRole('button', { name: 'Submit', exact: true }).click();
     await expect.poll(() => panel.innerText()).toContain('queued');
     const sent = await counts(page);
     expect(sent.feedback).toHaveLength(1);
@@ -148,7 +148,7 @@ it('allows notes while recording is off and keeps download', async () => {
     await fixture(page, 'off');
     await sendWord(page);
     const panel = feedback(page);
-    const send = panel.getByRole('button', { name: 'Send', exact: true });
+    const send = panel.getByRole('button', { name: 'Submit', exact: true });
     expect(await send.isDisabled()).toBe(false);
     await panel.getByRole('button', { name: 'Keep a copy of this run', exact: true }).click();
     expect(await page.evaluate('window.downloadCount')).toBe(1);
@@ -174,7 +174,7 @@ it('sends a privacy-signal note on the same page without a run-consent step', as
       await panel.getByRole('checkbox', { name: 'Send this run with my note', exact: true }).count(),
     ).toBe(0);
     await panel.locator('textarea').first().fill('I wanted to visit another house.');
-    await panel.getByRole('button', { name: 'Send', exact: true }).click();
+    await panel.getByRole('button', { name: 'Submit', exact: true }).click();
     await expect.poll(async () => (await counts(page)).feedback.length).toBe(1);
     expect((await counts(page)).runs).toHaveLength(0);
     await expect.poll(() => panel.innerText()).toContain('queued');
@@ -189,7 +189,7 @@ it('offers Send word before starting a run', async () => {
     await fixture(page, 'title');
     await sendWord(page);
     await feedback(page).locator('textarea').first().fill('A note from the title page.');
-    await feedback(page).getByRole('button', { name: 'Send', exact: true }).click();
+    await feedback(page).getByRole('button', { name: 'Submit', exact: true }).click();
     await expect.poll(async () => (await counts(page)).feedback.length).toBe(1);
     expect((await counts(page)).runs).toHaveLength(0);
   } finally {
@@ -197,21 +197,27 @@ it('offers Send word before starting a run', async () => {
   }
 });
 
-it('uses the supplied complete-history choice while pending without granting linkage or blocking notes', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-  try {
-    await fixture(page, 'unverified');
-    await sendWord(page);
-    const panel = feedback(page);
-    await panel.getByRole('checkbox', { name: /Link all continuing histories/ }).click();
-    await expect.poll(() => page.evaluate('window.recordingChoices')).toEqual([true]);
-    expect(
-      await page.evaluate(`(async () => (await import('/src/ui/lab.ts')).lab.personaRecordingAllowed)()`),
-    ).toBe(false);
-    await panel.locator('textarea').fill('The pending choice does not block my note.');
-    await panel.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect.poll(async () => (await counts(page)).feedback.length).toBe(1);
-  } finally {
-    await page.close();
+for (const mode of ['off', 'dnt'] as const) {
+  for (const checked of [false, true]) {
+    it(`submits ${mode} feedback with share checkbox ${checked}`, async () => {
+      const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+      try {
+        await fixture(page, mode);
+        await sendWord(page);
+        const panel = feedback(page);
+        const checkbox = panel.getByRole('checkbox', {
+          name: 'Share this run and my play with the lab',
+          exact: true,
+        });
+        expect(await checkbox.isChecked()).toBe(false);
+        if (checked) await checkbox.check();
+        expect(await page.evaluate('window.recordingChoices')).toEqual([]);
+        await panel.getByRole('button', { name: 'Submit', exact: true }).click();
+        await expect.poll(async () => (await counts(page)).feedback.length).toBe(1);
+        expect((await counts(page)).feedback[0]?.[1]).toHaveProperty('sharePlay', checked);
+      } finally {
+        await page.close();
+      }
+    });
   }
-});
+}

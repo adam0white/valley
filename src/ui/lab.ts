@@ -1,5 +1,5 @@
 import { createLab } from '@adam0white/lab-client';
-import { feedbackPersonaControl } from '@adam0white/lab-kit';
+import { feedbackPersonaControl, feedbackSharePlay } from '@adam0white/lab-kit';
 import type { SavedGame } from '../sim/game.ts';
 
 export const lab = createLab({ game: 'valley' });
@@ -57,13 +57,13 @@ export function mountLab(options: RunControls): void {
   </dialog>
   <dialog class="feedback-panel" aria-labelledby="valley-feedback-title">
     <header class="feedback-head"><button type="button" data-feedback-back aria-label="Back to menu">←</button><h2 id="valley-feedback-title">Send word</h2><button type="button" data-close-feedback aria-label="Close Send word">×</button></header>
-    <form class="feedback-form"><div class="feedback-body"><p data-feedback-lead>Send a note about this game. Recording and continuing-person choices are optional.</p>
+    <form class="feedback-form"><div class="feedback-body"><p data-feedback-lead>Send a note about this game. You can send a note with or without sharing play.</p>
     <div class="feedback-verdicts" role="group" aria-label="Would you keep playing?"><button type="button" data-verdict="keep" aria-pressed="false">I'd keep playing</button><button type="button" data-verdict="mixed" aria-pressed="false">Not sure</button><button type="button" data-verdict="quit" aria-pressed="false">I'd stop here</button></div>
     <label for="valley-feedback-note">What happened in the valley, what you wanted, what got in the way.</label><textarea id="valley-feedback-note" rows="4" maxlength="12000"></textarea>
     <label for="valley-feedback-name">Your name or tester id <small>(optional)</small></label><input id="valley-feedback-name" type="text" maxlength="60" autocomplete="nickname"><p class="soft">A name labels your player id and its past and future linked history on this device. Leave it empty to stay pseudonymous.</p>
     <details><summary>What is sent</summary><p data-send-preview>Your note, optional verdict and name, with your current linked run, saves and log.</p><p>Long runs use a shorter replay: the seed and every input, without the full state.</p><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a></details>
     <button type="button" data-download>Keep a copy of this run</button><p data-feedback-status role="status" aria-live="polite"></p></div>
-    <footer class="feedback-actions"><button type="submit" class="primary" data-send>Send</button></footer></form>
+    <footer class="feedback-actions"><button type="submit" class="primary" data-send>Submit</button></footer></form>
   </dialog>`;
   document.body.append(controls);
   const menu = controls.querySelector<HTMLDialogElement>('.game-menu-panel')!;
@@ -80,24 +80,7 @@ export function mountLab(options: RunControls): void {
       return undefined;
     }
   };
-  const personaChoice = feedbackPersonaControl({
-    personaRecordingRequired: lab.personaRecordingRequired,
-    get personaRecordingAllowed() {
-      return lab.personaRecordingAllowed;
-    },
-    allowPersonaRecording(allow) {
-      void Promise.resolve()
-        .then(() => options.chooseRecording(allow))
-        .then(syncPersonaChoice, syncPersonaChoice);
-    },
-  });
-  function syncPersonaChoice() {
-    const input = personaChoice?.querySelector('input');
-    if (input) input.checked = lab.personaRecordingAllowed;
-  }
-  if (personaChoice?.lastChild)
-    personaChoice.lastChild.textContent =
-      ' Link all continuing histories in this run to lab recording (optional)';
+  let personaChoice = feedbackPersonaControl(lab);
   if (personaChoice) feedback.querySelector('textarea')?.after(personaChoice);
 
   let verdict = '';
@@ -116,7 +99,7 @@ export function mountLab(options: RunControls): void {
     const off = recordingOff();
     find<HTMLInputElement>('[data-events]').checked = !off && (!lab.privacySignalOn || lab.privacyOverride);
     find('[data-feedback-lead]').textContent =
-      'Send a note about this game. Recording and continuing-person choices are optional.';
+      'Send a note about this game. You can send a note with or without sharing play.';
     find('[data-send-preview]').textContent = off
       ? 'Your note, verdict and optional name only. No run or linked history is sent.'
       : 'Your note, verdict and optional name. Available run details are included when recording permits them.';
@@ -151,9 +134,12 @@ export function mountLab(options: RunControls): void {
       note.value = '';
       name.value = readLocal(NAME_KEY);
       status.textContent = '';
-      send.textContent = 'Send';
+      send.textContent = 'Submit';
       for (const button of controls.querySelectorAll('[data-verdict]'))
         button.setAttribute('aria-pressed', 'false');
+      personaChoice?.remove();
+      personaChoice = feedbackPersonaControl(lab);
+      if (personaChoice) feedback.querySelector('textarea')?.after(personaChoice);
       sync();
       feedback.showModal();
     }
@@ -205,7 +191,6 @@ export function mountLab(options: RunControls): void {
   find<HTMLInputElement>('[data-events]').addEventListener('change', (event) => {
     const on = (event.target as HTMLInputElement).checked;
     lab.setTelemetryOff(!on);
-    if (lab.privacySignalOn) lab.setPrivacyOverride(on);
     sync();
   });
   find<HTMLFormElement>('form').addEventListener('submit', async (event) => {
@@ -221,9 +206,10 @@ export function mountLab(options: RunControls): void {
     const chosenName = name.value.trim().slice(0, 60);
     const text = [verdict ? `Verdict: ${verdict}.` : '', note.value.trim()].filter(Boolean).join('\n\n');
     try {
-      const noteOnly = !lab.telemetryOn || (lab.privacySignalOn && !lab.privacyOverride);
-      const receipt = await lab.sendFeedback(text, { name: chosenName, run: feedbackRun() });
-      const sentMessage = `${noteOnly ? 'Note and verdict queued without a run or history linkage' : 'Note and verdict queued. Run details depend on recording and availability; continuing-person history links only after explicit consent'} · ${receipt}`;
+      const sharePlay = feedbackSharePlay(personaChoice);
+      const noteOnly = !lab.telemetryOn && !sharePlay;
+      const receipt = await lab.sendFeedback(text, { name: chosenName, run: feedbackRun(), sharePlay });
+      const sentMessage = `${noteOnly ? 'Note and verdict queued without a run or history linkage' : 'Note and verdict queued. Run details depend on recording and availability; recorded play is linked across games on this device'} · ${receipt}`;
       try {
         if (chosenName) localStorage.setItem(NAME_KEY, chosenName);
         else localStorage.removeItem(NAME_KEY);
