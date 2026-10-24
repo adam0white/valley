@@ -130,23 +130,30 @@ export class CastSession {
       throw new Error('Invalid local run receipt.');
     for (const input of g.cast?.inputs ?? []) await validatePersona(input.parent);
     for (const claim of g.cast?.claims ?? []) await validatePersona(claim);
-    const candidateHeads = fileOrigin
-      ? (fileArchive?.castHeads ?? meta?.archiveHeads ?? {})
-      : (meta?.heads ?? {});
+    const candidateHeads = fromFile
+      ? (fileArchive?.castHeads ?? { ...meta?.archiveHeads, ...meta?.heads })
+      : { ...meta?.archiveHeads, ...meta?.heads };
     if (Object.keys(candidateHeads).length > 6) throw new Error('Too many cast receipts.');
     for (const [id, raw] of Object.entries(candidateHeads)) {
       const head = await validatePersona(raw);
       if (head.castId !== id || !ALLOCATION.some((c) => c.castId === id))
         throw new Error('Outside cast receipt.');
       archiveHeads[id] = head;
-      if (fileOrigin) continue; // Provenance in a file is never checkpoint ownership.
+      if (fromFile || meta?.heads?.[id]?.revision !== head.revision) continue;
+      // Only a locally accepted native source receipt can own a file-origin alternative.
+      const nativeOwned =
+        head.transfer.hostRun === runId &&
+        head.transfer.castPassport === 'valley-cast/1' &&
+        head.source.rules === HOST_RULES;
+      if ((fileOrigin || meta?.localOnly) && !nativeOwned)
+        throw new Error('Imported receipts do not grant alternative ownership.');
       const initial = g.cast?.claims.find((c) => c.castId === id);
       const initialClaim = initial?.revision === head.revision;
       const terminalOfClaim = !!head.terminal && initial?.revision === head.parentRevision;
       if (
         head.source.game !== 'valley' ||
         (!initialClaim && !terminalOfClaim && head.transfer.hostRun !== runId) ||
-        (initial && head.branchId !== initial.branchId)
+        (initial && head.branchId !== initial.branchId && !nativeOwned)
       )
         throw new Error('Invalid local ownership receipt.');
       heads[id] = head;
@@ -261,15 +268,7 @@ export class CastSession {
     this.render();
   }
   async checkpoint(manual = false): Promise<void> {
-    if (
-      (this.failedCheckpoint && !manual) ||
-      this.busy ||
-      !this.game ||
-      !this.shelf.enabled ||
-      this.localOnly ||
-      this.fileOrigin
-    )
-      return;
+    if ((this.failedCheckpoint && !manual) || this.busy || !this.game || !this.shelf.enabled) return;
     this.busy = true;
     const generation = this.generation;
     const g = this.game;
@@ -277,6 +276,7 @@ export class CastSession {
       for (const c of ALLOCATION) {
         const id = localRole(c.castId);
         const parent = this.heads[c.castId];
+        if ((this.fileOrigin || this.localOnly) && !parent) continue;
         const dead = g.valley.castDeaths?.[id];
         if (parent?.terminal) continue;
         if (dead && parent) {
@@ -365,11 +365,83 @@ export class CastSession {
       this.render();
     }
   }
+  /** Explicit new root from this played source, never adoption of embedded ownership. */
+  async alternative(castId: string): Promise<void> {
+    if (this.busy) return;
+    const g = this.game;
+    const generation = this.generation;
+    const runId = this.runId;
+    this.busy = true;
+    try {
+      const c = ALLOCATION.find((p) => p.castId === castId);
+      if (!g || !c || !this.shelf.enabled)
+        throw new Error('Open a current played chapter and enable browser continuity first.');
+      const raw = g.valley.castReleased?.[localRole(castId)];
+      if (!raw || !raw.body.alive || raw.activity)
+        throw new Error(
+          'This person must be naturally paused after current work. No activity, care or goal is cleared.',
+        );
+      const person = calendarPassport(raw);
+      const checkpoint = await checkpointReceipt(raw);
+      const previous =
+        this.heads[castId] ?? this.archiveHeads[castId] ?? g.cast?.claims.find((p) => p.castId === castId);
+      const branchId = crypto.randomUUID();
+      const envelope = await createPersona({
+        format: 'hf-persona/1',
+        castId,
+        castRevision: c.revision,
+        branchId,
+        parentRevision: null,
+        source: this.stamps(),
+        transfer: {
+          castPassport: 'valley-cast/1',
+          sourceRole: raw.id,
+          hostRun: runId,
+          person,
+          checkpoint,
+          life: initialPersonaLife(castId, branchId, Date.now()),
+          alternativeSource: {
+            version: 'valley-explicit-alternative/1',
+            previousReceipt: previous?.revision ?? null,
+            initialClaim: g.cast?.claims.find((p) => p.castId === castId)?.revision ?? null,
+            fileOrigin: this.fileOrigin,
+            localOnly: this.localOnly,
+          },
+        },
+        limitations: [
+          ...person.person.limitations,
+          'Explicit alternative from a played Valley chapter. Prior receipts remain history and grant no ownership of this new root. Full source state stays in the source export.',
+        ],
+      });
+      const sources = { ...this.sources, [castId]: { revision: envelope.revision, person: snapshot(raw) } };
+      if (canonicalPersona(sources).length > 1024 * 1024)
+        throw new Error('Export the source archive before another checkpoint.');
+      await this.shelf.ready;
+      if (generation !== this.generation || this.game !== g || this.runId !== runId) return;
+      await this.shelf.request({ action: 'put', envelope, fork: true });
+      if (generation !== this.generation || this.game !== g || this.runId !== runId) return;
+      this.lab.setPersonaRecording(`valley-group-${crypto.randomUUID()}`);
+      this.lab.allowPersonaRecording(false);
+      this.choice++;
+      this.heads[castId] = envelope;
+      this.sources = sources;
+      this.failedCheckpoint = false;
+      this.status = `${c.name}: NEW NULL-parent alternative branch accepted. Prior branch/history retained. Download this native checkpoint and keep a full run copy.`;
+      this.saveLocal?.();
+      await this.queryRecording();
+    } catch (error) {
+      if (generation === this.generation)
+        this.status = `Alternative refused: ${error instanceof Error ? error.message : String(error)}`;
+    } finally {
+      this.busy = false;
+      this.render();
+    }
+  }
   mount(host: HTMLElement, saveLocal: () => void) {
     this.saveLocal = saveLocal;
     this.panel = document.createElement('section');
     this.panel.className = 'cast-controls';
-    this.panel.innerHTML = `<h3>People between chapters</h3><label><input type="checkbox" data-continuity> Continue people in this browser</label><p>All applicable allocated people enter together at a fresh start. A loaded chapter stays pinned. This device’s shelf is separate from recording and analysis.</p><label>Checkpoint person <select data-cast-person>${ALLOCATION.map((c) => `<option value="${c.castId}">${c.name}</option>`).join('')}</select></label><button data-cast-close>Close this person’s visiting chapter</button><p>Continue play until the person finishes current work. Five visitors have a thirty-day stay; Yusuf’s household care has no supported departure agreement. No duty or health restriction is cleared.</p><button data-cast-publish>Save eligible people to the browser shelf</button><button data-cast-allow>Permit recording of this complete loaded history</button><button data-cast-deny>Keep this history local</button><p data-cast-status role="status"></p>`;
+    this.panel.innerHTML = `<h3>People between chapters</h3><label><input type="checkbox" data-continuity> Continue people in this browser</label><p>All applicable allocated people enter together at a fresh start. A loaded chapter stays pinned. This device’s shelf is separate from recording and analysis.</p><label>Checkpoint person <select data-cast-person>${ALLOCATION.map((c) => `<option value="${c.castId}">${c.name}</option>`).join('')}</select></label><button data-cast-close>Close this person’s visiting chapter</button><p>Continue play until the person finishes current work. Five visitors have a thirty-day stay; Yusuf’s household care has no supported departure agreement. No duty or health restriction is cleared.</p><button data-cast-publish>Save eligible people to the browser shelf</button><button data-cast-alternative>Create a new alternative branch from this played person</button><p>An explicit alternative keeps the prior branch in history and makes a NEW NULL-parent branch from the selected person’s actual paused state. Imported receipts never become ownership. Current work, goals, care and clinical restrictions must still permit a checkpoint.</p><button data-cast-download>Download selected native checkpoint</button><button data-cast-allow>Permit recording of this complete loaded history</button><button data-cast-deny>Keep this history local</button><p data-cast-status role="status"></p>`;
     host.append(this.panel);
     const box = this.panel.querySelector<HTMLInputElement>('[data-continuity]');
     box?.addEventListener('change', () => {
@@ -403,6 +475,29 @@ export class CastSession {
     this.panel
       .querySelector('[data-cast-publish]')
       ?.addEventListener('click', () => void this.checkpoint(true));
+    this.panel.querySelector('[data-cast-alternative]')?.addEventListener('click', () => {
+      const id = this.panel?.querySelector<HTMLSelectElement>('[data-cast-person]')?.value;
+      if (!id) return;
+      if (
+        window.confirm(
+          `Create a NEW alternative branch for ${canonicalCast(id).name} from this played, naturally paused source? The prior branch/history stays. This creates a new NULL-parent root; it does not recover ownership from imported receipts.`,
+        )
+      )
+        void this.alternative(id);
+    });
+    this.panel.querySelector('[data-cast-download]')?.addEventListener('click', () => {
+      const id = this.panel?.querySelector<HTMLSelectElement>('[data-cast-person]')?.value;
+      const head = id ? this.heads[id] : undefined;
+      if (!head || head.transfer.castPassport !== 'valley-cast/1') return;
+      const url = URL.createObjectURL(
+        new Blob([JSON.stringify(head, null, 2)], { type: 'application/json' }),
+      );
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `valley-${localRole(head.castId)}-native-person.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
     this.panel.querySelector('[data-cast-allow]')?.addEventListener(
       'click',
       () =>

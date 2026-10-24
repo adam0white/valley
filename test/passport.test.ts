@@ -102,6 +102,11 @@ class FakeShelf implements Shelf {
       this.writes++;
       return true as T;
     }
+    if (q.action === 'put' && q.envelope) {
+      this.state = acceptPersona(this.state, q.envelope, q.fork);
+      this.writes++;
+      return true as T;
+    }
     if (q.action === 'recordingBatch')
       return {
         sameEpoch: false,
@@ -249,4 +254,63 @@ it('closes an owned branch on death and preserves its terminal receipt after loc
   expect(() => preparePersonaLife(terminal, 30 * 3600000)).toThrow('closed');
   await session.loaded(load(save(g)), session.metadata());
   expect(session.heads['hf.cast.danyal.well']?.terminal?.kind).toBe('dead');
+});
+
+it('keeps imported receipts nonowned until a new explicit paused-source alternative is accepted', async () => {
+  const shelf = new FakeShelf();
+  const parent = await source();
+  shelf.state = { heads: { [parent.castId]: parent.revision }, revisions: [parent] };
+  const session = new CastSession(fakeLab(), shelf);
+  const g = await session.fresh(42);
+  act(g, { verb: 'release-cast', person: 'danyal' });
+  step(g, 10 * 1440);
+  const file = session.exportRun(save(g));
+  const originalHead = shelf.state.heads[parent.castId];
+  const imported = new CastSession(fakeLab(), shelf);
+  const restored = load(file);
+  await imported.loaded(restored, undefined, true, file);
+  const pinned = JSON.stringify(restored.cast);
+  await imported.checkpoint(true);
+  expect(imported.heads).toEqual({});
+  expect(shelf.state.heads[parent.castId]).toBe(originalHead);
+  await imported.alternative(parent.castId);
+  const root = imported.heads[parent.castId];
+  const paused = restored.valley.castReleased?.danyal;
+  const initial = file.cast?.claims[0];
+  if (!root || !paused || !initial) throw new Error('missing source control receipt');
+  expect(root.parentRevision).toBeNull();
+  expect(root.branchId).not.toBe(initial.branchId);
+  expect(root.transfer.castPassport).toBe('valley-cast/1');
+  expect(root.transfer.checkpoint).toEqual(await checkpointReceipt(paused));
+  expect(shelf.state.revisions.some((p) => p.revision === originalHead)).toBe(true);
+  expect(JSON.stringify(restored.cast)).toBe(pinned);
+  expect(imported.fileOrigin).toBe(true);
+  const meta = imported.metadata();
+  await expect(imported.loaded(load(save(restored)), { ...meta, runId: 'other-run' })).rejects.toThrow(
+    'Imported receipts',
+  );
+  await imported.loaded(load(save(restored)), meta);
+  expect(imported.heads[parent.castId]?.revision).toBe(root.revision);
+  await imported.loaded(load(save(restored)), undefined, true, imported.exportRun(save(restored)));
+  expect(imported.heads).toEqual({});
+});
+it('refuses an unpaused source and cancels an alternative after its run generation changes', async () => {
+  const shelf = new FakeShelf();
+  const session = new CastSession(fakeLab(), shelf);
+  const g = await session.fresh(42, true);
+  await session.alternative('hf.cast.danyal.well');
+  expect(session.status).toContain('paused');
+  expect(shelf.writes).toBe(0);
+  act(g, { verb: 'release-cast', person: 'danyal' });
+  step(g, 10 * 1440);
+  let finish!: (value: boolean) => void;
+  shelf.ready = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const pending = session.alternative('hf.cast.danyal.well');
+  session.invalidate();
+  finish(true);
+  await pending;
+  expect(shelf.writes).toBe(0);
+  expect(session.heads).toEqual({});
 });
