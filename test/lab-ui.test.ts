@@ -15,7 +15,7 @@ afterAll(async () => {
   await browser?.close();
 }, 30000);
 
-async function fixture(page: Page, mode: 'linked' | 'off' | 'dnt' | 'title' = 'linked') {
+async function fixture(page: Page, mode: 'linked' | 'off' | 'dnt' | 'title' | 'unverified' = 'linked') {
   page.setDefaultTimeout(4000);
   await page.route('https://human.adamwhite.work/**', (route) => route.fulfill({ status: 204, body: '' }));
   if (mode === 'dnt')
@@ -34,16 +34,16 @@ async function fixture(page: Page, mode: 'linked' | 'off' | 'dnt' | 'title' = 'l
     const { save, newGame, load, fingerprint } = await import('/src/sim/game.ts');
     const { mountLab, lab, labScreen } = await import('/src/ui/lab.ts');
     lab.setTelemetryOff(mode === 'off');
-    lab.setPersonaRecording(null); // Synthetic genuinely fresh component fixture.
+    lab.setPersonaRecording(mode === 'unverified' ? 'unverified-fixture' : null); // Synthetic genuinely fresh component fixture.
     const run = save(newGame(7));
     document.body.innerHTML = '<header class="topbar"><button type="button" data-menu>Menu</button></header>';
     const target = window;
-    target.feedbackCalls = []; target.runCalls = []; target.downloadCount = 0;
+    target.feedbackCalls = []; target.runCalls = []; target.downloadCount = 0; target.recordingChoices = [];
     target.titleCount = 0; target.notebookCount = 0; target.bindCount = 0;
     target.replayFingerprint = (value) => fingerprint(load(value).valley);
     lab.sendFeedback = async (...args) => { target.feedbackCalls.push(args); return 'feedback-test'; };
     lab.sendRun = async (...args) => { target.runCalls.push(args); return 'run-test'; };
-    mountLab({ getRun: () => mode === 'title' ? undefined : run, hasRun: () => mode !== 'title',
+    mountLab({ chooseRecording: async allow => { target.recordingChoices.push(allow); await new Promise(() => {}); }, getRun: () => mode === 'title' ? undefined : run, hasRun: () => mode !== 'title',
       download: () => { target.downloadCount++; target.downloadedRun = run; },
       bindVolume: async () => { target.bindCount++; },
       notebook: () => { target.notebookCount++; },
@@ -192,6 +192,25 @@ it('offers Send word before starting a run', async () => {
     await feedback(page).getByRole('button', { name: 'Send', exact: true }).click();
     await expect.poll(async () => (await counts(page)).feedback.length).toBe(1);
     expect((await counts(page)).runs).toHaveLength(0);
+  } finally {
+    await page.close();
+  }
+});
+
+it('uses the supplied complete-history choice while pending without granting linkage or blocking notes', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await fixture(page, 'unverified');
+    await sendWord(page);
+    const panel = feedback(page);
+    await panel.getByRole('checkbox', { name: /Link all continuing histories/ }).click();
+    await expect.poll(() => page.evaluate('window.recordingChoices')).toEqual([true]);
+    expect(
+      await page.evaluate(`(async () => (await import('/src/ui/lab.ts')).lab.personaRecordingAllowed)()`),
+    ).toBe(false);
+    await panel.locator('textarea').fill('The pending choice does not block my note.');
+    await panel.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect.poll(async () => (await counts(page)).feedback.length).toBe(1);
   } finally {
     await page.close();
   }

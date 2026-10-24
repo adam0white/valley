@@ -312,6 +312,7 @@ export function start() {
   mountLab({
     getRun: () => (g ? castSession.exportRun(save(g, volume)) : undefined),
     hasRun: () => !!g,
+    chooseRecording: (allow) => castSession.queryRecording(allow),
     download,
     notebook: openNotebook,
     toTitle: pauseToCover,
