@@ -1,95 +1,21 @@
-/** Canonical one-cast-1 content, pending consumption of the published shared registry.
- * This host implements voluntary disclosures through visits, not automatic biographical knowledge.
- * It grants no hidden repair, forgiveness, family outcome or qualification.
- */
-import type { PersonSpec } from '@adam0white/human-framework';
-
-const values = {
-  benevolence: 0.5,
-  universalism: 0.5,
-  tradition: 0.5,
-  conformity: 0.5,
-  security: 0.5,
-  achievement: 0.5,
-  power: 0.5,
-  hedonism: 0.5,
-  stimulation: 0.5,
-  selfDirection: 0.5,
+/** Canonical profiles come from the exact released public registry. Secrets stay in authored encounters. */
+import { canonicalCast, castForGame } from '@adam0white/lab-client';
+export const CAST_IDS: Record<string, string> = {
+  yusuf: 'hf.cast.yusuf.well',
+  maryam: 'hf.cast.maryam.well',
+  'yusuf-usta': 'hf.cast.yusuf.warren',
+  'meryem-visitor': 'hf.cast.meryem.warren',
+  samira: 'hf.cast.samira.well',
+  danyal: 'hf.cast.danyal.well',
 };
-const profiles = {
-  yusuf: [
-    'hf.cast.yusuf.well',
-    {
-      honesty: 0.75,
-      emotionality: 0.4,
-      extraversion: 0.5,
-      agreeableness: 0.6,
-      conscientiousness: 0.85,
-      openness: 0.5,
-    },
-  ],
-  maryam: [
-    'hf.cast.maryam.well',
-    {
-      honesty: 0.8,
-      emotionality: 0.6,
-      extraversion: 0.6,
-      agreeableness: 0.8,
-      conscientiousness: 0.8,
-      openness: 0.4,
-    },
-  ],
-  'yusuf-usta': [
-    'hf.cast.yusuf.warren',
-    {
-      honesty: 0.75,
-      emotionality: 0.45,
-      extraversion: 0.5,
-      agreeableness: 0.5,
-      conscientiousness: 0.7,
-      openness: 0.75,
-    },
-  ],
-  'meryem-visitor': [
-    'hf.cast.meryem.warren',
-    {
-      honesty: 0.6,
-      emotionality: 0.5,
-      extraversion: 0.45,
-      agreeableness: 0.55,
-      conscientiousness: 0.55,
-      openness: 0.85,
-    },
-  ],
-  samira: [
-    'hf.cast.samira.well',
-    {
-      honesty: 0.7,
-      emotionality: 0.85,
-      extraversion: 0.5,
-      agreeableness: 0.7,
-      conscientiousness: 0.85,
-      openness: 0.5,
-    },
-  ],
-  danyal: [
-    'hf.cast.danyal.well',
-    {
-      honesty: 0.9,
-      emotionality: 0.4,
-      extraversion: 0.4,
-      agreeableness: 0.7,
-      conscientiousness: 0.8,
-      openness: 0.5,
-    },
-  ],
-} satisfies Record<string, [string, NonNullable<PersonSpec['traits']>]>;
-
+export const ALLOCATION = castForGame('valley');
+export const localRole = (castId: string) => {
+  const role = Object.keys(CAST_IDS).find((id) => CAST_IDS[id] === castId);
+  if (!role) throw new Error('No authored Valley role for this identity.');
+  return role;
+};
 export function canonicalOpening(id: string) {
-  const profile = profiles[id as keyof typeof profiles];
-  return profile
-    ? { castId: profile[0], revision: '1', traits: { ...profile[1] }, values: { ...values } }
-    : undefined;
+  return CAST_IDS[id] ? canonicalCast(CAST_IDS[id]) : undefined;
 }
 
 export const DISCLOSURES: Record<string, string> = {

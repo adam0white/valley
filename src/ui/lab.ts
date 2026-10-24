@@ -2,6 +2,7 @@ import { createLab } from '@adam0white/lab-client';
 import { compactRun, type SavedGame } from '../sim/game.ts';
 
 export const lab = createLab({ game: 'valley' });
+lab.setPersonaRecording(`valley-startup-${crypto.randomUUID()}`);
 export type GameSpeed = 'automatic' | 'slow' | 'steady' | 'fast';
 type RunControls = {
   getRun: () => SavedGame | undefined;
@@ -100,7 +101,12 @@ export function mountLab(options: RunControls): void {
     find('[data-send-preview]').textContent = unlinked()
       ? 'Your note, optional verdict and name, and a compact replay of this run. It is not linked to your player history.'
       : 'Your note, optional verdict and name, with your current linked run, saves and log.';
-    send.disabled = !sent && (busy || off || (unlinked() && (!consent.checked || !options.hasRun())));
+    send.disabled =
+      !sent &&
+      (busy ||
+        off ||
+        !lab.personaRecordingAllowed ||
+        (unlinked() && (!consent.checked || !options.hasRun())));
     find<HTMLButtonElement>('[data-download]').disabled = !options.hasRun();
     find<HTMLButtonElement>('[data-notebook]').hidden = !options.hasRun();
     find<HTMLButtonElement>('[data-feedback]').hidden = !options.hasRun();

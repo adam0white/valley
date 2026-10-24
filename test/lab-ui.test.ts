@@ -22,11 +22,19 @@ async function fixture(page: Page, mode: 'linked' | 'off' | 'dnt' = 'linked') {
     await page.addInitScript(() =>
       Object.defineProperty(navigator, 'doNotTrack', { get: () => '1', configurable: true }),
     );
+  await page.route('**/src/main.ts', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'text/javascript',
+      body: "import '/src/ui/style.css'; import '/node_modules/@adam0white/lab-kit/stage.css';",
+    }),
+  );
   await page.goto(origin);
   await page.evaluate(`(async (mode) => {
     const { save, newGame, load, fingerprint } = await import('/src/sim/game.ts');
     const { mountLab, lab, labScreen } = await import('/src/ui/lab.ts');
     lab.setTelemetryOff(mode === 'off');
+    lab.setPersonaRecording(null); // Synthetic genuinely fresh component fixture.
     const run = save(newGame(7));
     document.body.innerHTML = '<header class="topbar"><button type="button" data-menu>Menu</button></header>';
     const target = window;

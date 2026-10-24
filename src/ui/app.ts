@@ -38,6 +38,7 @@ import {
   stateJson,
   step,
 } from '../sim/game.ts';
+import type { CastStart } from '../sim/passport.ts';
 import type { Household } from '../sim/people.ts';
 import {
   type Hunch,
@@ -54,6 +55,7 @@ import {
   V,
   type ValleyState,
 } from '../sim/valley.ts';
+import { CastSession, type LocalCastReceipt } from './cast-session.ts';
 import { lab, labScreen, mountLab, openFeedback } from './lab.ts';
 import {
   callUnavailable,
@@ -70,11 +72,14 @@ import {
 } from './presentation.ts';
 import { closingGrain } from './tally.ts';
 
+const castSession = new CastSession(lab);
 const LOG = 'valley-log-v1';
 let speed: Pace = 'automatic';
 const HUB = 'https://human.adamwhite.work';
 
 interface Log {
+  cast?: CastStart;
+  continuity?: LocalCastReceipt;
   game: 'valley';
   version: string;
   seed: number;
@@ -134,6 +139,8 @@ function partOfDay(m: number): string {
 function writeLog() {
   if (!g) return;
   const log: Log = {
+    ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
+    continuity: castSession.metadata(),
     game: 'valley',
     version: GAME_VERSION,
     seed: g.valley.seed,
@@ -176,14 +183,22 @@ interface Bound {
   gz: Blob;
 }
 
+let runTransition = 0;
+
 async function bindVolume() {
   if (!g) return;
+  const boundGame = g;
+  const boundGeneration = castSession.generation;
+  const current = () =>
+    g === boundGame && castSession.game === boundGame && castSession.generation === boundGeneration;
   const s = g.valley;
   const json = JSON.stringify(stateJson(s));
   const bound: Bound = { seed: s.seed, k: g.inputs.length, minute: s.minute, gz: await gzip(json) };
+  if (!current()) return;
   volume++;
   try {
     const d = await db();
+    if (!current()) return;
     await new Promise<void>((res, rej) => {
       const tx = d.transaction('volumes', 'readwrite');
       tx.objectStore('volumes').put(bound, 'current');
@@ -191,9 +206,10 @@ async function bindVolume() {
       tx.onerror = () => rej(tx.error);
       tx.onabort = () => rej(tx.error);
     });
+    if (!current()) return;
     lab.captureSave({ seed: bound.seed, k: bound.k, minute: bound.minute, state: JSON.parse(json) });
   } catch {}
-  writeLog();
+  if (current()) writeLog();
 }
 
 async function readVolume(): Promise<Bound | null> {
@@ -234,6 +250,7 @@ async function gunzip(b: Blob): Promise<string> {
 async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> {
   if (log.version !== GAME_VERSION)
     throw new Error('This ledger uses an older Valley edition. Start fresh from the title page.');
+  if (log.cast) newGame(log.seed, log.cast); // Validate the pinned semantic header even when a bound volume exists.
   const bound = await readVolume();
   let game: Game;
   let rest: Input[];
@@ -241,10 +258,11 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
     game = {
       valley: restoreState(JSON.parse(await gunzip(bound.gz)) as ValleyState),
       inputs: log.inputs.slice(0, bound.k),
+      ...(log.cast ? { cast: structuredClone(log.cast) } : {}),
     };
     rest = log.inputs.slice(bound.k);
   } else {
-    game = newGame(log.seed);
+    game = newGame(log.seed, log.cast);
     rest = log.inputs;
   }
   while (game.valley.minute + QUANTUM <= log.minute && !game.valley.flags.ended) {
@@ -261,21 +279,23 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
 export function start() {
   lab.trackRun(
     () => {
+      if (!g || castSession.game !== g) return null;
       try {
-        const saved = localStorage.getItem(LOG);
-        if (saved) lab.captureSave(JSON.parse(saved));
+        const saved = readLog();
+        if (saved?.continuity?.runId === castSession.runId) lab.captureSave(saved);
       } catch {}
-      return g ? save(g, volume) : null;
+      return g && castSession.game === g ? castSession.exportRun(save(g, volume)) : null;
     },
     {
       runKey: () => g?.valley.seed ?? 'title',
       getLogs: () =>
-        g?.valley.notes.slice(-40).map((line) => (line.words ? `${line.text} ${line.words}` : line.text)) ??
-        [],
+        g && castSession.game === g
+          ? g.valley.notes.slice(-40).map((line) => (line.words ? `${line.text} ${line.words}` : line.text))
+          : [],
     },
   );
   mountLab({
-    getRun: () => (g ? save(g, volume) : undefined),
+    getRun: () => (g ? castSession.exportRun(save(g, volume)) : undefined),
     hasRun: () => !!g,
     download,
     notebook: openNotebook,
@@ -293,6 +313,8 @@ export function start() {
       await bindVolume();
     },
   });
+  const castHost = document.querySelector<HTMLElement>('.game-menu-panel .menu-body');
+  if (castHost) castSession.mount(castHost, writeLog);
   if ('serviceWorker' in navigator && location.hostname !== 'localhost')
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   title();
@@ -342,7 +364,7 @@ function title() {
     if (log && log.version === GAME_VERSION) openLedger(log);
   });
   const fresh = (seed: number) => {
-    clearSaves().then(() => begin(seed));
+    void begin(seed);
   };
   const nb = app.querySelector<HTMLButtonElement>('[data-go="new"]');
   if (nb) {
@@ -368,13 +390,20 @@ function title() {
     const file = (event.target as HTMLInputElement).files?.[0];
     const result = app.querySelector('#load-result');
     if (!file || !result) return;
+    const transition = ++runTransition;
     const previous = g;
+    const previousMeta = castSession.metadata();
+    castSession.invalidate();
     try {
-      const saved = JSON.parse(await file.text()) as SavedGame | CompactRun;
+      const text = await file.text();
+      if (transition !== runTransition) return;
+      const saved = JSON.parse(text) as SavedGame | CompactRun;
       const restored = load(saved);
       if (fingerprint(restored.valley) !== saved.fingerprint) throw new Error('differs');
       result.textContent = 'matches';
       g = restored;
+      await castSession.loaded(restored, undefined, true, saved);
+      if (transition !== runTransition) return;
       volume = 0;
       importStatus = 'matches';
       ways?.close();
@@ -382,21 +411,35 @@ function title() {
       await bindVolume();
       enter();
     } catch {
+      if (transition !== runTransition) return;
       // load() can reset module caches; restore the active instance before continuing.
-      if (previous) g = { valley: restoreState(previous.valley), inputs: previous.inputs };
+      if (previous) {
+        g = {
+          valley: restoreState(previous.valley),
+          inputs: previous.inputs,
+          ...(previous.cast ? { cast: previous.cast } : {}),
+        };
+        await castSession.loaded(g, previousMeta);
+      }
       result.textContent = 'differs — this run could not be loaded.';
     }
   });
 }
 
 function openLedger(log: Log) {
+  const transition = ++runTransition;
+  cancelAnimationFrame(raf);
+  castSession.invalidate();
   app.innerHTML = `<div class="page">${topbar('The Valley')}<h2>Reading the ledger back…</h2><p class="hand" id="prog"></p></div>`;
   const prog = app.querySelector('#prog') as HTMLElement;
   reopen(log, (m) => {
     prog.textContent = `${dateWords(dayOfMinute(m))} of year ${yearWord(yearOf(dayOfMinute(m)))}`;
   })
-    .then((game) => {
+    .then(async (game) => {
+      if (transition !== runTransition) return;
       g = game;
+      await castSession.loaded(game, log.continuity);
+      if (transition !== runTransition) return;
       enter();
     })
     .catch(() => {
@@ -404,17 +447,35 @@ function openLedger(log: Log) {
     });
 }
 
-function begin(seed: number) {
-  app.innerHTML = `<div class="page">${topbar('The Valley')}<h2>Up the valley road…</h2></div>`;
-  setTimeout(() => {
-    g = newGame(seed);
+async function begin(seed: number, localOnly = false) {
+  const transition = ++runTransition;
+  cancelAnimationFrame(raf);
+  app.innerHTML = `<div class="page">${topbar('The Valley')}<h2>Up the valley road…</h2><p>Preparing the whole applicable cast before the chapter begins.</p></div>`;
+  try {
+    const prepared = await castSession.fresh(seed, localOnly);
+    if (transition !== runTransition) return;
+    g = prepared;
+    await clearSaves();
+    if (transition !== runTransition || castSession.game !== prepared) return;
     importStatus = '';
     volume = 0;
     hurrying = false;
     seenNote = 0;
     writeLog();
+    await castSession.activate(prepared);
+    if (transition !== runTransition) return;
     enter();
-  }, 30);
+  } catch (error) {
+    if (transition !== runTransition) return;
+    title();
+    const status = document.createElement('p');
+    status.setAttribute('role', 'status');
+    status.textContent = `The chapter did not start: ${error instanceof Error ? error.message : String(error)}. Your previous ledger and shelf are kept.`;
+    const local = document.createElement('button');
+    local.textContent = 'Play fresh locally without carrying history';
+    local.addEventListener('click', () => void begin(seed, true));
+    app.querySelector('.title-actions')?.prepend(status, local);
+  }
 }
 
 // ---------- play ----------
@@ -525,6 +586,8 @@ function frame(t: number) {
   }
   drawMap();
   if (moved && t - lastSheet > 450) drawSheet();
+  if (moved && (Object.keys(s.castReleased ?? {}).length || Object.keys(s.castDeaths ?? {}).length))
+    void castSession.checkpoint();
   raf = requestAnimationFrame(frame);
 }
 
@@ -550,6 +613,7 @@ function afterQuantum(t: number): boolean {
   const day = dayOfMinute(s.minute);
   if (day !== lastDay) {
     lastDay = day;
+    void castSession.checkpoint();
     hunchCache = null;
     writeLog();
     drawTop();
@@ -1788,7 +1852,7 @@ function drawClosingGrain() {
 
 function download() {
   if (!g) return;
-  const sv: SavedGame = save(g, volume);
+  const sv: SavedGame = castSession.exportRun(save(g, volume));
   const blob = new Blob([JSON.stringify(sv)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);

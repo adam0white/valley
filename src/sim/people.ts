@@ -93,7 +93,11 @@ export function makePerson(w: Who, seed: number, now: number, household: string)
     name: w.name,
     seed: mixSeed(seed, w.id.length, w.id.charCodeAt(0), w.id.charCodeAt(w.id.length - 1), w.age),
     now,
-    bornAt: now - Math.round((w.age + hashUnit(seed, w.age, w.id.length) * 0.9) * MINUTES_PER_YEAR),
+    bornAt:
+      now -
+      Math.round(
+        (canonical ? canonical.age : w.age + hashUnit(seed, w.age, w.id.length) * 0.9) * MINUTES_PER_YEAR,
+      ),
     sex: w.sex,
     traits: canonical?.traits ?? { ...w.traits },
     values: canonical?.values ?? {
@@ -581,7 +585,7 @@ const VISITORS: HouseSpec[] = [
     store: 9,
     share: 0,
     looks:
-      'Visitors staying for the survey season: Yusuf Usta, 74, advises on digging; Meryem, 19, his granddaughter, assists with surveys. Samira, 29, gathers and advises on stores; her husband Idris and children Lena and Pell remain at home with agreed care. They brought provisions for a season. No return day or paid survey work has yet been agreed here. They are guests, not one family.',
+      'Visitors staying for the survey season: Yusuf Usta, 74, advises on digging; Meryem, 19, his granddaughter, assists with surveys. Samira, 29, gathers and advises on stores; her husband Idris and children Lena and Pell remain at home with agreed care. They brought provisions for a season. The visiting chapter lasts thirty days. They will finish eligible current work before it is paused; duties remain in the source ledger. No paid survey work is promised. They are guests, not one family.',
     people: [
       {
         id: 'yusuf-usta',
@@ -607,7 +611,7 @@ const VISITORS: HouseSpec[] = [
     store: 3,
     share: 0,
     looks:
-      'Danyal, 52, is a visiting well keeper and Christian widower. He lodges separately with his own grain. He and Maryam are old friends. He brought provisions for a season; the water-work visit and return chapter still need their own arrangements.',
+      'Danyal, 52, is a visiting well keeper and Christian widower. He lodges separately with his own grain. He and Maryam are old friends. He brought provisions for a season; the visiting chapter closes after thirty days at a safe work boundary, with his duties preserved in the ledger. Physical travel home is not simulated.',
     people: [
       { id: 'danyal', name: 'Danyal', age: 52, sex: 'male', christian: true, skills: { waterwork: 0.8 } },
     ],
@@ -680,7 +684,7 @@ export function foundValley(seed: number, now: number): Founded {
   }
   const byId = new Map(people.map((p) => [p.id, p]));
   // Neighbours in the lower hamlet know each other well.
-  const lower = households.filter((h) => h.hamlet === 'lower');
+  const lower = households.filter((h) => h.hamlet === 'lower' && !['guests', 'water-guest'].includes(h.id));
   for (const a of lower) {
     for (const b of lower) {
       if (a === b) continue;
@@ -714,6 +718,14 @@ export function foundValley(seed: number, now: number): Founded {
     const p = byId.get(a ?? '');
     if (p && b && role)
       seedTie(p, { otherId: b, roles: [role], affection: 0.7, familiarity: 0.95, trust: 0.75 });
+  }
+  for (const [a, b] of [
+    ['maryam', 'danyal'],
+    ['danyal', 'maryam'],
+  ]) {
+    const person = byId.get(a ?? '');
+    if (person && b)
+      seedTie(person, { otherId: b, roles: ['friend'], affection: 0.7, familiarity: 0.9, trust: 0.75 });
   }
   // Absent relatives are references, not simulated visitors or invented encounters.
   const samira = byId.get('samira');

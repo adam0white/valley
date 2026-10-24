@@ -28,7 +28,7 @@ const ownerInputs: Input[] = [
 describe('notebook run exports', () => {
   it('keeps the current cast day-12 schedule below 5 KB and replays to its recorded fingerprint', () => {
     const g = replay(406153184, ownerInputs, 17550);
-    expect(fingerprint(g.valley)).toBe('ed46c416');
+    expect(fingerprint(g.valley)).toBe('ab2c38d2');
     const run = compactRun(save(g));
     expect(run).toEqual(compactRun(g));
     expect(Buffer.byteLength(JSON.stringify(run))).toBeLessThan(5_000);
@@ -37,14 +37,14 @@ describe('notebook run exports', () => {
     expect(run).toMatchObject({
       game: 'valley',
       seed: 406153184,
-      version: '0.2.0',
-      framework: '2.8.0',
+      version: '0.3.0',
+      framework: '2.18.0',
       minute: 17550,
       inputs: ownerInputs,
-      fingerprint: 'ed46c416',
+      fingerprint: 'ab2c38d2',
       label: 'Volume I, 30 July of year one',
     });
-    expect(fingerprint(load(JSON.parse(JSON.stringify(run))).valley)).toBe('ed46c416');
+    expect(fingerprint(load(JSON.parse(JSON.stringify(run))).valley)).toBe('ab2c38d2');
   });
 
   it('keeps full-state downloads compatible and detaches the notebook input log', () => {

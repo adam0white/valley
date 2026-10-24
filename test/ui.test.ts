@@ -25,7 +25,7 @@ async function open(page: Page, minute = 360, seed = 406153184, inputs: Input[] 
     ({ minute, seed, inputs }) =>
       localStorage.setItem(
         'valley-log-v1',
-        JSON.stringify({ game: 'valley', version: '0.2.0', seed, inputs, minute, volume: 0 }),
+        JSON.stringify({ game: 'valley', version: '0.3.0', seed, inputs, minute, volume: 0 }),
       ),
     { minute, seed, inputs },
   );
@@ -58,7 +58,7 @@ it.each([
   try {
     await open(page);
     await fits(page);
-    expect(await page.locator('select').count()).toBe(0);
+    expect(await page.locator('.play select').count()).toBe(0);
     expect(await page.locator('[data-s]').count()).toBe(0);
     const map = await page.locator('#map').boundingBox();
     expect(map).not.toBeNull();

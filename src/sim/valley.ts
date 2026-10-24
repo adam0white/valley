@@ -43,10 +43,12 @@ import {
   pregnancyDue,
   promise,
   readBody,
+  restore,
   routineDay,
   type SimEvent,
   type Suggestion,
   type SuggestionResolution,
+  snapshot,
   spousesOf,
   stepCommunity,
   successChance,
@@ -66,7 +68,8 @@ import {
   weatherOf,
   yearOf,
 } from './calendar.ts';
-import { DISCLOSURES } from './cast.ts';
+import { ALLOCATION, CAST_IDS, DISCLOSURES, localRole } from './cast.ts';
+import { type CastStart, calendarPassport, lifeFacts, validateCastStart } from './passport.ts';
 import { foundValley, type Household, KAHYA, makeKahya } from './people.ts';
 import { DRAW, hashUnit, mixSeed, strHash } from './rng.ts';
 import {
@@ -241,6 +244,11 @@ export interface Flags {
 }
 
 export interface ValleyState {
+  castFacts?: Record<string, ReturnType<typeof lifeFacts>>;
+  castReleaseRequests?: string[];
+  castReleased?: Record<string, Person>;
+  castDeaths?: Record<string, Person>;
+
   v: 1;
   seed: number;
   minute: number;
@@ -293,8 +301,18 @@ export interface ValleyState {
 
 export const START_MINUTE = 7 * HOUR;
 
-export function newValley(seed: number): ValleyState {
+export function newValley(seed: number, cast?: CastStart, preflight = false): ValleyState {
+  if (community && communityFor) syncCommunity(communityFor);
   const { households, people } = foundValley(seed, 0);
+  if (cast) {
+    validateCastStart(people, cast, preflight);
+    for (const record of ALLOCATION) {
+      const index = people.findIndex((p) => p.id === localRole(record.castId));
+      const initial = cast.people[record.castId];
+      if (!initial || index < 0) throw new Error('Missing pinned cast actor.');
+      people[index] = restore(initial);
+    }
+  }
   const kahya = makeKahya(seed, 0);
   const s: ValleyState = {
     v: 1,
@@ -328,6 +346,25 @@ export function newValley(seed: number): ValleyState {
     leaving: [],
     stats: { asks: 0, verdicts: {}, harvestVerdicts: {} },
   };
+  s.castFacts = Object.fromEntries(
+    (cast?.inputs ?? []).map((input) => [localRole(input.parent.castId), lifeFacts(input)]),
+  );
+  for (const p of people) {
+    if (!CAST_IDS[p.id]) continue;
+    const fact = s.castFacts[p.id];
+    const action = roleActions(p.id)[fact?.life.assignment ?? 0];
+    if (action)
+      p.agenda.goals.push({
+        id: 'valley-visit-work',
+        label: fact?.assignment ?? 'the agreed visiting work',
+        serves: ['competence'],
+        advancedBy: [{ action, amount: 0.25 }],
+        importance: 0.4,
+        progress: 0,
+        status: 'active',
+        adoptedAt: p.now,
+      });
+  }
   s.agha.due = dueFor(s);
   // The reeve has lived among the lower lanes all his life: he has an impression of everyone there (clearest of kin).
   const osman = personOf(s, 'osman');
@@ -336,7 +373,7 @@ export function newValley(seed: number): ValleyState {
       if (h.hamlet !== 'lower') continue;
       for (const m of h.members) {
         const p = personOf(s, m);
-        if (!p || p === osman) continue;
+        if (!p || p === osman || ['guests', 'water-guest'].includes(h.id) || p.id === 'maryam') continue;
         for (let k = 0; k < 4; k++)
           glimpseOf(osman, p, -k * 30 * DAY, h.id === 'kavak' || h.id === 'ak' ? 0.9 : 0.6);
       }
@@ -537,6 +574,49 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
         advertises: { belonging: 0.25, leisure: 0.15 },
         tags: ['social', 'leisure'],
       });
+  }
+  const fact = s.castFacts?.[p.id];
+  const actions = roleActions(p.id);
+  const chosen = actions[fact?.life.assignment ?? 0];
+  const pendingActions = p.agenda.commitments
+    .filter((c) => c.status === 'pending' && c.from <= at && c.until > at)
+    .flatMap((c) => c.actions);
+  const dueActions = actions.filter((action) => action === chosen || pendingActions.includes(action));
+  if (light && !weak && !s.castReleased?.[p.id])
+    for (const action of dueActions) {
+      out.push({
+        id: `role:${action}`,
+        action,
+        label: roleLabel(action),
+        placeId: fact?.startsAtHome === false ? 'common' : home,
+        duration: fact?.availableForExtraWork ? 60 : 120,
+        effort: p.id === 'yusuf-usta' ? 0.1 : 0.3,
+        advertises: { competence: 0.15, meaning: 0.12 },
+        tags: ['work'],
+      });
+    }
+  if (
+    p.id === 'danyal' &&
+    p.agenda.commitments.some(
+      (c) =>
+        c.kind === 'worship' &&
+        c.normId === 'daily-prayer' &&
+        c.status === 'pending' &&
+        c.from <= at &&
+        c.until > at,
+    )
+  ) {
+    out.push({
+      id: 'christian-prayer',
+      action: 'christian-prayer',
+      label: 'keep his own quiet prayer',
+      placeId: home,
+      duration: 15,
+      effort: 0.05,
+      advertises: { meaning: 0.1 },
+      norms: [{ normId: 'daily-prayer', relation: 'fulfills' }],
+      tags: ['worship'],
+    });
   }
   // Own field.
   if (light && !weak && (season === 'harvest' || season === 'threshing') && h.field.standing > 0.5) {
@@ -759,10 +839,44 @@ function reapAmount(_s: ValleyState, p: Person, hours: number, protest: boolean)
   return V.reapRate * hours * (0.6 + 0.8 * skill) * (0.5 + 0.5 * ok) * (protest ? 0.6 : 1);
 }
 
+function pauseCastAtBoundary(s: ValleyState, p: Person): boolean {
+  const h = houseOfPerson(s, p.id);
+  if (!h) return false;
+  if (s.castReleaseRequests?.includes(p.id) && !p.activity && p.body.alive) {
+    try {
+      const passport = calendarPassport(p);
+      if (
+        passport.calendar.owed.length ||
+        passport.calendar.lapse ||
+        passport.calendar.commitments.some((c) => c.kind !== 'worship')
+      )
+        throw new Error('Unfinished material duty.');
+      s.castReleased ??= {};
+      s.castReleased[p.id] = snapshot(p);
+      h.members = h.members.filter((id) => id !== p.id);
+      s.departed[p.id] = { name: p.name, house: h.id, day: dayOfMinute(p.now), why: 'left' };
+      h.gone.push({ id: p.id, day: dayOfMinute(p.now), why: 'left' });
+      s.leaving.push(p.id);
+      note(s, {
+        at: p.now,
+        kind: 'story',
+        house: h.id,
+        who: p.id,
+        weight: 3,
+        text: `${p.name} closes this visiting chapter after finishing an action. Their exact state and duties are kept in the source ledger. The remaining grain stays in the lodging; no journey home or duty completion is inferred.`,
+      });
+      return true;
+    } catch {
+      /* An actual goal, duty or health conflict must finish or stay here. */
+    }
+  }
+  return false;
+}
+
 export function makeWorld(s: ValleyState): World {
   return {
     now: () => s.minute,
-    affordancesFor: (p) => offersFor(s, p),
+    affordancesFor: (p) => (pauseCastAtBoundary(s, p) ? [] : offersFor(s, p)),
     perceptsFor: (p, since, until) => {
       const q = s.queued[p.id];
       if (!q || q.length === 0) return [];
@@ -1098,7 +1212,11 @@ function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ende
   const hours = (span * progress) / 60;
   const h = houseOfPerson(s, p.id);
   if (reason === 'interrupted') base.status = 'interrupted';
+  if (roleActions(p.id).includes(act.action))
+    return { ...base, needs: { competence: 0.06 * progress, meaning: 0.04 * progress } };
   switch (act.action) {
+    case 'christian-prayer':
+      return { ...base, needs: { meaning: 0.1 * progress } };
     case 'reap': {
       if (!h) break;
       const amt = Math.min(h.field.standing, reapAmount(s, p, hours, !!act.protest));
@@ -1331,7 +1449,8 @@ function chooseModes(s: ValleyState, day: number) {
       const due = p?.family?.pregnancy?.dueAt;
       return due !== undefined && due < at + 5 * DAY;
     });
-    const lived = (busy && underSeal(s, h)) || asked || visited || hungry || birthNear;
+    const hasCast = h.members.some((id) => !!CAST_IDS[id]);
+    const lived = hasCast || (busy && underSeal(s, h)) || asked || visited || hungry || birthNear;
     if (!lived) continue;
     for (const m of h.members) {
       const p = personOf(s, m);
@@ -1423,6 +1542,10 @@ function dies(s: ValleyState, p: Person, h: Household, at: number) {
   } catch {
     // Someone's clock ran past the news; they hear it at their next look (engineering fallback).
   }
+  if (CAST_IDS[p.id]) {
+    s.castDeaths ??= {};
+    s.castDeaths[p.id] = snapshot(p);
+  }
   const age = Math.floor(ageYears(p));
   const hungry = daysOfBread(s, h) < 2;
   if (hungry && underSeal(s, h)) {
@@ -1480,6 +1603,10 @@ function shareAmongNeighbours(s: ValleyState, day: number) {
 
 function endOfDay(s: ValleyState, day: number) {
   const at = (day + 1) * DAY;
+  // A thirty-day visit is real bounded fiction, not an indefinite landless household.
+  if (day >= 29)
+    for (const id of ['maryam', 'yusuf-usta', 'meryem-visitor', 'samira', 'danyal'])
+      requestCastRelease(s, id);
   // Routine lives for everyone not lived in full today, for the day just passed.
   const full = new Set(s.full);
   for (const p of s.people) {
@@ -2594,6 +2721,16 @@ export function visit(s: ValleyState, hid: string, why: Knock['what'] | 'call' =
           !openAsksFor(s, p.id, arrive + 45).length,
       );
     if (speaker) {
+      const facts = s.castFacts?.[speaker.id];
+      if (facts?.contacts.length)
+        note(s, {
+          at: arrive + 40,
+          kind: 'story',
+          who: speaker.id,
+          house: h.id,
+          text: `${speaker.name} tells you about public work notes they read from ${facts.contacts.join(', ')}. This was a written encounter, not a meeting or mutual acquaintance.`,
+          weight: 1,
+        });
       s.flags.beats.push(`cast-disclosed:${speaker.id}`);
       note(s, {
         at: arrive + 45,
@@ -2708,3 +2845,56 @@ export function walkOffer(h: Household, walk: number, stay: number): Affordance 
 }
 
 export { glimpseOf, perceive };
+
+/** The player can end a bounded visiting role. Capturing waits for a genuine action boundary;
+ * HF refuses active projects/unsupported clinical/calendar state rather than clearing them. */
+export function requestCastRelease(s: ValleyState, id: string): boolean {
+  const p = personOf(s, id);
+  if (!p?.body.alive || !CAST_IDS[id] || s.castReleased?.[id] || s.castReleaseRequests?.includes(id))
+    return false;
+  // Yusuf’s household and pregnancy have no authored care handover in this chapter.
+  if (id === 'yusuf') return false;
+  s.castReleaseRequests ??= [];
+  s.castReleaseRequests.push(id);
+  promote(s, id);
+  note(s, {
+    at: s.minute,
+    kind: 'story',
+    who: id,
+    weight: 2,
+    text: `${p.name} agrees to close this visiting chapter after current work. Unfinished obligations and health restrictions remain; travel is not yet claimed.`,
+  });
+  return true;
+}
+function roleActions(id: string): string[] {
+  return (
+    (
+      {
+        maryam: ['cook', 'store-check'],
+        yusuf: ['build', 'flock-care'],
+        samira: ['gather-grain', 'observe-route'],
+        danyal: ['draw-water', 'store-check'],
+        'yusuf-usta': ['digging-advice', 'digging-advice'],
+        'meryem-visitor': ['survey', 'household-work'],
+      } as Record<string, string[]>
+    )[id] ?? []
+  );
+}
+function roleLabel(action: string): string {
+  return (
+    (
+      {
+        cook: 'prepare the household meal',
+        'store-check': 'check the seed and grain stores',
+        build: 'work on a building repair',
+        'flock-care': 'tend the household flock',
+        'gather-grain': 'follow a gathering route',
+        'observe-route': 'observe the local route',
+        'draw-water': 'check and work the well',
+        'digging-advice': 'advise on the digging line',
+        survey: 'survey a bounded section',
+        'household-work': 'do the agreed household work',
+      } as Record<string, string>
+    )[action] ?? action
+  );
+}

@@ -1,6 +1,6 @@
 {
   "name": "valley",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "The Valley: steward a valley over years. Every household can say no.",
@@ -22,9 +22,9 @@
     "check:lane": "npm run check"
   },
   "dependencies": {
-    "@adam0white/human-framework": "2.8.0",
-    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.2.1.tgz",
-    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.3.1.tgz"
+    "@adam0white/human-framework": "2.18.0",
+    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.4.0.tgz",
+    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.0.tgz"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

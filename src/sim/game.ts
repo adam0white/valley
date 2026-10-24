@@ -4,6 +4,7 @@
  */
 import { FRAMEWORK_VERSION, type Person, recall, restore, snapshot } from '@adam0white/human-framework';
 import { DAY, dateEnglish, dateWords, dayOfMinute, doyOf, HOUR, yearOf } from './calendar.ts';
+import type { CastStart } from './passport.ts';
 import { KAHYA } from './people.ts';
 import { mixSeed, strHash } from './rng.ts';
 import {
@@ -22,6 +23,7 @@ import {
   newValley,
   note,
   personOf,
+  requestCastRelease,
   resetCaches,
   seize,
   syncCommunity,
@@ -33,7 +35,7 @@ import {
   visit,
 } from './valley.ts';
 
-export const GAME_VERSION = '0.2.0';
+export const GAME_VERSION = '0.3.0';
 
 export type Input =
   | { at: number; verb: 'call'; job: Job; houses: string[]; wage?: boolean }
@@ -43,16 +45,18 @@ export type Input =
   | { at: number; verb: 'ease'; house: string }
   | { at: number; verb: 'visit'; house: string; why?: Knock['what'] | 'call' }
   | { at: number; verb: 'turn-away'; knock: string }
-  | { at: number; verb: 'borrow'; kile: number };
+  | { at: number; verb: 'borrow'; kile: number }
+  | { at: number; verb: 'release-cast'; person: string };
 
 export interface Game {
   valley: ValleyState;
   inputs: Input[];
+  cast?: CastStart;
 }
 
-export function newGame(seed: number): Game {
-  const valley = newValley(seed);
-  const g: Game = { valley, inputs: [] };
+export function newGame(seed: number, cast?: CastStart, preflight = false): Game {
+  const valley = newValley(seed, cast, preflight);
+  const g: Game = { valley, inputs: [], ...(cast ? { cast: structuredClone(cast) } : {}) };
   beats(g);
   return g;
 }
@@ -71,6 +75,8 @@ export function act(g: Game, input: Order): boolean {
 function apply(g: Game, i: Input): boolean {
   const s = g.valley;
   switch (i.verb) {
+    case 'release-cast':
+      return requestCastRelease(s, i.person);
     case 'call': {
       const a = call(s, i.job, i.houses, i.wage ? { wage: true } : {});
       if (!a) return false;
@@ -477,6 +483,9 @@ function readGathering(g: Game): { elders: ElderWord[]; letter: string } {
 // ---------- saves and the export ----------
 
 export interface SavedGame {
+  castHeads?: Record<string, import('@adam0white/lab-client').PersonaEnvelope>;
+  castSources?: Record<string, { revision: string; person: Person }>;
+  cast?: CastStart;
   game: 'valley';
   version: string;
   framework: string;
@@ -562,6 +571,7 @@ export const volumeLabel = (s: ValleyState, n: number) =>
 
 export function save(g: Game, n = 0): SavedGame {
   return {
+    ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
     game: 'valley',
     version: GAME_VERSION,
     framework: FRAMEWORK_VERSION,
@@ -579,6 +589,8 @@ export function save(g: Game, n = 0): SavedGame {
 export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
   if ('state' in g)
     return {
+      ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
+      ...(g.castHeads ? { castHeads: structuredClone(g.castHeads) } : {}),
       game: g.game,
       version: g.version,
       framework: g.framework,
@@ -589,6 +601,7 @@ export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
       label: g.label,
     };
   return {
+    ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
     game: 'valley',
     version: GAME_VERSION,
     framework: FRAMEWORK_VERSION,
@@ -603,16 +616,22 @@ export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
 export function load(saved: SavedGame | CompactRun): Game {
   if (saved.version !== GAME_VERSION || saved.framework !== FRAMEWORK_VERSION)
     throw new Error('This run uses an older Valley edition. Export it for safekeeping and start fresh.');
-  if ('state' in saved) return { valley: restoreState(saved.state), inputs: structuredClone(saved.inputs) };
-  const g = replay(saved.seed, structuredClone(saved.inputs), saved.minute);
+  if (saved.cast) newGame(saved.seed, saved.cast);
+  if ('state' in saved)
+    return {
+      valley: restoreState(saved.state),
+      inputs: structuredClone(saved.inputs),
+      ...(saved.cast ? { cast: structuredClone(saved.cast) } : {}),
+    };
+  const g = replay(saved.seed, structuredClone(saved.inputs), saved.minute, saved.cast);
   if (fingerprint(g.valley) !== saved.fingerprint)
     throw new Error('The run’s replay does not match its fingerprint.');
   return g;
 }
 
 /** Rebuild a run from its seed and inputs alone. */
-export function replay(seed: number, inputs: Input[], to: number): Game {
-  const g = newGame(seed);
+export function replay(seed: number, inputs: Input[], to: number, cast?: CastStart): Game {
+  const g = newGame(seed, cast);
   step(g, to, inputs);
   return g;
 }
