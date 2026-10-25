@@ -142,8 +142,8 @@ const ENGLISH: Record<string, string> = {
   agha: 'landowner',
   konak: 'residence',
   kile: 'grain measures',
-  yayla: 'yayla (summer highland pasture)',
-  pekmez: 'pekmez (grape syrup)',
+  yayla: 'summer highland pasture',
+  pekmez: 'grape syrup',
   reeve: 'reeve (local overseer)',
   'one sheaf in eight': 'one sheaf in eight (one eighth of the harvest as pay)',
   'a sheaf in eight': 'a sheaf in eight (one eighth of the harvest as pay)',
@@ -155,6 +155,10 @@ const TERM =
 export function englishText(text: string): string {
   for (const [before, after] of DISPLAY_REPLACEMENTS) text = text.replaceAll(before, after);
   text = text
+    .replaceAll('Yusuf Usta', 'Master Yusuf')
+    .replaceAll('Hajja Maryam', 'Maryam')
+    .replaceAll('yayla (summer highland pasture)', 'summer highland pasture')
+    .replaceAll('pekmez (grape syrup)', 'grape syrup')
     .replace(/\. After\.$/, '. I can come after that.')
     .replace(/^Put (.+) off today: (.+)\.$/, '$2 postponed $1 today.')
     .replace(/^Came (.+): (.+)\.$/, '$2 came $1.')

@@ -77,7 +77,7 @@ describe('owner-facing presentation', () => {
     required(g.valley.notes[0]).text = stored;
     const withNote = fingerprint(g.valley);
     expect(englishText(stored)).toBe(
-      'Osman the reeve (local overseer): one sheaf in eight (one eighth of the harvest as pay); the flock on the yayla (summer highland pasture); the pekmez (grape syrup) cauldron.',
+      'Osman the reeve (local overseer): one sheaf in eight (one eighth of the harvest as pay); the flock on the summer highland pasture; the grape syrup cauldron.',
     );
     expect(required(g.valley.notes[0]).text).toBe(stored);
     expect(fingerprint(g.valley)).toBe(withNote);

@@ -365,7 +365,7 @@ function infoWords(): string {
   if (selected)
     return `<h2>Knowing a house</h2><p>Your guess comes from what you last saw. The reeve’s guess is his own read of a person; neither is certain.</p><p>A lower-hamlet visit takes a couple of hours. The upper hamlet takes most of a morning. You can go again when you return.</p>`;
   const s = g.valley;
-  return `<h2>Your charge</h2><p>${esc(nextWords(s))}</p><p>Calls go through the crier; people weigh them against their own fields and can refuse. Hold a refusal to press it: they come, and they remember.</p><p>A visit takes walking time. Ease a share to leave more in a house’s jars; the neighbours will notice.</p><p>The grain bar: solid is in the granary, hatched is cut and waiting for threshing, outline is still standing, and the tick is the due.</p><p>The clock slows for replies and knocks. The menu and this i stop it. ${esc(limitsWords(s))}</p>${seasonOf(doyOf(dayOfMinute(s.minute))) === 'winter' ? '<p>Mill work asks for labour without a grain wage. The letter for grain opens when the forecast shows a shortfall.</p>' : ''}<p>Words: <b>kahya</b>, steward (you); <b>agha</b>, landowner; <b>kile</b>, grain measure.</p>`;
+  return `<h2>Your charge</h2><p>${esc(nextWords(s))}</p><p>Calls go through the crier; people weigh them against their own fields and can refuse. Hold a refusal to press it: they come, and they remember.</p><p>A visit takes walking time. Ease a share to leave more in a house’s jars; the neighbours will notice.</p><p>The grain bar: solid is in the granary, hatched is cut and waiting for threshing, outline is still standing, and the tick is the due.</p><p>The clock slows for replies and knocks. The menu and this i stop it. ${esc(limitsWords(s))}</p>${seasonOf(doyOf(dayOfMinute(s.minute))) === 'winter' ? '<p>Mill work asks for labour without a grain wage. The letter for grain opens when the forecast shows a shortfall.</p>' : ''}<p>You are the steward. You manage the landowner’s grain, which is counted in grain measures.</p>`;
 }
 
 function title() {
@@ -1049,7 +1049,7 @@ function drawMap() {
   if (cap)
     cap.textContent = `${dateWords(dayOfMinute(s.minute))} · year ${yearOf(dayOfMinute(s.minute))} · ${wx}`;
   const steward = app.querySelector('#steward');
-  if (steward) steward.textContent = caption(s, wx);
+  if (steward) steward.textContent = englishText(caption(s, wx));
 }
 
 const growing = (season: string) => season === 'spring' || season === 'summer';
@@ -1897,7 +1897,7 @@ function ending() {
 function drawClosingGrain() {
   const target = app.querySelector('[data-closing-grain]');
   if (!target) return;
-  target.textContent = g ? closingGrain(g.valley, true) : '';
+  target.textContent = g ? englishText(closingGrain(g.valley, true)) : '';
 }
 
 function download() {

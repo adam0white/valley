@@ -246,7 +246,7 @@ it('holds the clock for the menu and info, and slows the ledger for reading', as
     await page.clock.runFor(3000);
     expect(await state(page)).toEqual(reading);
     const popover = page.locator(':popover-open');
-    expect(await popover.innerText()).toMatch(/kahya.*steward.*agha.*landowner.*kile.*grain measure/s);
+    expect(await popover.innerText()).toMatch(/You are the steward.*landowner’s grain.*grain measures/s);
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: /The ledger/ }).click();
     const ledgerStart = await state(page);
