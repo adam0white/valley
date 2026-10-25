@@ -24,7 +24,7 @@ The brief (`scratchpad` copy, summarised: the owner's taste signals, the idea, H
 
 1. **No consequence without an ask.** Every note that matters traces to something the kahya asked, took, gave, or failed to show up for.
 2. **No outliner.** People live on the map and in notes. The only ledger with numbers is the agha's granary and the due (world truth). A household's own store is a guess ("their jars look low").
-3. **The kahya's read is approximate.** Hunches come from HF `predictAs` with the kahya as observer: words, with how sure you are. A visit refreshes them (HF `glimpseOf`). The reeve's hunches come from his own impressions, which favour his kin.
+3. **The kahya's read is approximate.** Hunches come from HF `predictAs` with the kahya as observer: words, with how sure you are. A visit refreshes them (HF `glimpsePerson`). The reeve's hunches come from his own impressions, which favour his kin.
 4. **Replies have reasons in the person's words.** HF `says`, filtered: no lens vocabulary, no generic line where it is wrong (The Pass, owner playtest).
 5. **Insisting is offered only on a no.** Press and hold to insist; it brings compliance under protest and costs trust through HF.
 6. **Continuous time, slowdown, not pause.** The clock runs fast through quiet days and slows by itself when a reply or a knock arrives; the game sets its pace, and one quiet Until something happens action stops at the next new event (owner, 2026-10-21).
@@ -50,7 +50,7 @@ The brief (`scratchpad` copy, summarised: the owner's taste signals, the idea, H
 - **Famine response.** When two houses are scraping the jars and the granary is low, the reeve tells you the agha lends: a loan of 20 to 120 kile arrives in twelve days and is owed with a quarter more at the next rider, once a year. A hungry house is fed a little by a better-off neighbour of its hamlet once a week, if that head is the giving kind (a world rule; HF request 2). A house that was turned away does not knock again for six days.
 - **Leaving.** Only the unattached young (17 to 32, unmarried, not the head, not with child) leave for the city, after the first two months, when the house's prospect (store plus field) is under 20 days or trust in the kahya is very low.
 
-## The people (HF 2.8.0, pinned exactly)
+## The people (HF 3.0.0, pinned exactly)
 
 - Every resident is an HF `Person` with traits, values, norms, habits, ties to kin and neighbours, trust in the kahya as a voice, a body with the slow fatigue store, and a life course (age, marriage, birth, death, grief).
 - The kahya is an HF person too: the observer for hunches, a body that tires on the lanes, and an age.
@@ -108,24 +108,78 @@ The owner's seed 406153184, minute 17550 export loads and replays to its recorde
 
 Two independent code reviews found one input-aliasing issue in compact loading; the loader now clones inputs, with a regression test. `npm run check` passes all 11 tests. The production build passes. A local browser replay of the owner's file showed the compact run in the notebook preview and sent it through the real gzip client to a local request intercept (981-byte run, 1,065-byte envelope). The download remained 2,977,030 bytes with the same state and fingerprint. No external run was uploaded; the browser reported no page errors. Existing lint warnings remain outside this change's scope.
 
-## Deferred (targets)
+## Deferred work implemented in the optional October edition
 
-- Complete the remaining DL checks and fixes listed in `playtests/follow-up-2026-10-20.md`: cold first-choice/cue testing, essential decision length, 360×690 immediate-response placement, non-grain choice slowdown, household focus restoration, 320 px/200% text/theme reflow, malformed-save validation, and explicit binding success/failure feedback. Target 2026-11-03.
-- Grain wages for carrying mill stone: the existing simulation uses the paid appeal but transfers no grain for mill work. The follow-up keeps this option visible and unavailable, explains that ordinary mill calls ask for labour, and preserves historic replay behavior. Implement and evaluate a versioned mechanic on 2026-11-03.
-- Production notebook acceptance of the compact run: verify after a separately authorized deployment, target 2026-11-03. The game deployment is authorized by the source-unread follow-up; sending a real notebook run remains a separate lab acceptance task.
-- The sim in a Web Worker: only if a phone measure shows stutter; decide by 2026-10-22.
-- The forecast's lever: the reeve's forecast should come while barley still stands and offer something besides the loan (an early sack from houses with full jars, which they can refuse or resent). The reviewer called the loan alone a debt trap: round 3. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
-- A winter decision stream: disputes or debts between two houses, drawn from HF ties, brought to the kahya as two-option knocks: version 1.1. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
-- A shorter notebook on phones: delivered in the owner UI follow-up, 2026-10-20; current notes lead and history opens on request. Owner acceptance remains the next playtest.
-- The Valley's HF playtester adapter: a press sent at night should be answered by the next morning's reply, and the grouped pressed line should not count as an answer. Fix in `scripts/hf-playtest.ts` by 2026-10-21.
-- A one-line first goal on the map screen: delivered in the owner UI follow-up, 2026-10-20, with an always-reachable charge and seasonal forecast. Owner acceptance remains the next playtest.
-- Conversation the player steers at a hearth (asking about a person, a debt, a grievance): version 1.1. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
-- The open hand's payoff inside the fiction beyond its letter (the valley carrying part of the shortfall for a kahya it trusts): judge after the owner's first play. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
-- Ledger volumes to turn back to (an abandoned future kept as crossed-out ink): polish round 2 (2026-10-21).
-- The year-three levy (the agha's rider wants men): version 1.1, after the polish rounds. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
-- Brokering marriages and one neighbouring valley over the pass: version 2, after the owner's first play. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
-- Drama-gated music in the spirit of Old World: after the first polish round (2026-10-22).
-- Hidden grain and an inspector who asks the village what it remembers (the wildcard's ledger idea): version 2. Reassess deeper gameplay on 2026-11-03; outside the owner UI follow-up.
+New terms can explicitly include `valley-2026-10`. The title checkbox starts unchecked.
+Resume and unmarked exports retain the original rules. The game remains version 0.3.0;
+full exports, compact exports, local logs and recovery volumes pin the rules edition.
+HF stays exactly 3.0.0. Technical delivery requires independent review, exact CI,
+a clean deployment and live verification; external delivery receipts are in
+`~/code/.lab-scratch/games-deferred/valley-report.md`.
+
+- Paid mill calls transfer real granary grain only for useful completed carrying,
+  at 0.15 grain measures per effective hour, while grain remains. Interrupted work
+  earns no pay. One completed activity has one payment receipt. Ordinary mill calls
+  remain unpaid. Player-facing costs stay approximate.
+- An early harvest forecast opens requests for an extra sack. Existing HF suggestions,
+  trust and alternatives decide whether each household carries it. Transfers retain
+  food for 180 days and unpaid normal shares. A sack is extra; it does not erase a share.
+  A house helped earlier may help meet the shortfall. This is a possible resource
+  payoff for the open hand, without guaranteed gratitude or forgiveness.
+- Winter petitions can offer a real grain loan from an actual neighbour in HF ties,
+  or a granary gift. The stream requires an actual grain knock. The neighbour can
+  refuse. Only a transferred sack creates a debt. Harvest repayment is another
+  voluntary HF carrying action, with the same real-resource guards.
+- During an attended visit, the player can ask about a person, grain debt or grievance.
+  Replies use heard words and recorded acts. A topic does not reveal an unspoken secret
+  or settle a quarrel. Existing canonical disclosure and bounded visitor rules remain.
+- The third-year rider asks for four hours of supply carrying on each of two days.
+  A household can refuse. Grain can replace service. If no worker finishes in a week,
+  the stated grain cost is added to the due. Actual shifts use HF activities and leave
+  less time for the worker's own field.
+- A separate grain store conserves sacks. Sending one to a house records the actual gift.
+  An inspector asks about remembered steward acts and the account. Opening the store
+  returns its grain to the account; refusal or silence adds the stated due. No private
+  biography or hidden household total becomes inspector knowledge.
+- Recovery volumes are retained locally and can be read from the ledger. They are
+  real saved pages. Reading does not rewind state or grant cast ownership. A volume
+  beyond a current continuation is labelled as later crossed-out pages; none are
+  fabricated from hypothetical play. Identical snapshot bytes share one history key.
+- Optional procedural music starts off. Short cues follow consequential notes. It
+  uses no server, graphics or game-state randomness.
+- The adapter captures a night press's actual next-morning reply during simulation
+  steps, including a reply later replaced in the day's notebook. A grouped report
+  about earlier pressure is not a new answer. No new cohort was run.
+- Existing current notes/history, first goal, phone response sheet and slowdown for
+  non-grain knocks were already implemented. This increment preserves them and adds
+  focused checks, persistent pending-choice slowdown, focus restoration, stale-render
+  callback guards, malformed-log admission and honest browser-save receipts.
+
+## Remaining input and acceptance gates
+
+- Cold first-choice and cue comprehension (DL-6/7/19): needs a new player; new rounds
+  are expressly paused in the 2026-10-25 brief. Owner review 2026-11-03. Automated layout
+  checks do not establish comprehension.
+- Physical-phone keyboard/enlarged-text reachability and performance: the 2026-10-20b
+  phone contract asks for a real phone. Controlled Chromium 360×690 with 4× CPU throttling
+  measured 96 simulation quanta: median 7.5ms, p95 12.1ms, max 25.1ms, no quantum above 50ms.
+  This is a desktop proxy, not proof about a phone. Physical-device review 2026-11-03.
+  A Web Worker remains conditional on measured phone stutter; no speculative migration.
+- Production compact-notebook acceptance (DL-28): requires the separately authorized
+  controlled lab receipt specified in the 2026-10-20 follow-up. Routed to the shared lab
+  owner for 2026-11-03. Private owner saves must not be sent. An intercepted receipt is
+  not production acceptance.
+- Marriage brokering and a neighbouring valley: the supplied2026-10-25 Valley plan,
+  step 5, expressly permits this named owner-input gate. Adam already played on
+  October 20; that fact is not missing. The concrete proposal for November3 is one
+  optional pass visit, generated background residents, and introductions that create
+  opportunities for mutual HF choice, without forced marriage or a new canonical cast.
+  Adam chooses that authored scope before implementation. The original version2 scope
+  change above records why it is a separate increment.
+- Adam accepts game feel, difficulty and readiness on 2026-11-03. The existing
+  first-goal/short-notebook fixes and new mechanics do not claim that acceptance.
+  F-491 retest and F-492/F-465 acceptance stay real gates. Friends and Show HN stay paused.
+
 
 ## Owner UI follow-up (2026-10-20)
 

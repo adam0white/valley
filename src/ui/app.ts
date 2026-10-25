@@ -1,3 +1,6 @@
+import { RULES_EDITION, type RulesEdition, type TermDecision } from '../sim/edition.ts';
+import { validLocalLog } from './local-log.ts';
+import { musicEvent } from './music.ts';
 import { automaticRate, type Pace, READING_MS } from './pacing.ts';
 /**
  * The Valley UI: plain DOM and a Canvas 2D ink map over the pure sim. The UI reads state and gives orders through
@@ -78,6 +81,7 @@ let speed: Pace = 'automatic';
 const HUB = 'https://human.adamwhite.work';
 
 interface Log {
+  rules?: RulesEdition;
   plainEnglish?: boolean;
   cast?: CastStart;
   continuity?: LocalCastReceipt;
@@ -124,6 +128,8 @@ let volume = 0;
 let wake: { release(): Promise<void> } | null = null;
 let hunchCache: { key: string; lines: string[] } | null = null;
 let actions: (() => void)[] = [];
+let sheetGeneration = 0;
+let storedLogProblem = false;
 
 const esc = (x: string) =>
   englishText(x).replace(
@@ -147,11 +153,12 @@ function partOfDay(m: number): string {
 
 // ---------- saves: the ledger ----------
 
-function writeLog() {
-  if (!g) return;
+function writeLog(): boolean {
+  if (!g) return false;
   const log: Log = {
     ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
     continuity: castSession.metadata(),
+    ...(g.valley.edition ? { rules: g.valley.edition.id } : {}),
     game: 'valley',
     plainEnglish: g.plainEnglish ?? true,
     version: GAME_VERSION,
@@ -165,16 +172,25 @@ function writeLog() {
     const text = JSON.stringify(log);
     localStorage.setItem(LOG, text);
     lab.captureSave(JSON.parse(text));
-  } catch {}
+    return localStorage.getItem(LOG) === text;
+  } catch {
+    return false;
+  }
 }
 
 function readLog(): Log | null {
+  storedLogProblem = false;
   try {
     const raw = localStorage.getItem(LOG);
-    if (!raw) return null;
+    if (!raw) {
+      storedLogProblem = false;
+      return null;
+    }
     const log = JSON.parse(raw) as Log;
-    return log.game === 'valley' && Array.isArray(log.inputs) ? log : null;
+    storedLogProblem = !validLocalLog(log);
+    return storedLogProblem ? null : log;
   } catch {
+    storedLogProblem = true;
     return null;
   }
 }
@@ -194,12 +210,16 @@ interface Bound {
   k: number;
   minute: number;
   gz: Blob;
+  inputLog?: string;
+  digest?: string;
+  rules?: RulesEdition;
 }
 
 let runTransition = 0;
 
-async function bindVolume() {
-  if (!g) return;
+async function bindVolume(): Promise<boolean> {
+  if (!g) return false;
+  const logSaved = writeLog();
   const boundGame = g;
   const boundGeneration = castSession.generation;
   const current = () =>
@@ -212,25 +232,32 @@ async function bindVolume() {
       seed: s.seed,
       k: g.inputs.length,
       minute: s.minute,
+      inputLog: JSON.stringify(g.inputs),
+      digest: [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(json)))]
+        .map((n) => n.toString(16).padStart(2, '0'))
+        .join(''),
+      ...(s.edition ? { rules: s.edition.id } : {}),
       gz: await gzip(json),
     };
-    if (!current()) return;
-    volume++;
+    if (!current()) return false;
     const d = await db();
-    if (!current()) return;
+    if (!current()) return false;
     await new Promise<void>((res, rej) => {
       const tx = d.transaction('volumes', 'readwrite');
+      tx.objectStore('volumes').put(bound, `history:${castSession.runId}:${bound.digest}`);
       tx.objectStore('volumes').put(bound, 'current');
       tx.oncomplete = () => res();
       tx.onerror = () => rej(tx.error);
       tx.onabort = () => rej(tx.error);
     });
-    if (!current()) return;
+    if (!current()) return false;
+    volume++;
     lab.captureSave({ seed: bound.seed, k: bound.k, minute: bound.minute, state: JSON.parse(json) });
   } catch (error) {
     console.warn('Recovery snapshot could not be saved. The input log is kept.', error);
+    return false;
   }
-  if (current()) writeLog();
+  return current() && writeLog() && logSaved;
 }
 
 async function readVolume(): Promise<Bound | null> {
@@ -243,6 +270,67 @@ async function readVolume(): Promise<Bound | null> {
     });
   } catch {
     return null;
+  }
+}
+
+async function openVolumes() {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'volumes-panel';
+  dialog.setAttribute('aria-label', 'Prior ledger volumes');
+  dialog.innerHTML =
+    '<button data-close>Close</button><h2>Prior volumes</h2><p>These are real recovery volumes saved in this browser. Reading them does not rewind the game or give an older person ownership of a new history.</p><div data-pages role="status">Reading volumes…</div>';
+  document.body.append(dialog);
+  dialog.querySelector('[data-close]')?.addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => dialog.remove());
+  dialog.showModal();
+  try {
+    const d = await db();
+    const entries = await new Promise<Bound[]>((resolve, reject) => {
+      const tx = d.transaction('volumes');
+      const rows: Bound[] = [];
+      const r = tx.objectStore('volumes').openCursor(IDBKeyRange.bound('history:', 'history;'));
+      r.onsuccess = () => {
+        const cursor = r.result;
+        if (!cursor) return;
+        rows.push(cursor.value as Bound);
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve(rows);
+      tx.onerror = () => reject(tx.error);
+    });
+    const pages = dialog.querySelector('[data-pages]');
+    if (!pages || !dialog.isConnected) return;
+    pages.innerHTML = entries.length
+      ? entries
+          .sort((a, b) => b.minute - a.minute)
+          .map((b) => {
+            const crossed =
+              b.runId === castSession.runId && !!g && (b.minute > g.valley.minute || b.k > g.inputs.length);
+            const label = `${fullDateEnglish(dayOfMinute(b.minute))}, ${b.k} recorded actions. ${b.runId === castSession.runId ? 'This term.' : 'Another saved term.'}`;
+            return `<details><summary>${crossed ? `<s>${esc(label)}</s> Later pages outside the current continuation.` : esc(label)}</summary><button data-volume="${entries.indexOf(b)}">Read saved pages</button><div></div></details>`;
+          })
+          .join('')
+      : '<p>No prior recovery volume has been saved yet.</p>';
+    for (const button of pages.querySelectorAll<HTMLButtonElement>('[data-volume]'))
+      button.addEventListener('click', async () => {
+        const bound = entries[Number(button.dataset.volume)];
+        const target = button.nextElementSibling;
+        if (!bound || !target) return;
+        try {
+          const state = JSON.parse(await gunzip(bound.gz)) as ValleyState;
+          target.innerHTML = state.notes
+            .filter((n) => n.at <= bound.minute)
+            .slice(-12)
+            .map((n) => `<p>${esc(n.text)}${n.words ? ` “${esc(n.words)}”` : ''}</p>`)
+            .join('');
+          button.disabled = true;
+        } catch {
+          target.textContent = 'This volume could not be read. The current game is unchanged.';
+        }
+      });
+  } catch {
+    const pages = dialog.querySelector('[data-pages]');
+    if (pages) pages.textContent = 'The browser could not read prior volumes.';
   }
 }
 
@@ -272,7 +360,7 @@ async function gunzip(b: Blob): Promise<string> {
 
 /** Read the ledger back: the bound volume, then the days written after it, quantum by quantum. */
 async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> {
-  if (log.version !== GAME_VERSION || typeof log.plainEnglish !== 'boolean')
+  if (!validLocalLog(log))
     throw new Error('This saved game uses an older Valley version. Start a new game from the title page.');
   if (log.cast) newGame(log.seed, log.cast); // Validate the pinned semantic header even when a bound volume exists.
   const bound = await readVolume();
@@ -284,18 +372,42 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
     bound.runId.length > 0 &&
     bound.runId === log.continuity?.runId &&
     bound.seed === log.seed &&
+    bound.rules === log.rules &&
+    Number.isSafeInteger(bound.k) &&
+    bound.k >= 0 &&
+    bound.inputLog === JSON.stringify(log.inputs.slice(0, bound.k)) &&
     bound.k <= log.inputs.length &&
     bound.minute <= log.minute
   ) {
-    game = {
-      valley: restoreState(JSON.parse(await gunzip(bound.gz)) as ValleyState),
-      plainEnglish: log.plainEnglish ?? true,
-      inputs: log.inputs.slice(0, bound.k),
-      ...(log.cast ? { cast: structuredClone(log.cast) } : {}),
-    };
-    rest = log.inputs.slice(bound.k);
+    try {
+      const json = await gunzip(bound.gz);
+      const digest = [
+        ...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(json))),
+      ]
+        .map((n) => n.toString(16).padStart(2, '0'))
+        .join('');
+      const state = JSON.parse(json) as ValleyState;
+      if (
+        digest !== bound.digest ||
+        state.seed !== log.seed ||
+        state.minute !== bound.minute ||
+        state.edition?.id !== log.rules
+      )
+        throw new Error('Recovery volume differs from its receipt.');
+      game = {
+        valley: restoreState(state),
+        plainEnglish: log.plainEnglish ?? true,
+        inputs: log.inputs.slice(0, bound.k),
+        ...(log.cast ? { cast: structuredClone(log.cast) } : {}),
+      };
+      rest = log.inputs.slice(bound.k);
+    } catch {
+      // An intact input log is authoritative when the recovery shortcut is damaged.
+      game = newGame(log.seed, log.cast, false, log.plainEnglish ?? true, log.rules);
+      rest = log.inputs;
+    }
   } else {
-    game = newGame(log.seed, log.cast, false, log.plainEnglish ?? true);
+    game = newGame(log.seed, log.cast, false, log.plainEnglish ?? true, log.rules);
     rest = log.inputs;
   }
   while (game.valley.minute + QUANTUM <= log.minute && !game.valley.flags.ended) {
@@ -303,6 +415,10 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
     onProgress(game.valley.minute);
     await new Promise((r) => setTimeout(r, 0));
   }
+  const pending = log.inputs.slice(game.inputs.length);
+  if (pending.length) step(game, game.valley.minute, pending);
+  if (JSON.stringify(game.inputs) !== JSON.stringify(log.inputs))
+    throw new Error('The saved input log contains actions that cannot be replayed. It has been kept.');
   volume = log.volume;
   return game;
 }
@@ -346,7 +462,12 @@ export function start() {
     bindVolume: async () => {
       if (!g) return;
       lastSnapDay = dayOfMinute(g.valley.minute);
-      await bindVolume();
+      const ok = await bindVolume();
+      const status = document.querySelector('[data-save-status]');
+      if (status)
+        status.textContent = ok
+          ? 'Your input log and recovery volume were saved in this browser.'
+          : 'The browser could not confirm a complete save. Keep this page open and download the run from Lab tools.';
     },
   });
   const castHost = document.querySelector<HTMLElement>('.game-menu-panel .menu-body');
@@ -368,15 +489,17 @@ function infoWords(): string {
   if (selected)
     return `<h2>What you know about a household</h2><p>Your guess comes from what you last saw. The local overseer makes his own guess about a person. Neither guess is certain.</p><p>A visit to the lower hamlet takes a couple of hours. A visit to the upper hamlet takes most of a morning. You can visit again when you return.</p>`;
   const s = g.valley;
-  return `<h2>Your work</h2><p>${esc(nextWords(s))}</p><p>The village announcer carries your requests. People consider their own field work and can refuse. Hold the button beside a refusal to insist. They will come, and they will remember.</p><p>A visit takes time to walk there and back. Reduce a household’s grain payment to leave more in its jars. The neighbours will notice.</p><p>The grain bar shows the harvest. The filled part is grain in the granary. The striped part is cut grain waiting to be separated from its stalks. The outline shows uncut grain. The mark shows what the landowner is owed.</p><p>Time slows for replies and knocks at your door. Opening the menu or this information panel stops time. ${esc(limitsWords(s))}</p>${seasonOf(doyOf(dayOfMinute(s.minute))) === 'winter' ? '<p>People receive no grain pay for mill work. You can write for grain when the estimate shows that you will have too little.</p>' : ''}<p>You are the steward. You manage the landowner’s grain, which is counted in grain measures.</p>`;
+  return `<h2>Your work</h2><p>${esc(nextWords(s))}</p><p>The village announcer carries your requests. People consider their own field work and can refuse. Hold the button beside a refusal to insist. They will come, and they will remember.</p><p>A visit takes time to walk there and back. Reduce a household’s grain payment to leave more in its jars. The neighbours will notice.</p><p>The grain bar shows the harvest. The filled part is grain in the granary. The striped part is cut grain waiting to be separated from its stalks. The outline shows uncut grain. The mark shows what the landowner is owed.</p><p>Time slows for replies and knocks at your door. Opening the menu or this information panel stops time. ${esc(limitsWords(s))}</p>${seasonOf(doyOf(dayOfMinute(s.minute))) === 'winter' ? (s.edition ? '<p>Paid mill calls use grain from the granary for completed carrying. Ordinary calls offer no pay.</p>' : '<p>People receive no grain pay for mill work. You can write for grain when the estimate shows that you will have too little.</p>') : ''}<p>You are the steward. You manage the landowner’s grain, which is counted in grain measures.</p>`;
 }
 
 function title() {
   labScreen('title');
   cancelAnimationFrame(raf);
   const log = readLog();
-  const where =
-    log && log.version !== GAME_VERSION
+  const hasSave = !!log || storedLogProblem;
+  const where = storedLogProblem
+    ? 'This browser’s saved ledger is malformed or incompatible. It is kept here. Starting a new game will replace it.'
+    : log && log.version !== GAME_VERSION
       ? 'This saved game uses an older Valley version. Start a new game to play with the new people. Your old saved game stays here until you start.'
       : log
         ? `Your ledger is open at ${dateWords(dayOfMinute(log.minute))} of year ${yearWord(yearOf(dayOfMinute(log.minute)))}.`
@@ -387,21 +510,23 @@ function title() {
     ${topbar(`<a href="${HUB}/games/" target="_top">All games</a>`)}
     <section class="title-premise"><h1>The Valley</h1><p class="purpose">${esc(PURPOSE)}</p><p class="soft">People can refuse you, and they remember how you answer.</p></section>
     ${LAB_TOOLS ? '<button data-ways>Lab tools ▸</button>' : ''}
+    <label class="edition-choice"><input type="checkbox" data-edition> Include grain wages, voluntary contributions, winter loans and inspections in this new term.</label>
     <div class="vignette" aria-hidden="true"><svg viewBox="0 0 360 140"><path d="M0 95Q80 15 160 90T360 70M0 130Q90 50 180 120T360 95M250 0Q200 70 260 140" fill="none" stroke="currentColor"/><g fill="none" stroke="currentColor" stroke-width="2"><path d="M70 95v-18l12-12 12 12v18zM130 105V87l12-12 12 12v18zM190 90V72l12-12 12 12v18zM280 100V82l12-12 12 12v18z"/></g></svg></div>
     <footer class="title-actions">${where ? `<p class="hand">${esc(where)}</p>` : ''}
-    ${log ? `${log.version === GAME_VERSION ? '<button class="primary" data-go="open">Resume</button>' : ''}<button data-go="new" class="hold">New game<span class="fill"></span></button><p class="soft">This replaces your saved game.</p>` : '<button class="primary" data-go="new">New game</button>'}${mark()}</footer>
+    ${hasSave ? `${log && log.version === GAME_VERSION ? '<button class="primary" data-go="open">Resume</button>' : ''}<button data-go="new" class="hold">New game<span class="fill"></span></button><p class="soft">This replaces your saved game.</p>` : '<button class="primary" data-go="new">New game</button>'}${mark()}</footer>
     ${LAB_TOOLS ? `<dialog class="ways-panel" aria-label="Other ways to start"><header><h2>Other ways to start</h2><button data-ways-close aria-label="Close other ways to start">×</button></header><label for="valley-name">A named valley</label><input id="valley-name" placeholder="Kuyulu" maxlength="80"><p>The same name gives the same valley.</p><button data-seed${log ? ' class="hold"' : ''}>Begin this valley${log ? '<span class="fill"></span>' : ''}</button>${log ? '<p class="soft">This replaces your saved game.</p>' : ''}<label for="load-run">Load a playtest run</label><input id="load-run" type="file" accept=".json,application/json"><p id="load-result" role="status"></p></dialog>` : ''}
   </div>`;
   app.querySelector('[data-go="open"]')?.addEventListener('click', () => {
     if (log && log.version === GAME_VERSION) openLedger(log);
   });
   const fresh = (seed: number) => {
-    void begin(seed);
+    const rules = app.querySelector<HTMLInputElement>('[data-edition]')?.checked ? RULES_EDITION : undefined;
+    void begin(seed, false, rules);
   };
   const nb = app.querySelector<HTMLButtonElement>('[data-go="new"]');
   if (nb) {
     nb.addEventListener('click', () => {
-      if (!log) return fresh(Math.floor(Math.random() * 1e9));
+      if (!hasSave) return fresh(Math.floor(Math.random() * 1e9));
       if (app.querySelector('[data-confirm-title]')) return;
       const confirm = document.createElement('div');
       confirm.innerHTML =
@@ -425,7 +550,7 @@ function title() {
   };
   const seed = app.querySelector<HTMLButtonElement>('[data-seed]');
   if (seed) {
-    if (log) bindHold(seed, named);
+    if (hasSave) bindHold(seed, named);
     else seed.addEventListener('click', named);
   }
   app.querySelector<HTMLInputElement>('#load-run')?.addEventListener('change', async (event) => {
@@ -489,12 +614,12 @@ function openLedger(log: Log) {
     });
 }
 
-async function begin(seed: number, localOnly = false) {
+async function begin(seed: number, localOnly = false, rules?: RulesEdition) {
   const transition = ++runTransition;
   cancelAnimationFrame(raf);
   app.innerHTML = `<div class="page">${topbar('The Valley')}<h2>Starting your game…</h2><p>Please wait.</p></div>`;
   try {
-    const prepared = await castSession.fresh(seed, localOnly);
+    const prepared = await castSession.fresh(seed, localOnly, rules);
     if (transition !== runTransition) return;
     g = prepared;
     await clearSaves();
@@ -521,7 +646,7 @@ async function begin(seed: number, localOnly = false) {
     if (LAB_TOOLS) {
       const local = document.createElement('button');
       local.textContent = 'Start here without past history';
-      local.addEventListener('click', () => void begin(seed, true));
+      local.addEventListener('click', () => void begin(seed, true, rules));
       status.after(local);
     }
   }
@@ -594,7 +719,15 @@ function rateNow(t: number): number {
     night: partOfDay(s.minute) === 'night',
     travelling: !!s.kahyaState.visit,
     reading: t < slowUntil || selected !== null || tab !== 'notes',
-    waiting: s.knocks.some((k) => !k.answered && k.at <= s.minute && k.until > s.minute),
+    waiting:
+      s.knocks.some((k) => !k.answered && k.at <= s.minute && k.until > s.minute) ||
+      !!pendingTerm(s) ||
+      s.asks.some(
+        (a) =>
+          !a.closed &&
+          a.until > s.minute &&
+          Object.values(a.replies).some((r) => ['refused', 'deferred', 'modified'].includes(r.verdict)),
+      ),
     hurrying,
     working: !!currentJob(s),
     pace: speed,
@@ -651,6 +784,7 @@ function afterQuantum(t: number): boolean {
     seenNote = n.id;
     if (n.kind === 'reply' || n.weight >= 2.5 || (first && n.weight >= 2)) {
       slowUntil = t + READING_MS;
+      if (n.weight >= 2.5) musicEvent(['death', 'due', 'weather', 'theft', 'seize'].includes(n.kind));
       event = true;
     }
   }
@@ -1232,14 +1366,41 @@ function drawSheet(force = false) {
   if (!force && sheetKey === key) return;
   sheetKey = key;
   lastSheet = performance.now();
+  sheetGeneration++;
   actions = [];
+  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const focusRoot = active?.closest<HTMLElement>('#sheet-head, #sheet, #thumbs, #houses');
+  const focusKey =
+    active && focusRoot
+      ? {
+          root: focusRoot.id,
+          tag: active.tagName,
+          text: active.textContent,
+          label: active.getAttribute('aria-label'),
+          house: active.getAttribute('data-h'),
+          selected,
+        }
+      : null;
   const sheet = app.querySelector<HTMLElement>('#sheet');
   const thumbs = app.querySelector<HTMLElement>('#thumbs');
   if (!sheet || !thumbs) return;
   const top = sheet.scrollTop;
-  const knock = s.knocks.find((k) => !k.answered && k.at <= s.minute && k.until > s.minute);
+  const upcomingTerm = pendingTerm(s);
+  const knock = s.knocks.find(
+    (k) =>
+      !k.answered &&
+      k.at <= s.minute &&
+      k.until > s.minute &&
+      !(upcomingTerm?.kind === 'winter' && upcomingTerm.house === k.house),
+  );
   // An unanswered knock takes precedence over the house and reading sheets.
   if (knock) {
+    selected = null;
+    tab = 'notes';
+    hurrying = false;
+  }
+  const term = !knock ? pendingTerm(s) : undefined;
+  if (term) {
     selected = null;
     tab = 'notes';
     hurrying = false;
@@ -1247,7 +1408,7 @@ function drawSheet(force = false) {
   const hh = selected ? houseOf(s, selected) : undefined;
   const root = app.querySelector<HTMLElement>('.play');
   root?.setAttribute('data-house', String(!!hh));
-  root?.setAttribute('data-knock', String(!!knock));
+  root?.setAttribute('data-knock', String(!!knock || !!term));
   root?.setAttribute('data-reader', String(tab === 'ledger' || tab === 'reader'));
   const header = app.querySelector<HTMLElement>('#sheet-head');
   if (header) {
@@ -1262,17 +1423,23 @@ function drawSheet(force = false) {
     `${importStatus ? `<p id="load-result" role="status">${importStatus}</p>` : ''}` +
     (knock
       ? knockCard(s, knock)
-      : hh
-        ? houseCard(s, hh)
-        : tab === 'ledger'
-          ? ledger(s)
-          : tab === 'reader'
-            ? reader(s)
-            : tab === 'orders'
-              ? otherOrders(s)
-              : notebook(s));
-  thumbs.hidden = !!knock || tab !== 'notes';
+      : term
+        ? termCard(s, term)
+        : hh
+          ? houseCard(s, hh)
+          : tab === 'ledger'
+            ? ledger(s)
+            : tab === 'reader'
+              ? reader(s)
+              : tab === 'orders'
+                ? otherOrders(s)
+                : notebook(s));
+  thumbs.hidden = !!knock || !!term || tab !== 'notes';
   thumbs.innerHTML = thumbs.hidden ? '' : hh ? houseThumbs(s, hh) : valleyThumbs(s);
+  const generation = sheetGeneration;
+  actions = actions.map((fn) => () => {
+    if (generation === sheetGeneration) fn();
+  });
   for (const button of app.querySelectorAll<HTMLButtonElement>('button.hold[data-k]')) {
     const fn = actions[Number(button.dataset.k)];
     if (fn) bindHold(button, fn);
@@ -1280,6 +1447,55 @@ function drawSheet(force = false) {
   drawHouses(s);
   if (!force) sheet.scrollTop = top;
   stage?.refresh();
+  if (focusKey && focusKey.selected === selected) {
+    const candidates = app.querySelectorAll<HTMLElement>(
+      `#${focusKey.root} button, #${focusKey.root} summary, #${focusKey.root} select`,
+    );
+    const replacement = [...candidates].find(
+      (el) =>
+        el.tagName === focusKey.tag &&
+        el.textContent === focusKey.text &&
+        el.getAttribute('aria-label') === focusKey.label &&
+        el.getAttribute('data-h') === focusKey.house,
+    );
+    replacement?.focus({ preventScroll: true });
+  }
+}
+
+function pendingTerm(s: ValleyState) {
+  return s.edition?.decisions?.find((d) => !d.answered && d.from <= s.minute && d.until > s.minute);
+}
+function termCard(s: ValleyState, d: TermDecision): string {
+  const choose = (choice: string) => order({ verb: 'term-choice', id: d.id, choice });
+  let choices: string[];
+  if (d.kind === 'winter')
+    choices = [
+      btn('Ask the neighbour for a loan', () => choose('neighbour')),
+      btn('Send grain from the granary', () => choose('grain'), {
+        disabled: s.agha.granary < 6,
+        hint: 'A small sack leaves less grain for the rider.',
+      }),
+    ];
+  else if (d.kind === 'inspection')
+    choices = [
+      btn('Open the separate store', () => choose('return')),
+      btn('Keep it closed', () => choose('refuse'), { hint: 'The next due grows by six grain measures.' }),
+    ];
+  else
+    choices = [
+      btn('Send grain instead', () => choose('grain'), {
+        disabled: s.agha.granary < 12,
+        hint: 'The rider takes twelve grain measures. The due stays the same.',
+      }),
+      ...s.households
+        .filter((h) => underSeal(s, h) && h.field.size > 0 && h.members.length)
+        .map((h) =>
+          btn(`Ask ${householdLabel(h)}`, () => choose(`ask:${h.id}`), {
+            hint: 'They can refuse. Two days of carrying leave their own work waiting.',
+          }),
+        ),
+    ];
+  return `<div class="term-decision"><p>${esc(d.text)}</p><p class="soft">Reply before ${esc(fullDateEnglish(dayOfMinute(d.until)))}. Time slows while you read.</p><div class="row">${choices.join('')}</div></div>`;
 }
 
 const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -1631,6 +1847,47 @@ function houseThumbs(s: ValleyState, hh: Household): string {
       callUnavailable(s, job, hh),
       `The village announcer carries your request only to ${householdLabel(hh)}. People can refuse.`,
     );
+  if (s.edition && job === 'build-mill')
+    add(
+      'Call this house for paid mill work',
+      () => order({ verb: 'call', job, houses: [hh.id], wage: true }),
+      s.agha.granary <= 0 ? 'The granary has no grain for wages.' : callUnavailable(s, job, hh),
+      'Completed carrying earns a little grain from the granary. Unfinished work earns none. Pay stops when the grain runs out.',
+    );
+  if ((s.edition?.reserve ?? 0) > 0)
+    add(
+      'Send a sack from the separate store',
+      () => order({ verb: 'term-choice', id: `reserve:${hh.id}`, choice: 'give' }),
+      empty ? 'Nobody lives here.' : null,
+      'The sack leaves the separate store. Your book records where it went.',
+    );
+  if (s.edition?.forecast === yearOf(dayOfMinute(s.minute)))
+    add(
+      'Ask for an extra sack',
+      () => order({ verb: 'contribute', house: hh.id }),
+      empty
+        ? 'Nobody lives here.'
+        : !underSeal(s, hh)
+          ? 'This house is outside your authority.'
+          : s.edition?.requests?.some(
+                (r) =>
+                  r.house === hh.id &&
+                  r.action === 'early-sack' &&
+                  yearOf(dayOfMinute(r.from)) === yearOf(dayOfMinute(s.minute)),
+              )
+            ? 'You already asked this household during this harvest.'
+            : null,
+      'Ask only if their jars are full. They can refuse. This is extra grain, not their normal share.',
+    );
+  const visit = s.kahyaState.visit;
+  if (s.edition && visit?.house === hh.id && visit.arrive <= s.minute && visit.leave > s.minute)
+    for (const topic of ['person', 'debt', 'grievance'] as const)
+      add(
+        `Ask about ${topic === 'person' ? 'someone here' : topic === 'debt' ? 'a grain debt' : 'a grievance'}`,
+        () => order({ verb: 'topic', house: hh.id, topic }),
+        null,
+        'Ask while you sit here. They may have nothing more to tell you.',
+      );
   if (job === 'reap-agha' && yearOf(dayOfMinute(s.minute)) > 1)
     add(
       'Call this house to cut barley for pay',
@@ -1753,6 +2010,25 @@ function otherOrders(s: ValleyState): string {
         hint: callUnavailable(s, job) ?? 'A small share of the cut grain goes to their jars.',
       }),
     );
+  if (s.edition) {
+    if (job === 'build-mill')
+      out.push(
+        btn('Call for paid mill work', () => send({ verb: 'call', job, houses, wage: true }), {
+          disabled: s.agha.granary <= 0 || !!callUnavailable(s, job),
+          hint: 'Completed carrying earns a little grain from the granary. Unfinished work earns none. Pay stops when the grain runs out.',
+        }),
+      );
+    out.push(
+      btn(
+        'Leave a sack out of the account',
+        () => send({ verb: 'term-choice', id: 'reserve', choice: 'hide' }),
+        {
+          disabled: s.agha.granary < 6 || s.edition.hiddenYears?.includes(yearOf(dayOfMinute(s.minute))),
+          hint: 'Keep a small sack in a separate store. The inspector may demand it or add to the due. Once each year.',
+        },
+      ),
+    );
+  }
   const blocked =
     !s.flags.verbs.includes('borrow') || !!(s.agha.loan && s.minute - s.agha.loan.asked < 300 * DAY);
   out.push(
@@ -1793,7 +2069,7 @@ function ledger(s: ValleyState): string {
     s.agha.loan && !s.agha.loan.paid
       ? `<tr><td>Owed for the loan${loanOwedAt(s, s.agha.dueDay) ? '' : ', at next year’s rider'}</td><td class="n">${s.agha.loan.owe}</td></tr>`
       : '';
-  return `<div class="ledger ink-in">
+  return `<div class="ledger ink-in"><p>${s.edition ? 'This term includes voluntary contributions, mill pay, winter loans and inspections.' : 'This term uses the original rules.'}</p>${btn('Read prior volumes', () => void openVolumes())}
     <p>${esc(nextWords(s))}</p>
     <p class="soft" >This grain is set aside to pay the landowner. Gifts leave less for the rider to collect.</p>
     <table>

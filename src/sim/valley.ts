@@ -67,6 +67,16 @@ import {
 } from './calendar.ts';
 import { ALLOCATION, CAST_IDS, DISCLOSURES, localRole } from './cast.ts';
 import { tellValleyDeath } from './death.ts';
+import {
+  captureTermReply,
+  type EditionState,
+  millPay,
+  type RulesEdition,
+  resolveTermWork,
+  termDay,
+  termOffers,
+  termSuggestion,
+} from './edition.ts';
 import { type CastStart, calendarPassport, lifeFacts, validateCastStart } from './passport.ts';
 import { foundValley, type Household, householdLabel, KAHYA, makeKahya, personLabel } from './people.ts';
 import { DRAW, hashUnit, mixSeed, strHash } from './rng.ts';
@@ -192,7 +202,7 @@ export interface Knock {
   house: string;
   what: 'grain' | 'wedding' | 'birth' | 'death';
   words: string;
-  answered?: 'gave' | 'refused' | 'went' | 'ignored';
+  answered?: 'gave' | 'refused' | 'went' | 'ignored' | 'arranged';
   /** Minute it lapses. */
   until: number;
 }
@@ -243,6 +253,7 @@ export interface Flags {
 }
 
 export interface ValleyState {
+  edition?: EditionState;
   castFacts?: Record<string, ReturnType<typeof lifeFacts>>;
   castReleaseRequests?: string[];
   castReleased?: Record<string, Person>;
@@ -305,6 +316,7 @@ export function newValley(
   cast?: CastStart,
   preflight = false,
   plainEnglish = true,
+  rules?: RulesEdition,
 ): ValleyState {
   if (community && communityFor) syncCommunity(communityFor);
   const { households, people } = foundValley(seed, 0);
@@ -321,6 +333,7 @@ export function newValley(
   // Opt in after admission, before any simulation. Full-save restoration bypasses this path.
   for (const p of [...people, kahya]) p.lexicon = { ...p.lexicon, plainEnglish };
   const s: ValleyState = {
+    ...(rules ? { edition: { id: rules } } : {}),
     v: 1,
     seed,
     minute: 0,
@@ -470,7 +483,8 @@ export function openAsksFor(s: ValleyState, pid: string, at: number): Ask[] {
 function suggestionFor(s: ValleyState, p: Person, at: number): Suggestion | undefined {
   const asks = openAsksFor(s, p.id, at);
   const a = asks[asks.length - 1];
-  if (!a) return undefined;
+  const term = termSuggestion(s, p, at);
+  if (!a || (term && (term.since ?? -1) >= a.from)) return term;
   if (a.job === 'bring-share') {
     const h = houseOfPerson(s, p.id);
     if (!h || h.paid >= shareOwed(h) - 0.01) return undefined;
@@ -507,6 +521,7 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
   // Bed is for the dark, or for someone who can no longer keep their eyes open; a tired day-worker rests instead.
   const sleepy = !light || p.body.sleepPressure > 0.65 || p.body.sleepDebt > 0.5 || p.body.health < 0.5;
   const out: Affordance[] = [
+    ...termOffers(s, p, at),
     ...(sleepy
       ? [
           {
@@ -682,7 +697,7 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
         duration: 120,
         effort: 0.8,
         advertises: { esteem: 0.04, meaning: 0.03 },
-        material: a.wage ? 1 : 0,
+        material: a.wage ? (s.edition ? Math.min(s.agha.granary, 0.3) : 1) : 0,
         tags: ['work', 'outdoors'],
       });
     }
@@ -899,7 +914,7 @@ export function makeWorld(s: ValleyState): World {
       return h ? scarcityOf(s, h) : 0;
     },
     beginOptions: (p, offer, record) => {
-      captureReply(s, p, offer, record);
+      if (!captureTermReply(s, p, offer, record)) captureReply(s, p, offer, record);
       return undefined;
     },
     resolve: (p, act, reason) => resolveActivity(s, p, act, reason),
@@ -1247,6 +1262,8 @@ function replyWords(s: ValleyState, p: Person, ask: Ask, r: Reply): string {
 }
 
 function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ended' | 'interrupted'): Outcome {
+  const term = resolveTermWork(s, p, act, reason);
+  if (term) return term;
   const now = p.now;
   const base: Outcome = { affordanceId: act.affordanceId, action: act.action, status: 'completed', at: now };
   if (act.targetId !== undefined) base.targetId = act.targetId;
@@ -1301,6 +1318,7 @@ function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ende
       return out;
     }
     case 'build-mill': {
+      const before = s.agha.mill;
       s.agha.mill = Math.min(
         V.millHours,
         s.agha.mill +
@@ -1308,7 +1326,10 @@ function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ende
       );
       const ask = openAsksFor(s, p.id, act.startedAt).find((a) => a.job === 'build-mill');
       if (ask) ask.hours[p.id] = (ask.hours[p.id] ?? 0) + hours;
-      return { ...base, needs: { competence: 0.03 } };
+      const material = ask?.wage
+        ? millPay(s, p.id, `${p.id}:${act.startedAt}:${act.endsAt}`, s.agha.mill - before, reason === 'ended')
+        : 0;
+      return { ...base, ...(s.edition && ask?.wage ? { material } : {}), needs: { competence: 0.03 } };
     }
     case 'bring-share': {
       if (!h || reason === 'interrupted') return { ...base, status: 'interrupted' };
@@ -1484,7 +1505,11 @@ function chooseModes(s: ValleyState, day: number) {
   const at = day * DAY;
   const ids: string[] = [];
   for (const h of s.households) {
-    const asked = s.asks.some((a) => !a.closed && a.until > at && a.houses.includes(h.id));
+    const asked =
+      s.asks.some((a) => !a.closed && a.until > at && a.houses.includes(h.id)) ||
+      s.edition?.requests?.some(
+        (r) => r.house === h.id && r.until > at && (r.status === 'pending' || r.status === 'working'),
+      );
     const visited = (s.kahyaState.seen[h.id] ?? -1e9) > at - 7 * DAY;
     const hungry = daysOfBread(s, h) < 40;
     const birthNear = h.members.some((m) => {
@@ -1684,6 +1709,7 @@ function endOfDay(s: ValleyState, day: number) {
       weight: 3,
     });
   }
+  termDay(s, day);
   eveningTally(s, day);
   laneLife(s, day);
   inflowWord(s, day);

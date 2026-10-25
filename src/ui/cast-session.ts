@@ -20,6 +20,7 @@ import {
   watchPersonaCheckpoint,
 } from '@adam0white/lab-client';
 import { ALLOCATION, localRole } from '../sim/cast.ts';
+import type { RulesEdition } from '../sim/edition.ts';
 import { act, type Game, newGame, type SavedGame } from '../sim/game.ts';
 import { calendarPassport, checkpointReceipt, HOST_RULES, prepareCastStart } from '../sim/passport.ts';
 import { foundValley } from '../sim/people.ts';
@@ -68,7 +69,7 @@ export class CastSession {
     this.lab.allowPersonaRecording(true);
     this.render();
   }
-  async fresh(seed: number, localOnly = false): Promise<Game> {
+  async fresh(seed: number, localOnly = false, rules?: RulesEdition): Promise<Game> {
     this.invalidate();
     const generation = this.generation;
     await this.shelf.ready;
@@ -83,7 +84,7 @@ export class CastSession {
         this.stamps(),
         async (inputs) => {
           const initial = prepareCastStart(opening, inputs);
-          newGame(seed, initial, true); // Construct and tick the complete opening before any CAS.
+          newGame(seed, initial, true, true, rules); // Construct and tick the complete opening before any CAS.
           return initial;
         },
         { isCurrent: () => generation === this.generation },
@@ -94,7 +95,7 @@ export class CastSession {
       }
     }
     if (generation !== this.generation) throw new Error('Run or identity changed.');
-    const g = newGame(seed, header);
+    const g = newGame(seed, header, false, true, rules);
     this.game = g;
     this.failedCheckpoint = false;
     this.runId = crypto.randomUUID();

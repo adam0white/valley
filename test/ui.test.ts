@@ -659,10 +659,8 @@ it('refuses a legacy local log without a pinned narration choice', async () => {
     });
     await page.evaluate((text) => localStorage.setItem('valley-log-v1', text), legacy);
     await page.reload();
-    await page.getByRole('button', { name: 'Resume', exact: true }).click();
-    await expect
-      .poll(() => page.locator('body').textContent())
-      .toMatch(/Start a new game from the title page/);
+    expect(await page.getByRole('button', { name: 'Resume', exact: true }).count()).toBe(0);
+    expect(await page.locator('body').textContent()).toMatch(/malformed or incompatible/);
     expect(await page.evaluate(() => localStorage.getItem('valley-log-v1'))).toBe(legacy);
   } finally {
     await page.close();

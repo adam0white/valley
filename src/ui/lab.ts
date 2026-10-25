@@ -1,6 +1,7 @@
 import { createLab } from '@adam0white/lab-client';
 import { feedbackPersonaControl, feedbackSharePlay } from '@adam0white/lab-kit';
 import type { SavedGame } from '../sim/game.ts';
+import { toggleMusic } from './music.ts';
 
 export const LAB_TOOLS = new URLSearchParams(location.search).get('lab') === '1';
 export const lab = createLab({ game: 'valley' });
@@ -45,7 +46,7 @@ export function mountLab(options: RunControls): void {
   controls.id = 'lab-controls';
   controls.innerHTML = `<dialog class="game-menu-panel" aria-labelledby="valley-menu-title">
     <header class="menu-head"><h2 id="valley-menu-title">Game menu <small data-menu-date></small></h2><button type="button" data-close-menu aria-label="Close menu">×</button></header>
-    <div class="menu-body"><p>Time stops while this menu is open. The game saves your progress as you play.</p>
+    <div class="menu-body"><button type="button" data-music aria-pressed="false">Music: off</button><p data-save-status role="status"></p><p>Time stops while this menu is open. The game saves your progress as you play.</p>
     ${
       LAB_TOOLS
         ? `<button type="button" data-notebook>The notebook <span aria-hidden="true">▸</span></button>
@@ -69,6 +70,17 @@ export function mountLab(options: RunControls): void {
     <footer class="feedback-actions"><button type="submit" class="primary" data-send>Submit</button></footer></form>
   </dialog>`;
   document.body.append(controls);
+  const music = controls.querySelector<HTMLButtonElement>('[data-music]');
+  music?.addEventListener('click', async () => {
+    try {
+      const on = await toggleMusic();
+      music.textContent = `Music: ${on ? 'on' : 'off'}`;
+      music.setAttribute('aria-pressed', String(on));
+    } catch {
+      music.textContent = 'Music is unavailable in this browser.';
+      music.setAttribute('aria-pressed', 'false');
+    }
+  });
   const find = <T extends Element = HTMLElement>(selector: string): T => {
     const element = controls.querySelector<T>(selector);
     if (!element) throw new Error(`Missing lab control: ${selector}`);

@@ -10,8 +10,10 @@
  * seconds after a heavy note, as the UI does. The actions mirror the thumbs and knock cards in src/ui/app.ts; if
  * the UI changes, this list must follow it.
  */
+
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { dayOfMinute, doyOf, seasonOf, yearOf } from '../src/sim/calendar.ts';
 import { act, DAY, type Game, newGame, type Order, QUANTUM, step } from '../src/sim/game.ts';
 import {
@@ -23,6 +25,7 @@ import {
   shareOwed,
   underSeal,
 } from '../src/sim/valley.ts';
+import { PressAnswers } from './press-answers.ts';
 
 // The playtester's contract (packages/playtester/src/adapter.ts), restated so this repo typechecks alone.
 interface PlayEvent {
@@ -59,7 +62,6 @@ interface PT {
   readSession(trace: Trace): Reading;
 }
 const HF_DIR = process.env.HF_DIR ?? join(homedir(), 'code', 'human-framework');
-const pt = (await import(join(HF_DIR, 'packages/playtester/src/index.ts'))) as PT;
 
 const STEADY = 120;
 const SLOWED = 20;
@@ -115,18 +117,25 @@ function judge(n: Note): PlayEvent {
             ? [`seize:${n.house}`]
             : [`ease:${n.house}`, 'ease:']
       : n.kind === 'reply'
-        ? ['call:', 'wage:', ...(n.ids ?? (n.who ? [n.who] : [])).map((id) => `press:${n.ask}:${id}`)]
+        ? n.group?.startsWith('pressed-')
+          ? false
+          : ['call:', 'wage:']
         : n.kind === 'knock' && /went back down the lane|sent .* away/.test(n.text)
           ? ['away:']
           : false;
   return { kind: n.kind, summary: t, valence: v, salience: sal, ...(n.who ? { by: n.who } : {}), answers };
 }
 
-class ValleyAdapter {
+export class ValleyAdapter {
   name = 'the-valley';
   readonly g: Game;
   private seenNote = 0;
   private slowFor = 0;
+  private carry = 0;
+  private press = new PressAnswers();
+  private pressEvents: { id: string; note: Note }[] = [];
+  private advancedNote = 0;
+  private shown = new Map<number, string>();
   constructor(seed: number) {
     this.g = newGame(seed);
     this.seenNote = 0;
@@ -135,11 +144,15 @@ class ValleyAdapter {
     const s = this.g.valley;
     const events: PlayEvent[] = [];
     for (const n of s.notes) {
-      if (n.id <= this.seenNote || n.at > s.minute + QUANTUM) continue;
+      const signature = JSON.stringify([n.text, n.words, n.ids]);
+      if (n.at > s.minute || this.shown.get(n.id) === signature) continue;
+      this.shown.set(n.id, signature);
       events.push(judge(n));
       if (n.weight >= 2.5) this.slowFor = 3.5;
     }
     this.seenNote = s.notes.filter((n) => n.at <= s.minute + QUANTUM).at(-1)?.id ?? this.seenNote;
+    for (const answer of this.pressEvents.splice(0))
+      events.push({ ...judge(answer.note), answers: [answer.id] });
     const knocks = s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length;
     const days = nextRiderDay(s) - dayOfMinute(s.minute);
     const short = 1 - Math.min(1, s.agha.granary / Math.max(1, s.agha.due));
@@ -173,7 +186,7 @@ class ValleyAdapter {
       out.push({ id, label, kind, promise, ...(tags ? { tags } : {}) });
     if (job && !openAsk(g, job)) {
       add(`call:${job}`, `call the valley (${job})`, 'call', 0.8);
-      if (yearOf(dayOfMinute(s.minute)) > 1 || job === 'build-mill')
+      if (yearOf(dayOfMinute(s.minute)) > 1 && job === 'reap-agha')
         add(`wage:${job}`, 'call for a sheaf in eight', 'call', 0.55);
     }
     for (const k of s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute)) {
@@ -225,49 +238,61 @@ class ValleyAdapter {
     else if (verb === 'ease') o = { verb: 'ease', house: a ?? '' };
     else if (verb === 'seize') o = { verb: 'seize', house: a ?? '' };
     else if (verb === 'borrow') o = { verb: 'borrow', kile: 80 };
-    if (o) act(g, o);
+    if (o && act(g, o) && o.verb === 'insist') this.press.sent(o.ask, o.pid, g.valley);
   }
   advance(seconds: number) {
     const s = this.g.valley;
     let left = seconds;
-    while (left > 0 && !s.flags.ended) {
-      const dt = Math.min(left, 1);
+    while (left > 0.000001 && !s.flags.ended) {
       const h = (s.minute % DAY) / 60;
       const night = h < 5 || h >= 21;
       const rate = this.slowFor > 0 ? SLOWED : STEADY * (night ? 3 : 1);
+      const dt = Math.min(left, (QUANTUM - this.carry) / rate);
+      this.carry += dt * rate;
       this.slowFor = Math.max(0, this.slowFor - dt);
-      const to = s.minute + rate * dt;
-      step(this.g, Math.floor(to / QUANTUM) * QUANTUM);
       left -= dt;
+      if (this.carry >= QUANTUM - 0.000001) {
+        this.carry = Math.max(0, this.carry - QUANTUM);
+        step(this.g, s.minute + QUANTUM);
+        this.pressEvents.push(...this.press.read(s));
+        for (const n of s.notes) {
+          if (n.id <= this.advancedNote || n.at > s.minute) continue;
+          if (n.weight >= 2.5) this.slowFor = 3.5;
+        }
+        this.advancedNote = s.notes.filter((n) => n.at <= s.minute).at(-1)?.id ?? this.advancedNote;
+      }
     }
   }
 }
 
-const seeds = Number(process.argv.find((a) => a.startsWith('seeds='))?.slice(6) ?? 2);
-const json = process.argv.includes('json=1');
-for (const persona of Object.values(pt.PERSONAS))
-  for (let seed = 1; seed <= seeds; seed++) {
-    const game = new ValleyAdapter(1000 + seed);
-    const t0 = performance.now();
-    const trace = pt.playSession(game, persona, seed);
-    const r = pt.readSession(trace);
-    if (json) {
-      console.log(JSON.stringify(r));
-      continue;
-    }
-    const s = game.g.valley;
-    console.log(
-      `\n${persona.id} seed ${seed}: ${r.ended.reason} after ${r.minutes} min at ${r.ended.clock} (${r.ended.why}) [${Math.round(performance.now() - t0)} ms]`,
-    );
-    console.log(
-      `  granary ${Math.round(s.agha.granary)}/${s.agha.due}, delivered ${s.agha.delivered}, inputs ${game.g.inputs.length}; engagement ${r.meanEngagement}; time ${JSON.stringify(r.choices)}`,
-    );
-    console.log(
-      `  longest lull ${r.longestLull.seconds}s from ${r.longestLull.from} (${r.longestLull.phase}); looked away ${r.lookedAway}x`,
-    );
-    for (const m of trace.moments.filter((x) => x.kind !== 'rewarded').slice(0, 8))
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const pt = (await import(join(HF_DIR, 'packages/playtester/src/index.ts'))) as PT;
+  const seeds = Number(process.argv.find((a) => a.startsWith('seeds='))?.slice(6) ?? 2);
+  const json = process.argv.includes('json=1');
+  for (const persona of Object.values(pt.PERSONAS))
+    for (let seed = 1; seed <= seeds; seed++) {
+      const game = new ValleyAdapter(1000 + seed);
+      const t0 = performance.now();
+      const trace = pt.playSession(game, persona, seed);
+      const r = pt.readSession(trace);
+      if (json) {
+        console.log(JSON.stringify(r));
+        continue;
+      }
+      const s = game.g.valley;
       console.log(
-        `  ${Math.floor(m.t / 60)}:${String(m.t % 60).padStart(2, '0')} ${m.clock} ${m.kind}: ${m.text}`,
+        `\n${persona.id} seed ${seed}: ${r.ended.reason} after ${r.minutes} min at ${r.ended.clock} (${r.ended.why}) [${Math.round(performance.now() - t0)} ms]`,
       );
-    console.log(`  rewarded ${r.rewarded.length}x, first: ${r.rewarded.slice(0, 3).join(' | ')}`);
-  }
+      console.log(
+        `  granary ${Math.round(s.agha.granary)}/${s.agha.due}, delivered ${s.agha.delivered}, inputs ${game.g.inputs.length}; engagement ${r.meanEngagement}; time ${JSON.stringify(r.choices)}`,
+      );
+      console.log(
+        `  longest lull ${r.longestLull.seconds}s from ${r.longestLull.from} (${r.longestLull.phase}); looked away ${r.lookedAway}x`,
+      );
+      for (const m of trace.moments.filter((x) => x.kind !== 'rewarded').slice(0, 8))
+        console.log(
+          `  ${Math.floor(m.t / 60)}:${String(m.t % 60).padStart(2, '0')} ${m.clock} ${m.kind}: ${m.text}`,
+        );
+      console.log(`  rewarded ${r.rewarded.length}x, first: ${r.rewarded.slice(0, 3).join(' | ')}`);
+    }
+}

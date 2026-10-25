@@ -4,6 +4,14 @@
  */
 import { FRAMEWORK_VERSION, type Person, recall, restore, snapshot } from '@adam0white/human-framework';
 import { DAY, dateEnglish, dayOfMinute, doyOf, HOUR, yearOf } from './calendar.ts';
+import {
+  chooseTerm,
+  type HearthTopic,
+  RULES_EDITION,
+  type RulesEdition,
+  requestContribution,
+  talkAtHearth,
+} from './edition.ts';
 import type { CastStart } from './passport.ts';
 import { householdLabel, KAHYA, personLabel } from './people.ts';
 import { mixSeed, strHash } from './rng.ts';
@@ -37,6 +45,9 @@ import {
 export const GAME_VERSION = '0.3.0';
 
 export type Input =
+  | { at: number; verb: 'term-choice'; id: string; choice: string }
+  | { at: number; verb: 'contribute'; house: string }
+  | { at: number; verb: 'topic'; house: string; topic: HearthTopic }
   | { at: number; verb: 'call'; job: Job; houses: string[]; wage?: boolean }
   | { at: number; verb: 'insist'; ask: string; pid: string }
   | { at: number; verb: 'give'; house: string; kile: number }
@@ -54,8 +65,15 @@ export interface Game {
   cast?: CastStart;
 }
 
-export function newGame(seed: number, cast?: CastStart, preflight = false, plainEnglish = true): Game {
-  const valley = newValley(seed, cast, preflight, plainEnglish);
+export function newGame(
+  seed: number,
+  cast?: CastStart,
+  preflight = false,
+  plainEnglish = true,
+  rules?: RulesEdition,
+): Game {
+  if (rules !== undefined && rules !== RULES_EDITION) throw new Error('Unknown Valley rules edition.');
+  const valley = newValley(seed, cast, preflight, plainEnglish, rules);
   const g: Game = { valley, inputs: [], plainEnglish, ...(cast ? { cast: structuredClone(cast) } : {}) };
   beats(g);
   return g;
@@ -75,6 +93,12 @@ export function act(g: Game, input: Order): boolean {
 function apply(g: Game, i: Input): boolean {
   const s = g.valley;
   switch (i.verb) {
+    case 'term-choice':
+      return chooseTerm(s, i.id, i.choice);
+    case 'contribute':
+      return requestContribution(s, i.house);
+    case 'topic':
+      return talkAtHearth(s, i.house, i.topic);
     case 'release-cast':
       return requestCastRelease(s, i.person);
     case 'call': {
@@ -94,7 +118,7 @@ function apply(g: Game, i: Input): boolean {
         text:
           i.job === 'bring-share'
             ? `You asked the village announcer to call ${who} to bring the landowner’s share to the granary.`
-            : `You asked the village announcer to call ${who} to ${what}${i.wage ? ', with one eighth of the harvest as pay' : ''}.`,
+            : `You asked the village announcer to call ${who} to ${what}${i.wage ? (i.job === 'build-mill' && s.edition ? ', with grain from the granary for completed carrying while grain remains' : ', with one eighth of the harvest as pay') : ''}.`,
         weight: 0.8,
       });
       return true;
@@ -496,6 +520,7 @@ function readGathering(g: Game): { elders: ElderWord[]; letter: string } {
 // ---------- saves and the export ----------
 
 export interface SavedGame {
+  rules?: RulesEdition;
   /** Initial narration choice; omitted current-edition files use the fresh-game default. */
   plainEnglish?: boolean;
   castHeads?: Record<string, import('@adam0white/lab-client').PersonaEnvelope>;
@@ -587,6 +612,7 @@ export const volumeLabel = (s: ValleyState, n: number) =>
 export function save(g: Game, n = 0): SavedGame {
   return {
     ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
+    ...(g.valley.edition ? { rules: g.valley.edition.id } : {}),
     game: 'valley',
     plainEnglish: g.plainEnglish ?? true,
     version: GAME_VERSION,
@@ -607,6 +633,7 @@ export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
     return {
       ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
       ...(g.castHeads ? { castHeads: structuredClone(g.castHeads) } : {}),
+      ...(g.rules ? { rules: g.rules } : {}),
       game: g.game,
       version: g.version,
       framework: g.framework,
@@ -619,6 +646,7 @@ export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
     };
   return {
     ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
+    ...(g.valley.edition ? { rules: g.valley.edition.id } : {}),
     game: 'valley',
     plainEnglish: g.plainEnglish ?? true,
     version: GAME_VERSION,
@@ -632,6 +660,10 @@ export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
 }
 
 export function load(saved: SavedGame | CompactRun): Game {
+  if (saved.rules !== undefined && saved.rules !== RULES_EDITION)
+    throw new Error('Unknown Valley rules edition.');
+  if ('state' in saved && saved.state.edition?.id !== saved.rules)
+    throw new Error('The saved rules do not match the run.');
   if (saved.version !== GAME_VERSION || saved.framework !== FRAMEWORK_VERSION)
     throw new Error('This run uses an older Valley edition. Export it for safekeeping and start fresh.');
   if (saved.cast) newGame(saved.seed, saved.cast);
@@ -648,6 +680,7 @@ export function load(saved: SavedGame | CompactRun): Game {
     saved.minute,
     saved.cast,
     saved.plainEnglish ?? true,
+    saved.rules,
   );
   if (fingerprint(g.valley) !== saved.fingerprint)
     throw new Error(
@@ -663,8 +696,9 @@ export function replay(
   to: number,
   cast?: CastStart,
   plainEnglish = true,
+  rules?: RulesEdition,
 ): Game {
-  const g = newGame(seed, cast, false, plainEnglish);
+  const g = newGame(seed, cast, false, plainEnglish, rules);
   step(g, to, inputs);
   return g;
 }
