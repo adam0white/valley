@@ -284,7 +284,7 @@ it('refuses an unpaused source and cancels an alternative after its run generati
   const session = new CastSession(fakeLab(), shelf);
   const g = await session.fresh(42, true);
   await session.alternative('hf.cast.danyal.well');
-  expect(session.status).toContain('paused');
+  expect(session.status).toContain('pause first');
   expect(shelf.writes).toBe(0);
   act(g, { verb: 'release-cast', person: 'danyal' });
   step(g, 10 * 1440);

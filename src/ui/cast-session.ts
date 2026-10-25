@@ -47,7 +47,7 @@ export class CastSession {
   archiveHeads: Record<string, PersonaEnvelope> = {};
   game: Game | null = null;
   status =
-    'Browser continuity is separate from recording. Recorded play links automatically when recording is on.';
+    'Continuing people between games in this browser is separate from recording. When recording is on, recorded play links automatically.';
   private busy = false;
   private failedCheckpoint = false;
   private choice = 0;
@@ -105,8 +105,8 @@ export class CastSession {
     this.fileOrigin = false;
     this.localOnly = localOnly;
     this.status = header.inputs.length
-      ? `Admitted ${header.inputs.length} applicable histories together; all six actors are pinned. ${header.inputs.map((i) => canonicalCast(i.parent.castId).name).join(', ')}. Source omissions remain in the source archive.`
-      : 'Fresh local cast. No other history was imported.';
+      ? `Loaded ${header.inputs.length} matching histories together. All six people keep the versions loaded at the start. ${header.inputs.map((i) => canonicalCast(i.parent.castId).name).join(', ')}. Details left out of this game remain in the source archive.`
+      : 'The people start fresh in this game. No other history was loaded.';
     this.render();
     return g;
   }
@@ -190,8 +190,8 @@ export class CastSession {
       this.lab.setPersonaRecording(null);
     else if (!fileOrigin) await this.queryRecording();
     this.status = fileOrigin
-      ? 'File-origin chapter: embedded receipts grant no ownership. Recorded play links automatically when recording is on.'
-      : 'Loaded pinned chapter and validated local receipts. No latest shelf state was read.';
+      ? 'This game was loaded from a file. Its saved receipts do not let you update the original people. When recording is on, recorded play links automatically.'
+      : 'The saved game and its local receipts have been checked and loaded. The people keep their saved versions. The latest versions in browser storage were not read.';
     this.render();
   }
   metadata(): LocalCastReceipt {
@@ -309,14 +309,14 @@ export class CastSession {
         this.sources = nextSources;
         if (canonicalPersona(this.sources).length > 1024 * 1024)
           throw new Error('Export the source archive before another checkpoint.');
-        this.status = `${c.name}: chapter checkpoint accepted. Unsupported source state remains in the local archive.`;
+        this.status = `${c.name}: the saved checkpoint was accepted. Details this game cannot use remain in the local archive.`;
         this.saveLocal?.();
         await this.queryRecording();
       }
     } catch (error) {
       if (generation !== this.generation) return;
       this.failedCheckpoint = true;
-      this.status = `Checkpoint refused: ${error instanceof Error ? error.message : String(error)} Keep this chapter or export it. A stale parent is never retried against latest.`;
+      this.status = `The checkpoint was refused: ${error instanceof Error ? error.message : String(error)} Keep this game or download a copy. If its previous version is out of date, the game will not retry with the latest version.`;
     } finally {
       this.busy = false;
       this.render();
@@ -332,11 +332,11 @@ export class CastSession {
     try {
       const c = ALLOCATION.find((p) => p.castId === castId);
       if (!g || !c || !this.shelf.enabled)
-        throw new Error('Open a current played chapter and enable browser continuity first.');
+        throw new Error('Open a game you have played and turn on continuing people in this browser first.');
       const raw = g.valley.castReleased?.[localRole(castId)];
       if (!raw || !raw.body.alive || raw.activity)
         throw new Error(
-          'This person must be naturally paused after current work. No activity, care or goal is cleared.',
+          'This person must finish their current work and pause first. This action does not remove any activity, care or goal.',
         );
       const person = calendarPassport(raw);
       const checkpoint = await checkpointReceipt(raw);
@@ -383,12 +383,12 @@ export class CastSession {
       this.heads[castId] = envelope;
       this.sources = sources;
       this.failedCheckpoint = false;
-      this.status = `${c.name}: NEW NULL-parent alternative branch accepted. Prior branch/history retained. Download this native checkpoint and keep a full run copy.`;
+      this.status = `${c.name}: a new alternative history with no parent was accepted. The previous history is kept. Download this game’s checkpoint and keep a full copy of the game.`;
       this.saveLocal?.();
       await this.queryRecording();
     } catch (error) {
       if (generation === this.generation)
-        this.status = `Alternative refused: ${error instanceof Error ? error.message : String(error)}`;
+        this.status = `The alternative history was refused: ${error instanceof Error ? error.message : String(error)}`;
     } finally {
       this.busy = false;
       this.render();
@@ -402,7 +402,7 @@ export class CastSession {
     this.saveLocal = saveLocal;
     this.panel = document.createElement('section');
     this.panel.className = 'cast-controls';
-    this.panel.innerHTML = `<h3>People between chapters</h3><label><input type="checkbox" data-continuity> Continue people in this browser</label><p>All applicable allocated people enter together at a fresh start. A loaded chapter stays pinned. This device’s shelf is separate from recording and analysis.</p><label>Checkpoint person <select data-cast-person>${ALLOCATION.map((c) => `<option value="${c.castId}">${c.name}</option>`).join('')}</select></label><button data-cast-close>Close this person’s visiting chapter</button><p>Continue play until the person finishes current work. Five visitors have a thirty-day stay; Yusuf’s household care has no supported departure agreement. No duty or health restriction is cleared.</p><button data-cast-publish>Save eligible people to the browser shelf</button><button data-cast-alternative>Create a new alternative branch from this played person</button><p>An explicit alternative keeps the prior branch in history and makes a NEW NULL-parent branch from the selected person’s actual paused state. Imported receipts never become ownership. Current work, goals, care and clinical restrictions must still permit a checkpoint.</p><button data-cast-download>Download selected native checkpoint</button><p data-cast-status role="status"></p>`;
+    this.panel.innerHTML = `<h3>People between chapters</h3><label><input type="checkbox" data-continuity> Continue people in this browser</label><p>All matching people assigned to this game enter together when you start a new game. A loaded game keeps its saved versions of people. This device’s stored people are separate from recording and analysis.</p><label>Person to save <select data-cast-person>${ALLOCATION.map((c) => `<option value="${c.castId}">${c.name}</option>`).join('')}</select></label><button data-cast-close>End this person’s visit</button><p>Keep playing until the person finishes their current work. Five visitors stay for thirty days. The game has no agreement for handing over Yusuf’s household care so he can leave. Ending a visit does not remove duties or health restrictions.</p><button data-cast-publish>Save people who are ready in this browser</button><button data-cast-alternative>Start a new alternative history for this person</button><p>An alternative keeps the previous history and starts a new history with no parent from this person’s current paused state. Receipts loaded from a file do not let you update the original person. Current work, goals, care and medical restrictions must still allow a checkpoint to be saved.</p><button data-cast-download>Download this person’s game checkpoint</button><p data-cast-status role="status"></p>`;
     host.append(this.panel);
     const box = this.panel.querySelector<HTMLInputElement>('[data-continuity]');
     box?.addEventListener('change', () => {
@@ -410,8 +410,8 @@ export class CastSession {
       this.invalidate();
       this.shelf.setEnabled(enabled);
       this.status = enabled
-        ? 'Continuity enabled. Fresh starts preflight the whole applicable cast.'
-        : 'Continuity off. Local play/export remains available.';
+        ? 'People can now continue between games in this browser. New games check all matching people before starting.'
+        : 'People will not continue between games in this browser. You can still play here and download a copy.';
       this.render();
     });
     this.panel.querySelector('[data-cast-person]')?.addEventListener('change', () => {
@@ -424,13 +424,13 @@ export class CastSession {
       const id = localRole(selected);
       if (act(this.game, { verb: 'release-cast', person: id })) {
         this.status =
-          'Departure requested. Close the menu and continue until the actual work boundary; then save eligible people.';
+          'You have asked this person to leave. Close the menu and keep playing until they finish their work. Then save the people who are ready.';
         this.saveLocal?.();
       } else
         this.status =
           id === 'yusuf'
-            ? 'Yusuf cannot leave: no agreed handover of household and pregnancy care is implemented. Keep his chapter here.'
-            : 'Already requested, paused, absent or not eligible. Continue current work; export remains available.';
+            ? 'Yusuf cannot leave. The game has no agreed handover of household and pregnancy care. Keep his game here.'
+            : 'This person has already been asked, has paused, is absent or cannot leave. Continue the current work. You can still download a copy.';
       this.render();
     });
     this.panel
@@ -441,7 +441,7 @@ export class CastSession {
       if (!id) return;
       if (
         window.confirm(
-          `Create a NEW alternative branch for ${canonicalCast(id).name} from this played, naturally paused source? The prior branch/history stays. This creates a new NULL-parent root; it does not recover ownership from imported receipts.`,
+          `Create a new alternative history for ${canonicalCast(id).name} from their current state after they have finished work and paused? The previous history stays. The new history has no parent. Receipts loaded from a file will not let you update the original person.`,
         )
       )
         void this.alternative(id);
@@ -473,7 +473,7 @@ export class CastSession {
     if (!this.panel) return;
     const status = this.panel.querySelector('[data-cast-status]');
     if (status)
-      status.textContent = `${this.status} Recorded play links across games on this device when recording is on. Switch recording in the menu.`;
+      status.textContent = `${this.status} Recorded play links across games on this device when recording is on. Change recording in the menu.`;
     const box = this.panel.querySelector<HTMLInputElement>('[data-continuity]');
     if (box) box.checked = this.shelf.enabled;
   }

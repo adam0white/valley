@@ -77,7 +77,7 @@ describe('owner-facing presentation', () => {
     required(g.valley.notes[0]).text = stored;
     const withNote = fingerprint(g.valley);
     expect(englishText(stored)).toBe(
-      'Osman the reeve (local overseer): one sheaf in eight (one eighth of the harvest as pay); the flock on the summer highland pasture; the grape syrup cauldron.',
+      'Osman the local overseer: one sheaf in eight (one eighth of the harvest as pay); the flock on the summer highland pasture; the grape syrup cauldron.',
     );
     expect(required(g.valley.notes[0]).text).toBe(stored);
     expect(fingerprint(g.valley)).toBe(withNote);
@@ -205,7 +205,7 @@ describe('owner-facing presentation', () => {
     expect(text).toMatch(/granary.*empty/);
     expect(text).not.toMatch(/fatigue|daily allowance|action points/);
     const upper = required(s.households.find((h) => h.hamlet === 'upper'));
-    expect(limitsWords(s, upper)).toMatch(/seal/);
+    expect(limitsWords(s, upper)).toMatch(/authority/);
     upper.members = [];
     expect(limitsWords(s, upper)).toMatch(/empty/);
   });
@@ -300,7 +300,7 @@ it('describes late June renewal as complete and ends renewals with the term', ()
   s.flags.verbs.push('take');
   for (const h of s.households) h.paid = shareOwed(h);
   expect(callUnavailable(s, 'reap-agha')).toMatch(/no further.*term/i);
-  expect(callUnavailable(s, 'bring-share')).toMatch(/no further.*term/i);
+  expect(callUnavailable(s, 'bring-share')).toMatch(/not renew again.*term/i);
   expect(limitsWords(s, s.households[0])).not.toMatch(/year four/);
 });
 
@@ -330,32 +330,25 @@ it('keeps harvest results, rain deadline and grain date together through calls a
   s.agha.standing = 123;
   call(s, 'reap-agha', ['coban']);
   const before = fingerprint(s);
-  expect(nextWords(s)).toMatch(/about 185 kile are cut.*120 kile are still standing/i);
+  expect(nextWords(s)).toMatch(/about 185 grain measures are cut.*120 grain measures are still standing/i);
   expect(nextWords(s)).toMatch(/rain.*20 July/i);
   expect(nextWords(s)).toMatch(/5 August.*grain|grain.*5 August/i);
   expect(nowWords(s)).toMatch(/call.*underway|replies.*available/i);
   s.kahyaState.visit = { house: 'coban', arrive: 30, leave: 90, back: 120 };
-  expect(nextWords(s)).toMatch(/185 kile are cut.*120 kile are still standing/);
+  expect(nextWords(s)).toMatch(/185 grain measures are cut.*120 grain measures are still standing/);
   delete s.kahyaState.visit;
   expect(fingerprint(s)).toBe(before);
 });
 
-it('projects complete dialogue before shorter fragments without changing the saved run', () => {
+it('authors complete opening text without a display rewrite', () => {
   const g = newGame(7);
   const before = fingerprint(g.valley);
-  expect(englishText('A sheaf in eight. The world is turning.')).toBe(
-    'We will receive a sheaf in eight (one eighth of the harvest as pay). Things are changing.',
+  const opening = g.valley.notes[0]?.text ?? '';
+  expect(opening).toContain('He wants his barley cut before the rains.');
+  expect(opening).toContain('grain measures');
+  expect(englishText(opening)).toBe(opening);
+  expect(g.valley.households.find((h) => h.id === 'kara')?.looks).toBe(
+    'A young family lives here. The roof is partly repaired. A baby cries most evenings.',
   );
-  expect(englishText('We gave our girl away this month. The house is quieter. Too quiet.')).toBe(
-    'Our daughter married this month. The house is quieter. It is too quiet.',
-  );
-  expect(englishText('Come back in the spring. Not as kahya.')).toBe(
-    'Come back in the spring, but do not come as steward.',
-  );
-  expect(englishText('Put the mill off today: Yusuf and Zehra.')).toBe(
-    'Yusuf and Zehra postponed the mill today.',
-  );
-  expect(englishText('Brought their share today: Yusuf.')).toBe('Yusuf brought their share today.');
-  expect(englishText(g.valley.notes[0]?.text ?? '')).toContain('He wants his barley cut before the rains.');
   expect(fingerprint(g.valley)).toBe(before);
 });

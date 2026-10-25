@@ -271,7 +271,7 @@ async function gunzip(b: Blob): Promise<string> {
 /** Read the ledger back: the bound volume, then the days written after it, quantum by quantum. */
 async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> {
   if (log.version !== GAME_VERSION)
-    throw new Error('This ledger uses an older Valley edition. Start fresh from the title page.');
+    throw new Error('This saved game uses an older Valley version. Start a new game from the title page.');
   if (log.cast) newGame(log.seed, log.cast); // Validate the pinned semantic header even when a bound volume exists.
   const bound = await readVolume();
   let game: Game;
@@ -359,13 +359,13 @@ function topbar(words: string): string {
 
 function infoWords(): string {
   if (!g || app.querySelector('.title-page'))
-    return `<h2>The valley</h2><p>Call households to the harvest. Read their replies. Visit to learn what they need.</p><p>Grain you give comes out of the landowner’s due. Rain can damage uncut barley.</p>`;
+    return `<h2>The valley</h2><p>Call the households to help with the harvest. Read their replies. Visit them to learn what they need.</p><p>Grain you give leaves less to pay the landowner. Rain can damage uncut barley.</p>`;
   if (g.valley.flags.ended)
-    return `<h2>The tally</h2><p>The elders speak from what they remember. The grain tally is the game’s own convention: grain delivered, gifts and arrears are counted separately.</p>`;
+    return `<h2>The tally</h2><p>The elders speak from what they remember. The game counts grain delivered, gifts and unpaid grain separately.</p>`;
   if (selected)
-    return `<h2>Knowing a house</h2><p>Your guess comes from what you last saw. The reeve’s guess is his own read of a person; neither is certain.</p><p>A lower-hamlet visit takes a couple of hours. The upper hamlet takes most of a morning. You can go again when you return.</p>`;
+    return `<h2>What you know about a household</h2><p>Your guess comes from what you last saw. The local overseer makes his own guess about a person. Neither guess is certain.</p><p>A visit to the lower hamlet takes a couple of hours. A visit to the upper hamlet takes most of a morning. You can visit again when you return.</p>`;
   const s = g.valley;
-  return `<h2>Your charge</h2><p>${esc(nextWords(s))}</p><p>Calls go through the crier; people weigh them against their own fields and can refuse. Hold a refusal to press it: they come, and they remember.</p><p>A visit takes walking time. Ease a share to leave more in a house’s jars; the neighbours will notice.</p><p>The grain bar: solid is in the granary, hatched is cut and waiting for threshing, outline is still standing, and the tick is the due.</p><p>The clock slows for replies and knocks. The menu and this i stop it. ${esc(limitsWords(s))}</p>${seasonOf(doyOf(dayOfMinute(s.minute))) === 'winter' ? '<p>Mill work asks for labour without a grain wage. The letter for grain opens when the forecast shows a shortfall.</p>' : ''}<p>You are the steward. You manage the landowner’s grain, which is counted in grain measures.</p>`;
+  return `<h2>Your work</h2><p>${esc(nextWords(s))}</p><p>The village announcer carries your requests. People consider their own field work and can refuse. Hold the button beside a refusal to insist. They will come, and they will remember.</p><p>A visit takes time to walk there and back. Reduce a household’s grain payment to leave more in its jars. The neighbours will notice.</p><p>The grain bar shows the harvest. The filled part is grain in the granary. The striped part is cut grain waiting to be separated from its stalks. The outline shows uncut grain. The mark shows what the landowner is owed.</p><p>Time slows for replies and knocks at your door. Opening the menu or this information panel stops time. ${esc(limitsWords(s))}</p>${seasonOf(doyOf(dayOfMinute(s.minute))) === 'winter' ? '<p>People receive no grain pay for mill work. You can write for grain when the estimate shows that you will have too little.</p>' : ''}<p>You are the steward. You manage the landowner’s grain, which is counted in grain measures.</p>`;
 }
 
 function title() {
@@ -374,7 +374,7 @@ function title() {
   const log = readLog();
   const where =
     log && log.version !== GAME_VERSION
-      ? 'This ledger uses an older Valley edition. Start fresh to play the new cast. Your old ledger stays here until you begin a new term.'
+      ? 'This saved game uses an older Valley version. Start a new game to play with the new people. Your old saved game stays here until you start.'
       : log
         ? `Your ledger is open at ${dateWords(dayOfMinute(log.minute))} of year ${yearWord(yearOf(dayOfMinute(log.minute)))}.`
         : '';
@@ -387,7 +387,7 @@ function title() {
     <div class="vignette" aria-hidden="true"><svg viewBox="0 0 360 140"><path d="M0 95Q80 15 160 90T360 70M0 130Q90 50 180 120T360 95M250 0Q200 70 260 140" fill="none" stroke="currentColor"/><g fill="none" stroke="currentColor" stroke-width="2"><path d="M70 95v-18l12-12 12 12v18zM130 105V87l12-12 12 12v18zM190 90V72l12-12 12 12v18zM280 100V82l12-12 12 12v18z"/></g></svg></div>
     <footer class="title-actions">${where ? `<p class="hand">${esc(where)}</p>` : ''}
     ${log ? `${log.version === GAME_VERSION ? '<button class="primary" data-go="open">Resume</button>' : ''}<button data-go="new" class="hold">New game<span class="fill"></span></button><p class="soft">This replaces your saved game.</p>` : '<button class="primary" data-go="new">New game</button>'}${mark()}</footer>
-    ${LAB_TOOLS ? `<dialog class="ways-panel" aria-label="Other ways in"><header><h2>Other ways in</h2><button data-ways-close aria-label="Close other ways in">×</button></header><label for="valley-name">A named valley</label><input id="valley-name" placeholder="Kuyulu" maxlength="80"><p>The same name gives the same valley.</p><button data-seed${log ? ' class="hold"' : ''}>Begin this valley${log ? '<span class="fill"></span>' : ''}</button>${log ? '<p class="soft">This replaces your saved game.</p>' : ''}<label for="load-run">Load a playtest run</label><input id="load-run" type="file" accept=".json,application/json"><p id="load-result" role="status"></p></dialog>` : ''}
+    ${LAB_TOOLS ? `<dialog class="ways-panel" aria-label="Other ways to start"><header><h2>Other ways to start</h2><button data-ways-close aria-label="Close other ways to start">×</button></header><label for="valley-name">A named valley</label><input id="valley-name" placeholder="Kuyulu" maxlength="80"><p>The same name gives the same valley.</p><button data-seed${log ? ' class="hold"' : ''}>Begin this valley${log ? '<span class="fill"></span>' : ''}</button>${log ? '<p class="soft">This replaces your saved game.</p>' : ''}<label for="load-run">Load a playtest run</label><input id="load-run" type="file" accept=".json,application/json"><p id="load-result" role="status"></p></dialog>` : ''}
   </div>`;
   app.querySelector('[data-go="open"]')?.addEventListener('click', () => {
     if (log && log.version === GAME_VERSION) openLedger(log);
@@ -439,12 +439,12 @@ function title() {
       const saved = JSON.parse(text) as SavedGame | CompactRun;
       const restored = load(saved);
       if (fingerprint(restored.valley) !== saved.fingerprint) throw new Error('differs');
-      result.textContent = 'matches';
+      result.textContent = 'The saved game matches and can be loaded.';
       g = restored;
       await castSession.loaded(restored, undefined, true, saved);
       if (transition !== runTransition) return;
       volume = 0;
-      importStatus = 'matches';
+      importStatus = 'The saved game matches and has been loaded.';
       ways?.close();
       writeLog();
       await bindVolume();
@@ -460,7 +460,7 @@ function title() {
         };
         await castSession.loaded(g, previousMeta);
       }
-      result.textContent = 'differs — this run could not be loaded.';
+      result.textContent = 'This saved game does not match and could not be loaded.';
     }
   });
 }
@@ -469,7 +469,7 @@ function openLedger(log: Log) {
   const transition = ++runTransition;
   cancelAnimationFrame(raf);
   castSession.invalidate();
-  app.innerHTML = `<div class="page">${topbar('The Valley')}<h2>Reading the ledger back…</h2><p class="hand" id="prog"></p></div>`;
+  app.innerHTML = `<div class="page">${topbar('The Valley')}<h2>Loading your saved game…</h2><p class="hand" id="prog"></p></div>`;
   const prog = app.querySelector('#prog') as HTMLElement;
   reopen(log, (m) => {
     prog.textContent = `${dateWords(dayOfMinute(m))} of year ${yearWord(yearOf(dayOfMinute(m)))}`;
@@ -482,7 +482,7 @@ function openLedger(log: Log) {
       enter();
     })
     .catch(() => {
-      prog.textContent = 'The ledger would not open. Begin a new term from the title page.';
+      prog.textContent = 'Your saved game could not be opened. Start a new game from the title page.';
     });
 }
 
@@ -517,7 +517,7 @@ async function begin(seed: number, localOnly = false) {
     app.querySelector('.title-actions')?.prepend(status);
     if (LAB_TOOLS) {
       const local = document.createElement('button');
-      local.textContent = 'Play fresh locally without carrying history';
+      local.textContent = 'Start here without past history';
       local.addEventListener('click', () => void begin(seed, true));
       status.after(local);
     }
@@ -928,7 +928,7 @@ function drawMap() {
   ctx.strokeStyle = c.ink ?? '#222';
   ctx.lineWidth = 1.5;
   house(ctx, X(600), Y(545), 1.5);
-  if (window.innerWidth >= 900) label(ctx, 'konak', X(600) - 34, Y(545) + 2, c['ink-soft'] ?? '#666', 11);
+  if (window.innerWidth >= 900) label(ctx, 'residence', X(600) - 34, Y(545) + 2, c['ink-soft'] ?? '#666', 11);
   ctx.strokeRect(X(630) - 5, Y(568) - 5, 10, 10);
   if (s.agha.millOpen) {
     const done = Math.min(1, s.agha.mill / 600);
@@ -937,7 +937,7 @@ function drawMap() {
     ctx.stroke();
     label(
       ctx,
-      done >= 1 ? 'mill' : 'the mill, rising',
+      done >= 1 ? 'mill' : 'mill under construction',
       X(612) + 10,
       Y(420) - 8,
       c['ink-soft'] ?? '#666',
@@ -1313,10 +1313,12 @@ function knockCard(s: ValleyState, k: Knock): string {
             () => order({ verb: 'visit', house: k.house, why: k.what }),
             {
               disabled: busy(s),
-              hint: busy(s) ? visitHint(s) : 'walking and sitting take time away from the residence',
+              hint: busy(s)
+                ? visitHint(s)
+                : 'Walking there and spending time with them will keep you away from the residence.',
             },
           ),
-          btn('Send your regrets', () => order({ verb: 'turn-away', knock: k.id })),
+          btn('Decline the invitation', () => order({ verb: 'turn-away', knock: k.id })),
         ];
   return `<div class="knock ink-in"><div>${esc(ask)}<span class="w hand" style="display:block">“${esc(k.words)}”</span></div><div class="row">${row.join('')}</div></div>`;
 }
@@ -1358,11 +1360,11 @@ function pendingReplies(s: ValleyState, house?: Household): string {
         continue;
       pressShown.add(id);
       rows.push(
-        `<div class="reply-row"><span><b>${esc(hh?.short ?? '')} · ${esc(personOf(s, id)?.name ?? 'Someone')}</b><span class="reply-words">“${esc(reply.says)}”</span></span>${btn('Hold to press', () => order({ verb: 'insist', ask: ask.id, pid: id }), { hold: true })}</div>`,
+        `<div class="reply-row"><span><b>${esc(hh?.short ?? '')} · ${esc(personOf(s, id)?.name ?? 'Someone')}</b><span class="reply-words">“${esc(reply.says)}”</span></span>${btn('Hold to insist', () => order({ verb: 'insist', ask: ask.id, pid: id }), { hold: true })}</div>`,
       );
     }
   }
-  return `<section class="pending-replies"><h2 class="section-label">Replies to the call</h2><p class="reply-count">${counts.came} came, ${counts.deferred} put off, ${counts.refused} refused${counts.modified ? `, ${counts.modified} part` : ''}</p>${rows.join('')}</section>`;
+  return `<section class="pending-replies"><h2 class="section-label">Replies to the call</h2><p class="reply-count">${counts.came} came. ${counts.deferred} delayed. ${counts.refused} refused.${counts.modified ? ` ${counts.modified} agreed to do part of the work.` : ''}</p>${rows.join('')}</section>`;
 }
 
 function notebook(s: ValleyState): string {
@@ -1412,7 +1414,7 @@ function knownFood(s: ValleyState, hh: Household): string {
   const guess = s.kahyaState.guess?.[hh.id];
   if (!guess) return 'Food: you haven’t seen their jars yet.';
   const ago = dayOfMinute(s.minute) - dayOfMinute(guess.at);
-  return `${breadWords(guess.bread)}${ago > 2 ? ` Seen ${ago} days ago.` : ''}`;
+  return `${breadWords(guess.bread)}${ago > 2 ? ` You saw this ${ago} days ago.` : ''}`;
 }
 
 /** One live refusal beside its consequence and hold control; other replies remain in the notebook. */
@@ -1450,15 +1452,15 @@ function selectedRefusal(s: ValleyState, hh: Household): string {
   return `<div class="decision-reply"><p class="reply-date soft">${esc(fullDateEnglish(dayOfMinute(reply.at)))}</p>
     <p>${esc(personOf(s, id)?.name ?? 'They')}: “${esc(reply.says)}”</p>
     ${btn(
-      `Hold to press ${personOf(s, id)?.name ?? 'them'}`,
+      `Hold to insist that ${personOf(s, id)?.name ?? 'they'} come`,
       () => order({ verb: 'insist', ask: ask.id, pid: id }),
-      { hold: true, hint: 'They will come, and remember being pushed.' },
+      { hold: true, hint: 'They will come, and they will remember that you insisted.' },
     )}</div>`;
 }
 
 const BREAD: [number, string][] = [
   [200, 'Their jars are full.'],
-  [80, 'They have enough to the spring, you think.'],
+  [80, 'You think they have enough food until spring.'],
   [25, 'Their jars looked low.'],
   [0, 'They have almost no food left.'],
 ];
@@ -1523,7 +1525,7 @@ function houseCard(s: ValleyState, hh: Household): string {
           ? hunchLine(hunchOf(s, osman, head, job), head.name)
               .replace(/^You can’t tell yet/, 'He can’t say')
               .replace(/^You think/, 'He thinks')
-              .replace(/^You are fairly sure/, 'He is sure')
+              .replace(/^You are fairly sure/, 'He is fairly sure')
           : '';
       hunchCache = { key: ck, lines: [mine, his] };
     }
@@ -1546,7 +1548,7 @@ function houseCard(s: ValleyState, hh: Household): string {
           ? `${today - d} days ago`
           : dateWords(d);
   const book = acts.length
-    ? `<p class="soft" >Your book: ${esc(
+    ? `<p class="soft" >Your record: ${esc(
         acts
           .slice(-2)
           .reverse()
@@ -1556,7 +1558,7 @@ function houseCard(s: ValleyState, hh: Household): string {
     : '';
   const share =
     s.flags.verbs.includes('take') && underSeal(s, hh) && hh.members.length
-      ? `<p class="soft" >The landowner’s book: their share is ${hh.eased ? 'eased' : 'unchanged'}; ${hh.paid >= shareOwed(hh) - 0.5 ? 'paid' : hh.paid > 0 ? 'part paid' : 'not yet paid'}.</p>`
+      ? `<p class="soft" >The landowner’s record: their grain payment is ${hh.eased ? 'reduced' : 'unchanged'}. ${hh.paid >= shareOwed(hh) - 0.5 ? 'They have paid it' : hh.paid > 0 ? 'They have paid part of it' : 'They have not paid it yet'}.</p>`
       : '';
   const response = recent.find((n) => n.words && (n.kind === 'voice' || n.ask));
   const refusal = selectedRefusal(s, hh);
@@ -1569,29 +1571,29 @@ function houseCard(s: ValleyState, hh: Household): string {
       .filter(Boolean)
       .map((l) => `<div class="hunch">${esc(l)}<span class="by">your guess</span></div>`)
       .join('')}
-    ${reeve ? `<div class="hunch reeve">${esc(reeve)}<span class="by">The reeve’s guess</span></div>` : ''}
-    <p class="limits">${esc(limitsWords(s, hh))}</p><div class="looks">${esc(hh.members.length ? hh.looks : 'The door is shut and the hearth is cold.')}</div><div class="people">${hh.members.length ? esc(names) : 'Nobody lives here now.'}</div>${share}${book}</div>
+    ${reeve ? `<div class="hunch reeve">${esc(reeve)}<span class="by">The local overseer’s guess</span></div>` : ''}
+    <p class="limits">${esc(limitsWords(s, hh))}</p><div class="looks">${esc(hh.members.length ? hh.looks : 'The door is shut. Nobody has lit a fire inside.')}</div><div class="people">${hh.members.length ? esc(names) : 'Nobody lives here now.'}</div>${share}${book}</div>
     ${pending}
     ${recent.length ? `<details class="house-history"><summary>Earlier replies from this house</summary>${recent.map((n) => noteLine(n)).join('')}</details>` : ''}
   </div>`;
 }
 
 const JOB_LABEL: Record<Job, string> = {
-  'reap-agha': 'to the landowner’s barley',
-  'bring-share': 'to bring the share',
-  'build-mill': 'to the mill',
+  'reap-agha': 'to cut the landowner’s barley',
+  'bring-share': 'to bring their grain payment',
+  'build-mill': 'to work on the mill',
 };
 
 function giftHint(s: ValleyState): string {
   return s.agha.granary < 2
-    ? 'The granary is too low. Giving returns when threshing, shares, or a loan bring grain in.'
-    : 'This sends a small sack from the granary. It leaves less grain for the due.';
+    ? 'The granary has too little grain. You can give again when harvest work, household payments or a loan bring in grain.'
+    : 'This sends a small sack from the granary. It leaves less grain to pay the landowner.';
 }
 
 function visitHint(s: ValleyState): string {
   return busy(s) && s.kahyaState.visit
     ? `You can visit again when you return to the residence on ${fullDateEnglish(dayOfMinute(s.kahyaState.visit.back))}.`
-    : 'Visits open when a household puts off your call; send word through the crier first.';
+    : 'You can visit after a household delays answering your call. Send word through the village announcer first.';
 }
 
 function houseThumbs(s: ValleyState, hh: Household): string {
@@ -1611,14 +1613,18 @@ function houseThumbs(s: ValleyState, hh: Household): string {
   };
   if (job)
     add(
-      job === 'reap-agha' ? 'Call to barley' : job === 'bring-share' ? 'Call for share' : 'Call to mill',
+      job === 'reap-agha'
+        ? 'Call to cut barley'
+        : job === 'bring-share'
+          ? 'Call for grain payment'
+          : 'Call to build mill',
       () => order({ verb: 'call', job, houses: [hh.id] }),
       callUnavailable(s, job, hh),
-      'The crier carries your request; they can refuse.',
+      'The village announcer carries your request. People can refuse.',
     );
   if (job === 'reap-agha' && yearOf(dayOfMinute(s.minute)) > 1)
     add(
-      'Call for pay',
+      'Call to cut barley for pay',
       () => order({ verb: 'call', job, houses: [hh.id], wage: true }),
       callUnavailable(s, job, hh),
       'A small share of the cut grain goes to their jars.',
@@ -1639,7 +1645,7 @@ function houseThumbs(s: ValleyState, hh: Household): string {
       empty
         ? 'Nobody lives here.'
         : !s.flags.verbs.includes('give')
-          ? 'Giving opens when a household is short of food or asks at your door.'
+          ? 'You can give grain when a household is short of food or asks at your door.'
           : s.agha.granary < 2
             ? giftHint(s)
             : null,
@@ -1654,17 +1660,17 @@ function houseThumbs(s: ValleyState, hh: Household): string {
         : null;
   if (s.flags.verbs.includes('ease'))
     add(
-      'Ease share',
+      'Reduce grain payment',
       () => order({ verb: 'ease', house: hh.id }),
-      blocked ?? (hh.eased ? `Already eased. ${cropReturnWords(s)}` : null),
-      'Leave half of this year’s share in their jars; the neighbours will notice.',
+      blocked ?? (hh.eased ? `You have already reduced their payment. ${cropReturnWords(s)}` : null),
+      'Leave half of this year’s grain payment in their jars. The neighbours will notice.',
     );
   if (s.flags.verbs.includes('seize'))
     add(
-      'Reeve’s men',
+      'Send the local overseer’s men',
       () => order({ verb: 'seize', house: hh.id }),
       blocked,
-      'They take the share from the jars; the household will remember that you used force.',
+      'They take the grain payment from the jars. The household will remember that you used force.',
       true,
     );
   return `<p class="action-caption" role="status">${esc(actionCaption || limitsWords(s, hh))}</p><div class="verb-grid">${out.join('')}</div>`;
@@ -1699,7 +1705,7 @@ function valleyThumbs(s: ValleyState): string {
   const who = s.flags.upper ? 'the valley' : 'the hamlet';
   const label =
     job === 'bring-share'
-      ? `Call ${who} to bring the shares`
+      ? `Call ${who} to bring grain payments`
       : `Call ${who} ${JOB_LABEL[job ?? 'reap-agha']}`;
   const houses = s.households.filter((h) => underSeal(s, h) && h.members.length).map((h) => h.id);
   const primary =
@@ -1709,7 +1715,7 @@ function valleyThumbs(s: ValleyState): string {
           '<button ',
           '<button data-until aria-label="Skip to the next event" ',
         );
-  return `<p class="action-caption">${esc(ask ? `The call is open until ${fullDateEnglish(dayOfMinute(ask.until))}.` : job && !reason ? 'The crier carries your request; they can refuse.' : limitsWords(s))}</p>${primary}<div class="row">${btn('Other orders ▸', () => openReading('orders'))}${btn('The ledger ▸', () => openReading('ledger'))}</div>`;
+  return `<p class="action-caption">${esc(ask ? `The call is open until ${fullDateEnglish(dayOfMinute(ask.until))}.` : job && !reason ? 'The village announcer carries your request. People can refuse.' : limitsWords(s))}</p>${primary}<div class="row">${btn('Other orders ▸', () => openReading('orders'))}${btn('The ledger ▸', () => openReading('ledger'))}</div>`;
 }
 
 function otherOrders(s: ValleyState): string {
@@ -1724,11 +1730,11 @@ function otherOrders(s: ValleyState): string {
   if (job)
     out.push(
       btn(
-        job === 'bring-share' ? 'Call for the shares' : `Call ${JOB_LABEL[job]}`,
+        job === 'bring-share' ? 'Call for grain payments' : `Call ${JOB_LABEL[job]}`,
         () => send({ verb: 'call', job, houses }),
         {
           disabled: !!callUnavailable(s, job),
-          hint: callUnavailable(s, job) ?? 'The crier carries your request.',
+          hint: callUnavailable(s, job) ?? 'The village announcer carries your request.',
         },
       ),
     );
@@ -1747,8 +1753,8 @@ function otherOrders(s: ValleyState): string {
       hint:
         loanReturnWords(s) ??
         (!s.flags.verbs.includes('borrow')
-          ? 'The letter opens when the forecast shows a shortfall or hungry houses find the granary low.'
-          : 'A cart arrives in twelve days; repay a quarter more at a later rider.'),
+          ? 'You can write when the estimate shows too little grain or hungry households find the granary low.'
+          : 'A cart arrives in twelve days. Repay a quarter more when a later rider comes.'),
     }),
   );
   return `<div class="other-orders">${out.join('')}</div>`;
@@ -1772,7 +1778,7 @@ function ledger(s: ValleyState): string {
     .filter((h) => underSeal(s, h))
     .map(
       (h) =>
-        `<tr><td>${esc(h.name)}</td><td class="n">${Math.round(h.paid)} of ${shareOwed(h)}${h.eased ? ' (eased)' : ''}</td></tr>`,
+        `<tr><td>${esc(h.name)}</td><td class="n">${Math.round(h.paid)} of ${shareOwed(h)}${h.eased ? ' (reduced)' : ''}</td></tr>`,
     )
     .join('');
   const loan =
@@ -1781,18 +1787,18 @@ function ledger(s: ValleyState): string {
       : '';
   return `<div class="ledger ink-in">
     <p>${esc(nextWords(s))}</p>
-    <p class="soft" >This grain is set aside for the due. Gifts leave less for the rider.</p>
+    <p class="soft" >This grain is set aside to pay the landowner. Gifts leave less for the rider to collect.</p>
     <table>
       <tr><td>In the granary</td><td class="n">${Math.round(s.agha.granary)} grain measures</td></tr>
-      ${s.agha.reaped >= 1 ? `<tr><td>Cut, in his sheaves, not yet threshed</td><td class="n">about ${Math.round(s.agha.reaped / 5) * 5 || 1}</td></tr>` : ''}
-      ${s.agha.standing >= 1 ? `<tr><td>Still standing in his field</td><td class="n">about ${Math.round(s.agha.standing / 10) * 10 || 5}</td></tr>` : ''}
-      <tr><td>The due</td><td class="n">${s.agha.due} grain measures</td></tr>
+      ${s.agha.reaped >= 1 ? `<tr><td>Cut grain awaiting separation from stalks</td><td class="n">about ${Math.round(s.agha.reaped / 5) * 5 || 1}</td></tr>` : ''}
+      ${s.agha.standing >= 1 ? `<tr><td>Uncut grain in the landowner’s field</td><td class="n">about ${Math.round(s.agha.standing / 10) * 10 || 5}</td></tr>` : ''}
+      <tr><td>Owed to the landowner</td><td class="n">${s.agha.due} grain measures</td></tr>
       <tr><td>The rider comes</td><td class="n">${esc(riderWords(s))}</td></tr>
-      ${s.agha.arrears ? `<tr><td>Written against this year</td><td class="n">${s.agha.arrears}</td></tr>` : ''}
+      ${s.agha.arrears ? `<tr><td>Unpaid grain added to this year</td><td class="n">${s.agha.arrears}</td></tr>` : ''}
       ${loan}
-      <tr><td>Years short</td><td class="n">${s.agha.missed}</td></tr>
+      <tr><td>Years with too little grain paid</td><td class="n">${s.agha.missed}</td></tr>
     </table>
-    ${s.flags.verbs.includes('take') ? `<h3 style="margin:8px 0 0">${sharesFresh(s) ? 'Shares this year' : 'Shares brought to the last rider'}</h3><table>${rows}</table>` : ''}
+    ${s.flags.verbs.includes('take') ? `<h3 style="margin:8px 0 0">${sharesFresh(s) ? 'Grain payments this year' : 'Grain payments brought to the last rider'}</h3><table>${rows}</table>` : ''}
     <p class="soft" >The term ends at the elders’ gathering, ${esc(dateWords(END_DAY))} of year three.</p>
   </div>`;
 }
@@ -1810,7 +1816,7 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
     status.className = b.closest('.decision-reply') ? 'sr' : 'hold-feedback';
     status.setAttribute('role', 'status');
     status.hidden = false;
-    status.textContent = 'Keep holding to press this action. Release after the ink fills the control.';
+    status.textContent = 'Keep holding the button to carry out this action. Release after the button fills.';
     b.after(status);
   };
   b.addEventListener('click', feedback);

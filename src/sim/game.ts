@@ -3,7 +3,7 @@
  * the term (who brings what, when), the ending at the elders' gathering, saves and the playtest export.
  */
 import { FRAMEWORK_VERSION, type Person, recall, restore, snapshot } from '@adam0white/human-framework';
-import { DAY, dateEnglish, dateWords, dayOfMinute, doyOf, HOUR, yearOf } from './calendar.ts';
+import { DAY, dateEnglish, dayOfMinute, doyOf, HOUR, yearOf } from './calendar.ts';
 import type { CastStart } from './passport.ts';
 import { KAHYA } from './people.ts';
 import { mixSeed, strHash } from './rng.ts';
@@ -81,7 +81,11 @@ function apply(g: Game, i: Input): boolean {
       const a = call(s, i.job, i.houses, i.wage ? { wage: true } : {});
       if (!a) return false;
       const what =
-        i.job === 'reap-agha' ? 'the agha’s barley' : i.job === 'build-mill' ? 'the mill' : 'the share';
+        i.job === 'reap-agha'
+          ? 'cut the landowner’s barley'
+          : i.job === 'build-mill'
+            ? 'carry stone for the mill'
+            : 'bring the share';
       const who =
         i.houses.length > 2 ? 'the hamlet' : i.houses.map((h) => houseOf(s, h)?.name ?? h).join(' and ');
       note(s, {
@@ -89,8 +93,8 @@ function apply(g: Game, i: Input): boolean {
         kind: 'story',
         text:
           i.job === 'bring-share'
-            ? `You had the crier call ${who} to bring the agha’s share to the granary.`
-            : `You had the crier call ${who} to ${what}${i.wage ? ', one sheaf in eight for their trouble' : ''}.`,
+            ? `You asked the village announcer to call ${who} to bring the landowner’s share to the granary.`
+            : `You asked the village announcer to call ${who} to ${what}${i.wage ? ', with one eighth of the harvest as pay' : ''}.`,
         weight: 0.8,
       });
       return true;
@@ -101,7 +105,7 @@ function apply(g: Game, i: Input): boolean {
         note(s, {
           at: s.minute,
           kind: 'story',
-          text: `You sent word again to ${personOf(s, i.pid)?.name ?? 'them'}: no more putting it off.`,
+          text: `You sent word again to ${personOf(s, i.pid)?.name ?? 'them'}: they must not postpone the work again.`,
           who: i.pid,
           weight: 1,
         });
@@ -186,13 +190,13 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'story',
-      text: `The agha’s letter came up the valley with you: his barley in before the rains, his due of ${s.agha.due} kile by ${dateWords(s.agha.dueDay)}. The last kahya left in the night, in spring. His house above the mill stands empty.`,
+      text: `You brought the landowner’s letter up the valley. He wants his barley cut before the rains. His payment of ${s.agha.due} grain measures must be ready by ${dateEnglish(s.agha.dueDay)}. The last steward left during the night in spring. His house above the mill stands empty.`,
       weight: 3,
     });
     note(s, {
       at: s.minute + 1,
       kind: 'weather',
-      text: 'Cloud is building over the ridge. The old men say rain in two days.',
+      text: 'Clouds are building over the ridge. The old men say it will rain in two days.',
       weight: 2,
     });
   }
@@ -206,8 +210,8 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'story',
-      text: 'The reeve, at your elbow: “Send word again and they’ll come, kahya. Or walk down and ask them yourself. Some houses only open the door to a face.”',
-      words: 'Some houses only open the door to a face.',
+      text: 'The local overseer stands beside you and says, “Send word again and they’ll come, steward. Or walk down and ask them yourself. Some households will only listen if you visit them.”',
+      words: 'Some households will only listen if you visit them.',
       who: 'osman',
       weight: 2,
     });
@@ -216,7 +220,7 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'story',
-      text: 'The reeve says he knows every house in the lower lanes. His guesses are written beside yours now, in his hand.',
+      text: 'The local overseer says he knows every house in the lower lanes. His guesses are written beside yours now, in his hand.',
       who: 'osman',
       weight: 1.5,
     });
@@ -229,7 +233,7 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'letter',
-      text: `The threshing is well along. The ledger says what each house owes the agha. His rider comes on ${dateWords(s.agha.dueDay)} for ${s.agha.due} kile; the granary holds ${Math.round(s.agha.granary)}. Call the shares in, ease the ones who cannot, or send the reeve’s men.`,
+      text: `People have separated much of the grain from the cut barley. The account book says what each house owes the landowner. His rider comes on ${dateEnglish(s.agha.dueDay)} for ${s.agha.due} grain measures. The granary holds ${Math.round(s.agha.granary)}. Ask households to bring their shares. You can reduce the shares of those who cannot pay, or send the local overseer’s men to collect them.`,
       weight: 3,
     });
   }
@@ -239,13 +243,13 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'story',
-      text: 'The reeve, low: “The granary is the agha’s, kahya, but the key is on your belt. What you give, the rider will count as missing.”',
-      words: 'The key is on your belt.',
+      text: 'The local overseer says quietly, “The granary belongs to the landowner, steward, but you control who receives its grain. The rider will count any grain you give away as missing.”',
+      words: 'You control who receives grain from the granary.',
       who: 'osman',
       weight: 2,
     });
   }
-  // Hunger in the lanes when the granary is low: the reeve says the agha can be written to.
+  // Hunger in the lanes when the granary is low: the reeve says the landowner can be written to.
   const lean = s.households.filter(
     (h) => underSeal(s, h) && h.members.length && daysOfBread(s, h) < 25,
   ).length;
@@ -254,8 +258,8 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'story',
-      text: 'The reeve came by at dusk. Two houses are scraping the jars, he said, and the granary is low. The agha lends, if you write to him, and his rider takes it back with a quarter more.',
-      words: 'He lends. He never forgets that he lent.',
+      text: 'The local overseer came by at dusk. Two households have almost no food left, he said, and the granary is low. The landowner will lend grain if you write to him. His rider will collect the loan with a quarter more.',
+      words: 'He will lend grain. He never forgets a loan.',
       who: 'osman',
       weight: 2.5,
     });
@@ -267,7 +271,7 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'letter',
-      text: 'A millwright from the city came up through the snow with the agha’s letter: a mill on the stream, if the valley carries the stone. Six hundred hours of backs, and the fields are idle till spring; stone slides on a sledge over frozen ground. When the mill turns, the agha will take his share in flour and ask forty kile less of the valley.',
+      text: 'A mill builder from the city came through the snow with the landowner’s letter. He will build a mill on the stream if the valley carries the stone. The work needs six hundred hours of labour. The fields need no work until spring. People can slide the stone on sledges over frozen ground. When the mill works, the landowner will take his share in flour. He will ask the valley for forty fewer grain measures.',
       weight: 3,
     });
   }
@@ -277,15 +281,21 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'letter',
-      text: `The agha has bought the upper hamlet’s debts. Its six houses are under your seal from this harvest. You have never sat in any of them. The due rises to ${s.agha.due} kile.`,
+      text: `The landowner has bought the upper hamlet’s debts. You have authority over its six houses from this harvest. You have never visited any of them. The payment he requires rises to ${s.agha.due} grain measures.`,
       weight: 3,
     });
   }
   // The mill rising, in what can be seen at the stream.
   const MILL_SIGHTS: [number, string][] = [
-    [0.25, 'The race is dug at the stream. the reeve paced it out twice and pronounced it straight.'],
+    [
+      0.25,
+      'The channel for the mill water has been dug beside the stream. The local overseer walked its length twice and said it was straight.',
+    ],
     [0.5, 'The mill walls are up to a man’s chest. Children dare each other to walk along them.'],
-    [0.75, 'The millstones came up on the sledge, two days for the pair. The whole valley went to look.'],
+    [
+      0.75,
+      'Both millstones arrived on the sledge. The journey took two days. Everyone in the valley went to look.',
+    ],
   ];
   if (s.agha.millOpen)
     for (const [f, text] of MILL_SIGHTS)
@@ -296,7 +306,7 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'work',
-      text: 'The mill turned for the first time. The children ran beside the race. The agha’s due falls by forty kile.',
+      text: 'The mill worked for the first time. The children ran beside its water channel. The landowner now requires forty fewer grain measures.',
       weight: 3,
     });
   }
@@ -306,7 +316,7 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'letter',
-      text: 'The rider came back with a second letter, sealed. The agha thanks you for your service. Another man will come up the valley before the snow.',
+      text: 'The rider came back with a second sealed letter. The landowner thanks you for your service. Another man will replace you before the snow.',
       weight: 3,
     });
   }
@@ -315,7 +325,7 @@ export function beats(g: Game) {
     note(s, {
       at: s.minute,
       kind: 'story',
-      text: 'The elders gathered at the konak, as they do at the end of a kahya’s term.',
+      text: 'The elders gathered at the residence, as they do at the end of a steward’s term.',
       weight: 3,
     });
   }
@@ -338,61 +348,61 @@ export function gathering(g: Game): { elders: ElderWord[]; letter: string } {
 
 const WARM = [
   'You asked, and mostly you listened. That is more than the last one did.',
-  'Come back in the spring. Not as kahya.',
-  'You were the agha’s man, and somehow ours too. I don’t know how you managed it.',
+  'Come back in the spring, but do not come as steward.',
+  'You were the landowner’s man, and somehow ours too. I don’t know how you managed it.',
   'When the next one comes, I will tell him how it was done.',
   'There was bread in this house every winter you were here. I noticed.',
-  'You never shouted. People remember a kahya who never shouted.',
-  'If you pass this way again, there is a place at our cloth.',
+  'You never shouted. People remember a steward who never shouted.',
+  'If you pass this way again, you are welcome to eat with us.',
 ];
-/** Warm lines that only fit a kahya who came down this lane. */
+/** Warm lines that only fit a steward who came down this lane. */
 const WARM_VISITED = [
-  'When you knocked, we opened. Not every kahya can say that.',
+  'When you knocked, we opened the door. Not every steward can say that.',
   'You ate our bread like a neighbour. They don’t say that of many in this house.',
-  'You sat on our step and asked about the goats. Nobody from the konak ever asked about the goats.',
-  'The children still call the stool by the door the kahya’s stool.',
+  'You sat on our step and asked about the goats. Nobody from the residence ever asked about the goats.',
+  'The children still call the stool by the door the steward’s stool.',
 ];
 /** For a house the open hand fed. */
 const OPEN_HAND = [
-  'The agha lost some barley and we kept our children. I know which I would choose.',
-  'Your sack came up our lane the winter it mattered. The agha can count it if he likes.',
+  'The landowner lost some barley and we kept our children. I know which I would choose.',
+  'You sent us a sack of grain in the winter when we needed it. The landowner can count it if he likes.',
   'They say you gave his grain away. They say it as if it were a bad thing.',
-  'You were a poor kahya and a good neighbour. I would rather have the second.',
-  'The rider wrote you down as short. We wrote you down as the one who came with a sack.',
-  'Nobody in this house went to bed hungry while you held the key. Put that in the agha’s book.',
+  'You were a poor steward and a good neighbour. I would rather have a good neighbour.',
+  'The rider recorded that you had not paid enough. We remember you as the person who brought us a sack of grain.',
+  'Nobody in this house went to bed hungry while you held the key. Put that in the landowner’s book.',
 ];
 /** For a house that hardly knew you. */
 const STRANGER = [
-  'We hardly saw you. The crier did your asking.',
+  'We hardly saw you. The village announcer did your asking.',
   'You never came down our lane. I couldn’t tell you what you were like.',
-  'I would know the agha’s rider in the road sooner than you.',
-  'Which one were you? Forgive me. There have been a few.',
+  'I would recognise the landowner’s rider on the road more easily than I would recognise you.',
+  'Which steward were you? Forgive me. There have been several.',
   'We heard your name at the mill. That is all we had of you.',
   'If you came by, nobody told me.',
 ];
 const PLAIN = [
   'You were here {years}. We will see what the next one is like.',
-  'The barley came in. That is what a kahya is for.',
+  'The barley came in. That is what a steward is for.',
   'We had no quarrel with you. Write that down, it is rare.',
   'You came when you needed something. So did the last one.',
   'The young ones say you were fair. The young ones say a lot of things.',
-  'You kept the agha’s book. Ours you never saw.',
-  'Nothing to complain of. Nothing to sing about either.',
-  'You did the work of the seal. I can’t say better or worse.',
+  'You kept the landowner’s account book. You never saw ours.',
+  'I have nothing to complain about. I have nothing to praise either.',
+  'You did the work of the steward. I can’t say better or worse.',
   'The rider came and went, and so did you. The valley is still here.',
-  'Ask me again in ten years. Kahyas look different from far away.',
-  'We paid, you counted. That was most of it.',
+  'Ask me again in ten years. Time changes how we remember stewards.',
+  'We paid, and you counted. That was most of what we did together.',
   'You were not the worst. I’ve seen the worst.',
 ];
 const COLD = [
   'We did what you asked. Don’t ask me to say more than that.',
   'Your book will say what it says. Ours says something else.',
   'The next one will hear about you before he unpacks.',
-  'I have nothing to say to the agha’s man.',
+  'I have nothing to say to the landowner’s man.',
   'You knew where our door was when the share was due.',
-  'Go well. Go soon.',
+  'I hope your journey goes well. I hope you leave soon.',
   'We will be civil to the next one too. It costs nothing.',
-  'I said my piece at the well. I won’t say it twice.',
+  'I said what I thought at the well. I won’t say it twice.',
 ];
 
 const asYou = (summary: string) =>
@@ -433,10 +443,10 @@ function readGathering(g: Game): { elders: ElderWord[]; letter: string } {
     if (deadName)
       words = hard
         ? `${deadName} died with nothing in the jar. You had the key to the granary. That is all I will say.`
-        : `${deadName} died hungry, the winter you were here. I don’t say it was you. I don’t say it wasn’t.`;
+        : `${deadName} died hungry, the winter you were here. I am not saying you caused it. I am not saying you did not.`;
     else if (worst && worst.at < 0 && (trust < 0.35 || !best))
       // A memory from before your term: the office, not you.
-      words = `I remember ${worst.summary.replace(/^the kahya/, 'when the last kahya')}. It was the same seal.`;
+      words = `I remember ${worst.summary.replace(/^the kahya/, 'when the last kahya')}. The steward had the same authority.`;
     else if (worst && (trust < 0.35 || !best))
       words = `I remember ${asYou(worst.summary)}. I won’t pretend I don’t.`;
     else if (
@@ -465,18 +475,18 @@ function readGathering(g: Game): { elders: ElderWord[]; letter: string } {
   const given = s.stats.given ?? 0;
   const letter =
     s.flags.ended !== 'dismissed' && s.agha.missed === 0 && seized >= 6
-      ? `The agha’s letter renews your seal and raises your stipend. He has never had the shares in so cleanly, he writes. ${hungryDead ? `He does not mention the ${hungryDead === 1 ? 'one who' : `${hungryDead} who`} died hungry. The elders did.` : 'The elders were quieter about it.'}`
+      ? `The landowner’s letter renews your authority and raises your pay. He writes that the shares have never been collected so fully. ${hungryDead ? `He does not mention the ${hungryDead === 1 ? 'one who' : `${hungryDead} who`} died hungry. The elders mentioned it.` : 'The elders were less pleased.'}`
       : s.flags.ended === 'dismissed' && given >= 40 && hungryDead === 0
-        ? `The agha’s letter thanks you for your service, and ends it. Your term was to run three harvests; it ran short. He has worked out where ${Math.round(given)} kile of his barley went, he writes, and he is not a charity. Nobody in the valley died hungry while you held the seal. He does not mention that. The elders did.`
+        ? `The landowner’s letter thanks you for your service, and ends it. Your term was meant to last three harvests. It ended early. He has worked out where ${Math.round(given)} grain measures of his barley went, he writes, and he is not a charity. Nobody in the valley died hungry while you were steward. He does not mention that. The elders mentioned it.`
         : s.flags.ended !== 'dismissed' && given >= 40
-          ? `The agha’s letter renews your seal${s.agha.missed ? ', for now' : ''}. It asks, twice, where ${Math.round(given)} kile of his barley went. In the margin you write the names of the houses that ate it.`
+          ? `The landowner’s letter renews your authority${s.agha.missed ? ', for now' : ''}. It asks, twice, where ${Math.round(given)} grain measures of his barley went. In the margin you write the names of the houses that ate it.`
           : s.flags.ended === 'dismissed'
-            ? 'The agha’s letter thanks you for your service, and ends it. Your term was to run three harvests; it ran short. Another man has the seal.'
+            ? 'The landowner’s letter thanks you for your service, and ends it. Your term was meant to last three harvests. It ended early. Another man is now steward.'
             : s.agha.missed === 0 && meanTrust > 0.45
-              ? 'The agha’s letter renews your seal for another term, and asks how you did it.'
+              ? 'The landowner’s letter renews your authority for another term, and asks how you did it.'
               : s.agha.missed === 0
-                ? 'The agha’s letter renews your seal. It says nothing about the valley.'
-                : 'The agha’s letter renews your seal, for now. It mentions the year you were short.';
+                ? 'The landowner’s letter renews your authority. It says nothing about the valley.'
+                : 'The landowner’s letter renews your authority, for now. It mentions the year you were short.';
   return { elders, letter };
 }
 
@@ -625,7 +635,9 @@ export function load(saved: SavedGame | CompactRun): Game {
     };
   const g = replay(saved.seed, structuredClone(saved.inputs), saved.minute, saved.cast);
   if (fingerprint(g.valley) !== saved.fingerprint)
-    throw new Error('The run’s replay does not match its fingerprint.');
+    throw new Error(
+      'This file does not replay the same way in this version of The Valley. It may come from an older version. Start a new game instead.',
+    );
   return g;
 }
 

@@ -127,7 +127,7 @@ it('shows a visit conversation only when its scheduled time arrives', async () =
     expect(await page.locator('#steward').innerText()).toMatch(/walking to/);
     expect(await page.locator('.house-response').count()).toBe(0);
     await page.locator('.house-about').click();
-    expect(await page.locator('#sheet').innerText()).not.toContain('at the hearth');
+    expect(await page.locator('#sheet').innerText()).not.toContain('by the fire');
     // Keep the sheet open: it must redraw when the existing future note becomes due.
     await page.clock.runFor(35000);
     expect(await page.locator('.house-response').count()).toBe(1);
@@ -222,7 +222,9 @@ it('explains a blocked house verb without adding an input', async () => {
     expect(await give.getAttribute('aria-disabled')).toBe('true');
     // aria-disabled communicates the block; a real tap still explains its reason.
     await give.click({ force: true });
-    expect(await page.locator('#thumbs').innerText()).toMatch(/granary.*(low|empty)|grain.*arriv/i);
+    expect(await page.locator('#thumbs').innerText()).toMatch(
+      /granary.*(low|empty|too little)|grain.*arriv/i,
+    );
     expect((await state(page)).inputs).toBe(before);
   } finally {
     await page.close();
@@ -591,7 +593,7 @@ it.each([
       e.scrollTop = e.scrollHeight;
     });
     expect(await body.evaluate((e) => e.scrollTop + e.clientHeight >= e.scrollHeight - 1)).toBe(true);
-    await page.getByRole('button', { name: 'Call to barley', exact: true }).click();
+    await page.getByRole('button', { name: 'Call to cut barley', exact: true }).click();
     await page.clock.runFor(30000);
     expect(
       await page.getByRole('button', { name: 'About ▾', exact: true }).getAttribute('aria-expanded'),

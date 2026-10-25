@@ -111,7 +111,7 @@ it('sends linked feedback with an optional remembered name and keeps a full loca
     expect(await page.evaluate('window.downloadCount')).toBe(1);
     expect(await page.evaluate('!!window.downloadedRun.state && !!window.downloadedRun.savedAt')).toBe(true);
     await panel.getByRole('button', { name: 'Submit', exact: true }).click();
-    await expect.poll(() => panel.innerText()).toContain('queued');
+    await expect.poll(() => panel.innerText()).toContain('waiting to be sent');
     const sent = await counts(page);
     expect(sent.feedback).toHaveLength(1);
     expect(sent.feedback[0]?.[0]).toContain('The winter felt slow.');
@@ -165,7 +165,7 @@ it('sends a privacy-signal note on the same page without a run-consent step', as
     await panel.getByRole('button', { name: 'Submit', exact: true }).click();
     await expect.poll(async () => (await counts(page)).feedback.length).toBe(1);
     expect((await counts(page)).runs).toHaveLength(0);
-    await expect.poll(() => panel.innerText()).toContain('queued');
+    await expect.poll(() => panel.innerText()).toContain('waiting to be sent');
   } finally {
     await page.close();
   }

@@ -46,7 +46,7 @@ export function mountLab(options: RunControls): void {
   controls.id = 'lab-controls';
   controls.innerHTML = `<dialog class="game-menu-panel" aria-labelledby="valley-menu-title">
     <header class="menu-head"><h2 id="valley-menu-title">Game menu <small data-menu-date></small></h2><button type="button" data-close-menu aria-label="Close menu">×</button></header>
-    <div class="menu-body"><p>The valley waits while this is open. Your place is kept as you play.</p>
+    <div class="menu-body"><p>Time stops while this menu is open. The game saves your progress as you play.</p>
     ${
       LAB_TOOLS
         ? `<button type="button" data-notebook>The notebook <span aria-hidden="true">▸</span></button>
@@ -61,11 +61,11 @@ export function mountLab(options: RunControls): void {
   </dialog>
   <dialog class="feedback-panel" aria-labelledby="valley-feedback-title">
     <header class="feedback-head"><button type="button" data-feedback-back aria-label="Back to menu">←</button><h2 id="valley-feedback-title">Feedback</h2><button type="button" data-close-feedback aria-label="Close Feedback">×</button></header>
-    <form class="feedback-form"><div class="feedback-body"><p data-feedback-lead>Send a note about this game. You can send a note with or without sharing play.</p>
+    <form class="feedback-form"><div class="feedback-body"><p data-feedback-lead>Send a note about this game. You can choose whether to share your play.</p>
     <div class="feedback-verdicts" role="group" aria-label="Would you keep playing?"><button type="button" data-verdict="keep" aria-pressed="false">I'd keep playing</button><button type="button" data-verdict="mixed" aria-pressed="false">Not sure</button><button type="button" data-verdict="quit" aria-pressed="false">I'd stop here</button></div>
-    <label for="valley-feedback-note">What happened in the valley, what you wanted, what got in the way.</label><textarea id="valley-feedback-note" rows="4" maxlength="12000"></textarea>
-    <label for="valley-feedback-name">Your name or tester id <small>(optional)</small></label><input id="valley-feedback-name" type="text" maxlength="60" autocomplete="nickname"><p class="soft">A name labels your player id and its past and future linked history on this device. Leave it empty to stay pseudonymous.</p>
-    <details><summary>What is sent</summary><p data-send-preview>Your note, optional verdict and name, with your current linked run, saves and log.</p><p>Long runs use a shorter replay: the seed and every input, without the full state.</p><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a></details>
+    <label for="valley-feedback-note">Tell us what happened in the valley, what you wanted and what got in the way.</label><textarea id="valley-feedback-note" rows="4" maxlength="12000"></textarea>
+    <label for="valley-feedback-name">Your name or tester ID <small>(optional)</small></label><input id="valley-feedback-name" type="text" maxlength="60" autocomplete="nickname"><p class="soft">A name labels your player ID and the past and future play linked to it on this device. Leave this empty to use only your player ID.</p>
+    <details><summary>What is sent</summary><p data-send-preview>We send your note, your optional answer and name, and your current linked game, saves and log.</p><p>For long games, we send the starting seed and every action so the game can be replayed. We leave out the full game state.</p><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a></details>
     ${LAB_TOOLS ? '<button type="button" data-download>Keep a copy of this run</button>' : ''}<p data-feedback-status role="status" aria-live="polite"></p></div>
     <footer class="feedback-actions"><button type="submit" class="primary" data-send>Submit</button></footer></form>
   </dialog>`;
@@ -102,11 +102,11 @@ export function mountLab(options: RunControls): void {
   const sync = () => {
     find<HTMLInputElement>('[data-events]').checked = lab.telemetryOn;
     find('[data-feedback-lead]').textContent =
-      'Send a note about this game. You can send a note with or without sharing play.';
+      'Send a note about this game. You can choose whether to share your play.';
     find('[data-send-preview]').textContent =
       !lab.telemetryOn && !feedbackSharePlay(personaChoice)
-        ? 'Your note, verdict and optional name only. No run or linked history is sent.'
-        : 'Your note, verdict and optional name. Available run details are included when recording permits them.';
+        ? 'We send only your note, your answer and your optional name. We send no saved game or linked history.'
+        : 'We send your note, your answer and your optional name. We include available game details when recording allows it.';
     send.disabled = !sent && busy;
     const download = find<HTMLButtonElement>('[data-download]');
     if (download) download.disabled = !options.hasRun();
@@ -214,7 +214,7 @@ export function mountLab(options: RunControls): void {
       const sharePlay = feedbackSharePlay(personaChoice);
       const noteOnly = !lab.telemetryOn && !sharePlay;
       const receipt = await lab.sendFeedback(text, { name: chosenName, run: feedbackRun(), sharePlay });
-      const sentMessage = `${noteOnly ? 'Note and verdict queued without a run or history linkage' : 'Note and verdict queued. Run details depend on recording and availability; recorded play is linked across games on this device'} · ${receipt}`;
+      const sentMessage = `${noteOnly ? 'Your note and answer are waiting to be sent without a saved game or linked history' : 'Your note and answer are waiting to be sent. Game details depend on recording and what is available. Recorded play is linked across games on this device'} · ${receipt}`;
       try {
         if (chosenName) localStorage.setItem(NAME_KEY, chosenName);
         else localStorage.removeItem(NAME_KEY);

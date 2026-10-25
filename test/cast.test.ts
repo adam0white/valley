@@ -29,12 +29,12 @@ import { act, fingerprint, load, newGame, replay, save, step } from '../src/sim/
 
 it('reveals a volunteered fact only on a later visit and replays it', () => {
   const g = newGame(42);
-  expect(g.valley.notes.some((n) => n.text.includes('timber token'))).toBe(false);
+  expect(g.valley.notes.some((n) => n.text.includes('wooden token'))).toBe(false);
   expect(act(g, { verb: 'visit', house: 'coban' })).toBe(true);
-  expect(g.valley.notes.some((n) => n.text.includes('timber token'))).toBe(false);
+  expect(g.valley.notes.some((n) => n.text.includes('wooden token'))).toBe(false);
   step(g, DAY + 8 * 60);
   expect(act(g, { verb: 'visit', house: 'coban' })).toBe(true);
-  expect(g.valley.notes.some((n) => n.words?.includes('timber token'))).toBe(true);
+  expect(g.valley.notes.some((n) => n.words?.includes('wooden token'))).toBe(true);
   const expected = fingerprint(g.valley);
   expect(fingerprint(replay(42, g.inputs, g.valley.minute).valley)).toBe(expected);
 });

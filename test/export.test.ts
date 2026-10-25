@@ -28,7 +28,7 @@ const ownerInputs: Input[] = [
 describe('notebook run exports', () => {
   it('keeps the current cast day-12 schedule below 5 KB and replays to its recorded fingerprint', () => {
     const g = replay(406153184, ownerInputs, 17550);
-    expect(fingerprint(g.valley)).toBe('ab2c38d2');
+    expect(fingerprint(g.valley)).toBe('ea270204');
     const run = compactRun(save(g));
     expect(run).toEqual(compactRun(g));
     expect(Buffer.byteLength(JSON.stringify(run))).toBeLessThan(5_000);
@@ -41,10 +41,10 @@ describe('notebook run exports', () => {
       framework: '2.18.0',
       minute: 17550,
       inputs: ownerInputs,
-      fingerprint: 'ab2c38d2',
+      fingerprint: 'ea270204',
       label: 'Volume I, 30 July of year one',
     });
-    expect(fingerprint(load(JSON.parse(JSON.stringify(run))).valley)).toBe('ab2c38d2');
+    expect(fingerprint(load(JSON.parse(JSON.stringify(run))).valley)).toBe('ea270204');
   });
 
   it('keeps full-state downloads compatible and detaches the notebook input log', () => {
@@ -77,7 +77,15 @@ describe('notebook run exports', () => {
 
   it('rejects a compact run whose replay does not match its fingerprint', () => {
     const run = compactRun(replay(7, [], 0));
-    expect(() => load({ ...run, fingerprint: '00000000' })).toThrow(/fingerprint/i);
+    expect(() => load({ ...run, fingerprint: '00000000' })).toThrow(/Start a new game instead/i);
+  });
+
+  it('refuses a pre-rewrite compact export with a plain start-fresh message', () => {
+    // Baseline 80a75d9: seed 7 at minute 0, no inputs. Only its prose fingerprint differs.
+    const legacy = { ...compactRun(replay(7, [], 0)), fingerprint: '065eac42' };
+    expect(() => load(legacy)).toThrow(
+      'This file does not replay the same way in this version of The Valley. It may come from an older version. Start a new game instead.',
+    );
   });
 
   it('detaches loaded inputs from compact and full exports', () => {

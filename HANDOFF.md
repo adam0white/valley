@@ -36,3 +36,18 @@ Compression now runs inside the existing recovery-snapshot error handler. A fail
 Clean a044bc4 passed exact CI and deployed, but real WebKit navigation and reload still emitted native Blob access-control page errors with Recording both on and off. Catching the promise was insufficient; the browser reported the document-owned Blob stream failure separately. The final compression input now uses Response(text).body, following the independently reproduced Hearsay finding, while retaining gzip output, legacy decoding, no-CompressionStream fallback, the recovery error handler and session ownership guards. No error filtering or swallowing is used in browser verification.
 
 A new regression makes document Blob input streams unavailable, triggers the real hidden-page snapshot path, and requires a newly persisted, gzip-decodable snapshot with the latest input count and minute. It failed on the old path before the fix. The prior snapshot/latest-input-log preservation regression remains intact, as do admission ownership, font-ready About scrolling and compact-footer assertions. No rules, culture, packages or UI text changed. External receipts record lane, signed source, exact CI and the required fresh deployment/live reruns.
+
+## Plain English at the source — 2026-10-25
+
+The owner requested the Pass pilot treatment for Valley. Story, dialogue, household
+portraits, private encounters, instructions, menus and metadata now use complete English.
+The sentence display table is removed. Preserved HF labels and summaries still use a
+small term gloss. Rewritten lines retain their original saved repetition keys through
+`rememberedLine`; do not delete those keys as redundant prose.
+
+Delivery evidence and remaining work are in
+`~/code/.lab-scratch/plain2/valley-report.md`. The prose-free full-term baseline and opt-in
+runner live in `test/fixtures/plain-english-mechanics.json` and
+`scripts/plain-english-proof.mjs`. The game version stays 0.3.0. New exports replay;
+older compact exports whose prose fingerprint differs receive a start-fresh message.
+Adam accepts game feel separately from technical release checks.

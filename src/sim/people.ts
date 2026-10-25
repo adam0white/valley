@@ -168,7 +168,7 @@ const LOWER: HouseSpec[] = [
     size: 114,
     store: 20,
     share: 23,
-    looks: 'The reeve’s house: whitewashed, the only one with glass in a window.',
+    looks: 'The local overseer lives in this whitewashed house. It is the only house with a glass window.',
     people: [
       {
         id: 'osman',
@@ -218,7 +218,7 @@ const LOWER: HouseSpec[] = [
     size: 114,
     store: 10,
     share: 23,
-    looks: 'The Ak household. Three boys’ shirts on the line.',
+    looks: 'The Ak family lives here. Three boys’ shirts hang on the line.',
     people: [
       {
         id: 'hasan',
@@ -254,7 +254,7 @@ const LOWER: HouseSpec[] = [
     store: 3,
     share: 15,
     looks:
-      'Yusuf, 34, builds for the valley and tends the flock part-time. Zehra is his wife; their pregnancy is near term. His mother Maryam, 68, is visiting to cook. Tariq, his son from an earlier household chapter, is away at the Well; Zehra is Tariq’s stepmother.',
+      'Yusuf, 34, builds for the valley and tends the flock part-time. His wife Zehra will soon give birth. His mother Maryam, 68, is visiting to cook. His son Tariq is away at the Well. Zehra is Tariq’s stepmother.',
     people: [
       {
         id: 'yusuf',
@@ -282,7 +282,7 @@ const LOWER: HouseSpec[] = [
     size: 34,
     store: 4,
     share: 7,
-    looks: 'The Dere household by the stream. The ox stall is empty.',
+    looks: 'The Dere family lives by the stream. Their ox stall is empty.',
     people: [
       {
         id: 'saliha',
@@ -314,7 +314,7 @@ const LOWER: HouseSpec[] = [
     size: 54,
     store: 3,
     share: 11,
-    looks: 'A young house, roof half-mended. A baby crying most evenings.',
+    looks: 'A young family lives here. The roof is partly repaired. A baby cries most evenings.',
     people: [
       {
         id: 'mustafa',
@@ -347,7 +347,7 @@ const LOWER: HouseSpec[] = [
     size: 104,
     store: 8,
     share: 21,
-    looks: 'The smithy. The old man still swings the hammer; his son does the rest.',
+    looks: 'This is the smithy. The old man still swings the hammer. His son does the rest.',
     people: [
       {
         id: 'ibrahim',
@@ -384,7 +384,7 @@ const LOWER: HouseSpec[] = [
     size: 91,
     store: 8,
     share: 18,
-    looks: 'The well-digger’s house. Two daughters, and the whole lane knows it.',
+    looks: 'The well-digger lives here with his two daughters. Everyone in the lane knows them.',
     people: [
       {
         id: 'omer',
@@ -417,7 +417,8 @@ const LOWER: HouseSpec[] = [
     size: 68,
     store: 6,
     share: 14,
-    looks: 'Up the slope. The son is at the coffeehouse more than at the plough.',
+    looks:
+      'This house is up the slope. The son spends more time at the coffeehouse than working in the fields.',
     people: [
       {
         id: 'recep',
@@ -485,12 +486,32 @@ const FEMALE = [
   'Kezban',
 ];
 const UPPER_HOUSES = [
-  { id: 'yayla', short: 'Yayla', looks: 'Highest house in the valley; they come down only for the mill.' },
-  { id: 'ceviz', short: 'Ceviz', looks: 'An old walnut over the door, and a feud with someone below.' },
-  { id: 'pinar', short: 'Pınar', looks: 'By the upper spring. The women of the upper lanes meet here.' },
-  { id: 'uzun', short: 'Uzun', looks: 'Tall men, all of them, and a mother who decides.' },
-  { id: 'topal', short: 'Topal', looks: 'The father limps from the old levy. He does not speak of it.' },
-  { id: 'sari', short: 'Sarı', looks: 'New roof tiles. Someone sends money from the city.' },
+  {
+    id: 'yayla',
+    short: 'Yayla',
+    looks: 'This is the highest house in the valley. The family comes down only for the mill.',
+  },
+  {
+    id: 'ceviz',
+    short: 'Ceviz',
+    looks: 'An old walnut tree grows over the door. This family has a feud with someone in the lower hamlet.',
+  },
+  {
+    id: 'pinar',
+    short: 'Pınar',
+    looks: 'This house is by the upper spring. The women of the upper lanes meet here.',
+  },
+  {
+    id: 'uzun',
+    short: 'Uzun',
+    looks: 'All the men in this house are tall. Their mother makes the decisions.',
+  },
+  {
+    id: 'topal',
+    short: 'Topal',
+    looks: 'The father limps because of an injury from his forced service. He does not speak of it.',
+  },
+  { id: 'sari', short: 'Sarı', looks: 'The roof has new tiles. Someone sends money from the city.' },
 ];
 const UPPER_POS = [
   [560, 230, 640, 180],
@@ -585,7 +606,7 @@ const VISITORS: HouseSpec[] = [
     store: 9,
     share: 0,
     looks:
-      'Visitors staying for the survey season: Yusuf Usta, 74, advises on digging; Meryem, 19, his granddaughter, assists with surveys. Samira, 29, gathers and advises on stores; her husband Idris and children Lena and Pell remain at home with agreed care. They brought provisions for a season. The visiting chapter lasts thirty days. They will finish eligible current work before it is paused; duties remain in the source ledger. No paid survey work is promised. They are guests, not one family.',
+      'These visitors are staying for the survey season. Yusuf Usta, 74, advises on digging. His granddaughter Meryem, 19, helps with surveys. Samira, 29, gathers supplies and advises on food stores. Her husband Idris and children Lena and Pell have care arranged at home. The visitors brought food for a season. Their stay lasts thirty days. They will finish any current work that can be finished before their stay ends. Their duties will remain in their home records. Nobody has promised paid survey work. These guests come from different families.',
     people: [
       {
         id: 'yusuf-usta',
@@ -611,7 +632,7 @@ const VISITORS: HouseSpec[] = [
     store: 3,
     share: 0,
     looks:
-      'Danyal, 52, is a visiting well keeper and Christian widower. He lodges separately with his own grain. He and Maryam are old friends. He brought provisions for a season; the visiting chapter closes after thirty days at a safe work boundary, with his duties preserved in the ledger. Physical travel home is not simulated.',
+      'Danyal, 52, is a visiting well keeper and Christian widower. He lodges separately with his own grain. He and Maryam are old friends. He brought food for a season. His stay ends after thirty days, once his current work can safely stop. His duties will remain in his home records. The game does not show his journey home.',
     people: [
       { id: 'danyal', name: 'Danyal', age: 52, sex: 'male', christian: true, skills: { waterwork: 0.8 } },
     ],

@@ -53,66 +53,66 @@ const OPEN: Record<Register, { warm: Pool; wary: Pool; cold: Pool }> = {
   blunt: {
     warm: [
       'Sit. You’re letting the cold in.',
-      'You again. Sit, then.',
-      'Sit down, kahya. Nobody bites here.',
+      'You have come again. Sit down, then.',
+      'Sit down, steward. You are safe here.',
     ],
     wary: ['If you’ve come for the share, say so.', 'Sit if you want. I have work.', 'What is it this time?'],
-    cold: ['You know where the door is.', 'Say what you came to say.', 'We have nothing for the agha today.'],
+    cold: ['You can leave now.', 'Say what you came to say.', 'We have nothing for the landowner today.'],
   },
   anxious: {
     warm: [
-      'Come in, come in, mind the step.',
-      'Oh, kahya, we didn’t know you were coming. Sit, please.',
-      'You’ll take tea. Don’t say no.',
+      'Come in. Be careful of the step.',
+      'Oh, steward, we didn’t know you were coming. Sit, please.',
+      'Have some tea. Please do not refuse.',
     ],
     wary: [
       'Is something wrong? Has something happened?',
-      'Kahya. Is it the share? We are trying.',
+      'Steward, have you come for the share? We are trying to pay it.',
       'Sit. I’ll put the water on. Is it bad news?',
     ],
     cold: [
-      'Please. Whatever it is, not in front of the children.',
-      'We have done nothing, kahya.',
+      'Please do not discuss this in front of the children.',
+      'We have done nothing, steward.',
       'Did someone send you here?',
     ],
   },
   wry: {
     warm: [
-      'The kahya in our lane. The neighbours will think we’re rich.',
+      'The steward has come to our lane. The neighbours will think we’re rich.',
       'Sit. The tea is bad but it is hot.',
-      'Look who walked down. Mind the dog, he has opinions.',
+      'You have come to visit. Be careful of the dog. He may bark at you.',
     ],
     wary: [
-      'The agha’s man at our hearth. Should I hide the barley?',
+      'The landowner’s man has come to our house. Should I hide the barley?',
       'Sit. We’ll pretend this is a social call.',
-      'Come for our health, kahya, or the agha’s?',
+      'Have you come to ask about our health, steward, or the landowner’s?',
     ],
     cold: [
-      'Come to count our spoons?',
+      'Have you come to count our spoons?',
       'Sit where I can see you.',
-      'The last one used to come like this too, smiling.',
+      'The last steward also used to visit us with a smile.',
     ],
   },
   plain: {
     warm: [
       'Welcome. Sit by the fire.',
       'Come in. You’ll eat with us.',
-      'You’re welcome here, kahya.',
-      'Kahya! Sit, sit. Bring the cushion.',
+      'You’re welcome here, steward.',
+      'You are here, steward! Sit down. Someone bring the cushion.',
       'There’s yogurt. You’ll have some.',
     ],
     wary: [
       'Come in. Sit.',
-      'Kahya. Sit, if you’re staying.',
+      'Steward, sit down if you’re staying.',
       'We weren’t expecting you. Sit.',
-      'Sit. The fire’s low, I’ll feed it.',
-      'Kahya. {Spouse} is in the field.',
+      'Sit down. The fire is low. I’ll add some wood.',
+      'Steward, {spouse} is in the field.',
     ],
     cold: [
-      'Kahya.',
+      'You are here, steward.',
       'You came, then.',
       'Sit, if you must.',
-      'We’ve said what we have to say to the konak.',
+      'We’ve said what we have to say to the people at the residence.',
       'Stand, then. We’re busy.',
     ],
   },
@@ -124,42 +124,42 @@ const JARS: { min: number; lines: Pool }[] = [
     lines: [
       'The jars are full this year, thank God. We’ve no complaint.',
       'We had a good year. I won’t pretend otherwise.',
-      'There’s barley in the house. More than we need, for once.',
-      'The boys ate till they groaned last night. A good year.',
-      'We’ll sell a little at the market, if the agha lets us.',
-      'Full jars. My mother says it won’t last, she says that every year.',
+      'There’s barley in the house. We have more than we need, for once.',
+      'The boys ate till they groaned last night. It has been a good year.',
+      'We’ll sell a little at the market, if the landowner lets us.',
+      'The jars are full. My mother says it won’t last. She says that every year.',
     ],
   },
   {
     min: 80,
     lines: [
-      'We’ll get to the spring if nobody falls ill.',
-      'Enough in the jar, if we’re careful.',
-      'We manage. The winter will tell.',
-      'Not rich, not hungry. That’s a good year here.',
+      'Our food will last until spring if nobody falls ill.',
+      'There is enough in the jar if we’re careful.',
+      'We have enough for now. We will see whether it lasts through winter.',
+      'We are not rich, but we are not hungry. That’s a good year here.',
       'If the snow comes late we’ll be fine.',
-      'Enough, God be thanked. Not more than enough.',
+      'We have enough, God be thanked. We have no more than that.',
     ],
   },
   {
     min: 25,
     lines: [
-      'The jar is lower than I like. We’re eating less at night.',
-      'We’ll be short before the spring. I know it already.',
+      'We have less grain than I would like. We’re eating less at night.',
+      'We’ll run short of food before spring. I know it already.',
       'Look in the jar if you want. I’d rather you didn’t.',
-      'We’ve started mixing chaff into the bread.',
-      'The little one asks for more and there isn’t more.',
+      'We’ve started mixing the husks from grain into the bread.',
+      'Our youngest child asks for more food, but we cannot spare any more.',
       'I sold the copper pot. Don’t look at the shelf.',
     ],
   },
   {
     min: 0,
     lines: [
-      'There’s nothing in the jar, kahya. The children eat first.',
+      'There’s nothing in the jar, steward. The children eat first.',
       'We’ve been eating what the neighbours bring.',
-      'You can see for yourself. The jar is scraped.',
+      'You can see for yourself. The jar is empty.',
       'We boiled the last of the seed. God forgive us.',
-      'The children have stopped asking. That’s worse.',
+      'The children have stopped asking for food. That worries me more.',
       'I haven’t eaten since yesterday. Don’t tell {spouse} I told you.',
     ],
   },
@@ -168,17 +168,17 @@ const JARS: { min: number; lines: Pool }[] = [
 const BORN = [
   'Come and see {child}. She has her grandmother’s scowl already.',
   '{child} doesn’t sleep. Nobody in this house sleeps.',
-  'Hold {child}, go on. Babies like strangers, God knows why.',
+  'Go on, hold {child}. Babies like strangers, though I do not know why.',
 ];
 const BORN_BOY = [
   'Come and see {child}. He has his grandfather’s ears, poor thing.',
   '{child} doesn’t sleep. Nobody in this house sleeps.',
-  'Hold {child}, go on. He won’t break.',
+  'Go on, hold {child}. You will not hurt him.',
 ];
 const DIED = [
   'Thank you for coming. {dead} would have liked that you came.',
   'Sit with us a while. The house is too quiet without {dead}.',
-  '{dead} always said the kahyas never came down this lane.',
+  '{dead} always said the stewards never came down this lane.',
 ];
 const WED = {
   in: [
@@ -186,20 +186,20 @@ const WED = {
     'We are still sweeping up after the wedding.',
   ],
   out: [
-    'We gave our girl away this month. The house is quieter. Too quiet.',
-    'Her loom is still here. She’ll send for it.',
+    'Our daughter married this month. The house is quieter. It is too quiet.',
+    'Her frame for weaving cloth is still here. She’ll send for it.',
   ],
 };
 /** Why the kahya came, when he was asked: the first thing said is about that, not about him. */
 const SCENE: Record<'wedding' | 'birth' | 'death', Pool> = {
   wedding: [
-    'You came! Sit, eat. The drum won’t stop till morning.',
-    'The kahya at our wedding. My father will tell this for a year.',
-    'Sit with the men, kahya. Eat first, talk after.',
+    'You came! Sit down and eat. The drum will play until morning.',
+    'The steward has come to our wedding. My father will talk about this for a year.',
+    'Sit with the men, steward. Eat first. We can talk afterward.',
   ],
   birth: [
     'Come in, quietly. She’s only just asleep.',
-    'You came to see the child. Sit, sit.',
+    'You came to see the child. Sit down.',
     'God is generous. Come and look.',
   ],
   death: [
@@ -214,21 +214,21 @@ const LEFT = [
 ];
 
 const GOOD = [
-  'We remember {deed}. We don’t forget that.',
+  'We remember that {deed}. We have not forgotten.',
   '{Spouse} still talks about how {deed}.',
-  'You did right by us when {deed}.',
+  'You helped us when {deed}.',
 ];
 const BAD = [
-  'I haven’t forgotten {deed}.',
-  'We remember {deed}. You should know that.',
+  'I haven’t forgotten that {deed}.',
+  'We remember that {deed}. You should know that.',
   'It was hard, when {deed}.',
 ];
 const OFFICE = [
-  'The last kahya took our ox. You sit in his chair.',
+  'The last steward took our ox. You have his job now.',
   'The last one smiled like that too, and then he took the ox.',
 ];
 const FIRST = [
-  'No kahya has sat in this house before.',
+  'No steward has sat in this house before.',
   'You’re the first of them to come to the door without wanting something. Or are you?',
 ];
 
@@ -238,9 +238,10 @@ function pick(ctx: VoiceContext, p: Person, key: string, pool: Pool, k: number):
   const today = Math.floor(ctx.minute / DAY);
   for (let i = 0; i < n; i++) {
     const line = pool[(start + i) % n] ?? '';
-    const was = ctx.said[line];
+    const key = rememberedLine(line);
+    const was = ctx.said[key];
     if (was === undefined || today - was > 90) {
-      ctx.said[line] = today;
+      ctx.said[key] = today;
       return line;
     }
   }
@@ -280,12 +281,12 @@ export function speakerOf(h: Household, people: (id: string) => Person | undefin
 /** Two or three sentences a house says when the kahya sits with them. */
 /** A kahya who keeps coming back to the same hearth: the house notices, and so do the neighbours. */
 const AGAIN: Pool = [
-  'Again, kahya? People will talk.',
+  'Have you come again, steward? People will talk about these visits.',
   'You were here the other day. Did you forget something?',
-  'Back so soon. Sit, then. The kettle hasn’t cooled.',
-  'The neighbours are counting your visits, kahya. So am I.',
-  'If you come any oftener we’ll have to feed you properly.',
-  'Twice in a week. Either you like our bread or you want something.',
+  'You have come back so soon. Sit down, then. The kettle hasn’t cooled.',
+  'The neighbours are counting your visits, steward. So am I.',
+  'If you visit any more often, we’ll have to cook a proper meal for you.',
+  'You have visited twice in a week. Either you like our bread or you want something.',
 ];
 
 export function visitWords(
@@ -305,7 +306,7 @@ export function visitWords(
         : firstTime
           ? OPEN[r][band(ctx.trust)]
           : OPEN[r][band(ctx.trust)].filter((l) => !/expecting|didn’t know you were coming/.test(l));
-  const parts: string[] = [pick(ctx, p, `open-${why}`, opener, 0) || 'Kahya.'];
+  const parts: string[] = [pick(ctx, p, `open-${why}`, opener, 0) || 'You are here, steward.'];
   if (ctx.died) parts.push(pick(ctx, p, 'died', DIED, 1).replace('{dead}', ctx.died));
   else if (ctx.born) {
     const boy = /\bboy\b/.test(ctx.born);
@@ -330,25 +331,25 @@ export function visitWords(
 
 const GIFT: Record<string, Pool> = {
   need: [
-    'God keep you, kahya. The children will eat tonight.',
-    'We’ll pay it back at the threshing. I swear it.',
+    'God keep you, steward. The children will eat tonight.',
+    'We’ll pay it back when we separate the grain from the cut barley. I swear it.',
     'I won’t forget who sent this.',
-    'Tell the agha we are grateful. Or don’t. Tell God.',
+    'Tell the landowner we are grateful. Or thank God for us instead.',
   ],
   ok: [
-    'That’s kind. We’ll keep it for the spring.',
-    'We weren’t asking, but we won’t say no.',
-    'Thank you. I’ll put it by.',
+    'That is kind of you. We’ll keep it for spring.',
+    'We did not ask for grain, but we accept it.',
+    'Thank you. I’ll keep it for later.',
   ],
   rich: [
-    'We don’t need it, kahya. {needy} does.',
+    'We don’t need it, steward. {needy} does.',
     'Keep it for someone who’s hungry. We have enough.',
-    'What do we want with the agha’s grain? Our jars are full.',
+    'What do we want with the landowner’s grain? Our jars are full.',
   ],
 };
 const GIFT_BLUNT_NEED = [
   'It isn’t charity if we pay it back. We’ll pay it back.',
-  'Fine. Thank you. Don’t make a speech of it.',
+  'I accept it. Thank you. Please do not make a speech about it.',
 ];
 
 export function giftWords(ctx: VoiceContext, p: Person): string {
@@ -365,24 +366,24 @@ export function giftWords(ctx: VoiceContext, p: Person): string {
 
 const SEIZE: Record<Register, Pool> = {
   blunt: [
-    'Take it, then. Take the jars too, they’re the agha’s as well.',
-    'You’ll eat well tonight, kahya.',
+    'Take it, then. Take the jars too, since you treat them as the landowner’s property.',
+    'You’ll eat well tonight, steward.',
     'I’ll remember this. So will my sons.',
   ],
   anxious: [
-    'Please, leave some for the children. Please.',
-    'We would have brought it. We would have.',
+    'Please leave some for the children.',
+    'We would have brought the share to you.',
     'What will we eat? What will we eat now?',
   ],
   wry: [
-    'So this is what the kahya looks like when he’s working.',
+    'So this is what the steward looks like when he’s working.',
     'Write it in your book. Write it neatly.',
-    'The last one at least asked first.',
+    'At least the last steward asked first.',
   ],
   plain: [
-    'There. Now you have it.',
-    'We would have paid, given time.',
-    'The whole lane saw. I hope you know that.',
+    'You have our grain now.',
+    'We would have paid if you had given us time.',
+    'Everyone in the lane saw what happened. I hope you know that.',
   ],
 };
 
@@ -391,14 +392,14 @@ export function seizeWords(ctx: VoiceContext, p: Person): string {
 }
 
 const EASED = [
-  'Half. God bless you, kahya. Half we can carry.',
+  'You have halved our share. God bless you, steward. We can afford half.',
   'I won’t ask why us. I’ll just say thank you.',
-  'The neighbours will talk. Let them.',
+  'The neighbours will talk about this. Let them talk.',
 ];
 const EASED_LANE = [
-  'Talk at the spring: “Why them and not us? Their jars are no emptier than ours.”',
-  'Talk at the coffeehouse: “The kahya has his favourites, then.”',
-  'Talk at the spring: “Good. That house has had a bad year.”',
+  'People at the spring say: “Why did they get help instead of us? Their jars are no emptier than ours.”',
+  'People at the coffeehouse say: “The steward has his favourites, then.”',
+  'People at the spring say: “That is good. That house has had a bad year.”',
 ];
 
 export function easeWords(ctx: VoiceContext, p: Person): string {
@@ -411,35 +412,255 @@ export function easeLaneWords(ctx: VoiceContext, p: Person, kind: number): strin
 /** How each register says yes to a call, by job; a paid call is answered as paid. */
 export const ASSENT: Record<Register, { reap: Pool; share: Pool; carry: Pool; paid: Pool }> = {
   blunt: {
-    reap: ['I’ll come. Don’t expect singing.', 'Fine. Before the rain.', 'I’ll be there at first light.'],
-    share: ['Count it in front of me.', 'There. Write it down properly.'],
-    carry: ['Fine.', 'I’ll carry. Once.'],
-    paid: ['A sheaf in eight. I’ll count them.', 'Paid work. That I’ll do.'],
+    reap: ['I’ll come. Don’t expect singing.', 'I’ll come before the rain.', 'I’ll be there at first light.'],
+    share: ['Count it in front of me.', 'Here is our share. Write it down properly.'],
+    carry: ['I agree.', 'I’ll carry stone this once.'],
+    paid: [
+      'You promise one of every eight bundles of cut barley as pay. I’ll count them.',
+      'I’ll do the work if it is paid.',
+    ],
   },
   anxious: {
     reap: [
       'Yes, yes, we’ll come. Is it going to rain?',
-      'We’ll be there. Tell the agha we came.',
+      'We’ll be there. Tell the landowner we came.',
       'I’ll come. I’ll bring the boy.',
     ],
-    share: ['Here. Is it enough? Tell me it’s enough.', 'Here it is. Please write it down.'],
-    carry: ['I’ll carry. Is it far?', 'Yes, of course.'],
-    paid: ['A sheaf in eight? God bless you. We’ll come.', 'For a sheaf, yes. Thank you.'],
+    share: [
+      'Here is our share. Is it enough? Please tell me it is enough.',
+      'Here it is. Please write it down.',
+    ],
+    carry: ['I’ll carry. Is it far?', 'Yes, I’ll carry stone.'],
+    paid: [
+      'Will you pay us one of every eight bundles of cut barley? God bless you. We’ll come.',
+      'I will come for a bundle of cut barley. Thank you.',
+    ],
   },
   wry: {
     reap: [
-      'For the agha, then. He’ll thank us personally, I’m sure.',
-      'The agha’s barley won’t cut itself. More’s the pity.',
+      'I’ll work for the landowner, then. He’ll thank us personally, I’m sure.',
+      'Someone has to cut the landowner’s barley. I wish we did not have to do it.',
       'I’ll come. Somebody has to sing.',
     ],
-    share: ['There. Our gift to the agha’s horses.', 'Here. Don’t spend it all at once.'],
-    carry: ['A mill. Imagine. I’ll carry.', 'Stones for the agha. Why not.'],
-    paid: ['Paid, even. Is the agha unwell?', 'A sheaf in eight. The world is turning.'],
+    share: [
+      'There is our share. It will feed the landowner’s horses.',
+      'Here is our share. Don’t spend it all at once.',
+    ],
+    carry: ['We could have a mill. I’ll carry stone.', 'I’ll carry stones for the landowner. Why not?'],
+    paid: [
+      'We will even be paid. Is the landowner unwell?',
+      'We will receive one of every eight bundles of cut barley as pay. Things are changing.',
+    ],
   },
   plain: {
     reap: ['I’ll come.', 'We’ll be there.', 'I’ll bring my own sickle.'],
-    share: ['Here it is. Write it down.', 'There. We owe nothing.'],
+    share: ['Here it is. Write it down.', 'Here is our share. We owe nothing now.'],
     carry: ['I’ll carry.', 'A mill would be good.'],
-    paid: ['For a sheaf, I’ll come.', 'That’s fair. We’ll be there.'],
+    paid: ['I’ll come if you pay me a bundle of cut barley.', 'That’s fair. We’ll be there.'],
   },
 };
+
+/** Saved no-repeat histories use the original line as their identity. */
+
+const REMEMBERED_LINES: Record<string, string> = {
+  'People played backgammon late at the coffeehouse. {who} lost and blamed the dice.':
+    'The men sat late over backgammon at the coffeehouse. {who} lost, and blamed the dice.',
+  'Her frame for weaving cloth is still here. She’ll send for it.':
+    'Her loom is still here. She’ll send for it.',
+  '{who} of {house} is digging the soil in the garden behind the house.':
+    '{who} of {house} is turning the garden behind the house.',
+  'The {fam} sheep are giving birth. {who} has not slept properly in a week.':
+    'The {fam} ewes are lambing. {who} has not slept properly in a week.',
+  'Someone heard a wolf above the {fam} sheep pen. {who} stayed awake with the dog.':
+    'A wolf was heard above the {fam} fold. {who} sat up with the dog.',
+  '{who} of {house} repaired the wooden frame that joins the oxen by lamplight.':
+    '{who} of {house} mended a yoke by lamplight.',
+  '{who} of {house} is weaving cloth beside the stove. You can hear the work from the lane.':
+    '{who} of {house} has the loom up by the stove. You can hear it from the lane.',
+  'Here is our share. Write it down properly.': 'There. Write it down properly.',
+  'You have come again. Sit down, then.': 'You again. Sit, then.',
+  'Sit down, steward. You are safe here.': 'Sit down, kahya. Nobody bites here.',
+  'We have nothing for the landowner today.': 'We have nothing for the agha today.',
+  'Come in. Be careful of the step.': 'Come in, come in, mind the step.',
+  'Oh, steward, we didn’t know you were coming. Sit, please.':
+    'Oh, kahya, we didn’t know you were coming. Sit, please.',
+  'Have some tea. Please do not refuse.': 'You’ll take tea. Don’t say no.',
+  'Steward, have you come for the share? We are trying to pay it.': 'Kahya. Is it the share? We are trying.',
+  'Please do not discuss this in front of the children.':
+    'Please. Whatever it is, not in front of the children.',
+  'We have done nothing, steward.': 'We have done nothing, kahya.',
+  'The steward has come to our lane. The neighbours will think we’re rich.':
+    'The kahya in our lane. The neighbours will think we’re rich.',
+  'You have come to visit. Be careful of the dog. He may bark at you.':
+    'Look who walked down. Mind the dog, he has opinions.',
+  'The landowner’s man has come to our house. Should I hide the barley?':
+    'The agha’s man at our hearth. Should I hide the barley?',
+  'Have you come to ask about our health, steward, or the landowner’s?':
+    'Come for our health, kahya, or the agha’s?',
+  'Have you come to count our spoons?': 'Come to count our spoons?',
+  'You’re welcome here, steward.': 'You’re welcome here, kahya.',
+  'Steward, sit down if you’re staying.': 'Kahya. Sit, if you’re staying.',
+  'Sit down. The fire is low. I’ll add some wood.': 'Sit. The fire’s low, I’ll feed it.',
+  'Steward, {spouse} is in the field.': 'Kahya. {Spouse} is in the field.',
+  'You are here, steward.': 'Kahya.',
+  'There’s barley in the house. We have more than we need, for once.':
+    'There’s barley in the house. More than we need, for once.',
+  'The boys ate till they groaned last night. It has been a good year.':
+    'The boys ate till they groaned last night. A good year.',
+  'We’ll sell a little at the market, if the landowner lets us.':
+    'We’ll sell a little at the market, if the agha lets us.',
+  'The jars are full. My mother says it won’t last. She says that every year.':
+    'Full jars. My mother says it won’t last, she says that every year.',
+  'There is enough in the jar if we’re careful.': 'Enough in the jar, if we’re careful.',
+  'We have enough for now. We will see whether it lasts through winter.': 'We manage. The winter will tell.',
+  'We are not rich, but we are not hungry. That’s a good year here.':
+    'Not rich, not hungry. That’s a good year here.',
+  'We have enough, God be thanked. We have no more than that.':
+    'Enough, God be thanked. Not more than enough.',
+  'Our youngest child asks for more food, but we cannot spare any more.':
+    'The little one asks for more and there isn’t more.',
+  'There’s nothing in the jar, steward. The children eat first.':
+    'There’s nothing in the jar, kahya. The children eat first.',
+  'You can see for yourself. The jar is empty.': 'You can see for yourself. The jar is scraped.',
+  'The children have stopped asking for food. That worries me more.':
+    'The children have stopped asking. That’s worse.',
+  'Go on, hold {child}. Babies like strangers, though I do not know why.':
+    'Hold {child}, go on. Babies like strangers, God knows why.',
+  'Go on, hold {child}. You will not hurt him.': 'Hold {child}, go on. He won’t break.',
+  '{dead} always said the stewards never came down this lane.':
+    '{dead} always said the kahyas never came down this lane.',
+  'Our daughter married this month. The house is quieter. It is too quiet.':
+    'We gave our girl away this month. The house is quieter. Too quiet.',
+  'You came! Sit down and eat. The drum will play until morning.':
+    'You came! Sit, eat. The drum won’t stop till morning.',
+  'The steward has come to our wedding. My father will talk about this for a year.':
+    'The kahya at our wedding. My father will tell this for a year.',
+  'Sit with the men, steward. Eat first. We can talk afterward.':
+    'Sit with the men, kahya. Eat first, talk after.',
+  'You came to see the child. Sit down.': 'You came to see the child. Sit, sit.',
+  'We remember that {deed}. We have not forgotten.': 'We remember {deed}. We don’t forget that.',
+  'You helped us when {deed}.': 'You did right by us when {deed}.',
+  'I haven’t forgotten that {deed}.': 'I haven’t forgotten {deed}.',
+  'We remember that {deed}. You should know that.': 'We remember {deed}. You should know that.',
+  'The last steward took our ox. You have his job now.': 'The last kahya took our ox. You sit in his chair.',
+  'No steward has sat in this house before.': 'No kahya has sat in this house before.',
+  'Have you come again, steward? People will talk about these visits.': 'Again, kahya? People will talk.',
+  'You have come back so soon. Sit down, then. The kettle hasn’t cooled.':
+    'Back so soon. Sit, then. The kettle hasn’t cooled.',
+  'The neighbours are counting your visits, steward. So am I.':
+    'The neighbours are counting your visits, kahya. So am I.',
+  'If you visit any more often, we’ll have to cook a proper meal for you.':
+    'If you come any oftener we’ll have to feed you properly.',
+  'You have visited twice in a week. Either you like our bread or you want something.':
+    'Twice in a week. Either you like our bread or you want something.',
+  'God keep you, steward. The children will eat tonight.':
+    'God keep you, kahya. The children will eat tonight.',
+  'We’ll pay it back when we separate the grain from the cut barley. I swear it.':
+    'We’ll pay it back at the threshing. I swear it.',
+  'Tell the landowner we are grateful. Or thank God for us instead.':
+    'Tell the agha we are grateful. Or don’t. Tell God.',
+  'Thank you. I’ll keep it for later.': 'Thank you. I’ll put it by.',
+  'We don’t need it, steward. {needy} does.': 'We don’t need it, kahya. {needy} does.',
+  'What do we want with the landowner’s grain? Our jars are full.':
+    'What do we want with the agha’s grain? Our jars are full.',
+  'I accept it. Thank you. Please do not make a speech about it.':
+    'Fine. Thank you. Don’t make a speech of it.',
+  'Take it, then. Take the jars too, since you treat them as the landowner’s property.':
+    'Take it, then. Take the jars too, they’re the agha’s as well.',
+  'You’ll eat well tonight, steward.': 'You’ll eat well tonight, kahya.',
+  'Please leave some for the children.': 'Please, leave some for the children. Please.',
+  'We would have brought the share to you.': 'We would have brought it. We would have.',
+  'So this is what the steward looks like when he’s working.':
+    'So this is what the kahya looks like when he’s working.',
+  'At least the last steward asked first.': 'The last one at least asked first.',
+  'You have our grain now.': 'There. Now you have it.',
+  'We would have paid if you had given us time.': 'We would have paid, given time.',
+  'Everyone in the lane saw what happened. I hope you know that.':
+    'The whole lane saw. I hope you know that.',
+  'You have halved our share. God bless you, steward. We can afford half.':
+    'Half. God bless you, kahya. Half we can carry.',
+  'The neighbours will talk about this. Let them talk.': 'The neighbours will talk. Let them.',
+  'People at the spring say: “Why did they get help instead of us? Their jars are no emptier than ours.”':
+    'Talk at the spring: “Why them and not us? Their jars are no emptier than ours.”',
+  'People at the coffeehouse say: “The steward has his favourites, then.”':
+    'Talk at the coffeehouse: “The kahya has his favourites, then.”',
+  'People at the spring say: “That is good. That house has had a bad year.”':
+    'Talk at the spring: “Good. That house has had a bad year.”',
+  'I’ll come before the rain.': 'Fine. Before the rain.',
+  'I agree.': 'Fine.',
+  'I’ll carry stone this once.': 'I’ll carry. Once.',
+  'You promise one of every eight bundles of cut barley as pay. I’ll count them.':
+    'A sheaf in eight. I’ll count them.',
+  'I’ll do the work if it is paid.': 'Paid work. That I’ll do.',
+  'We’ll be there. Tell the landowner we came.': 'We’ll be there. Tell the agha we came.',
+  'Here is our share. Is it enough? Please tell me it is enough.': 'Here. Is it enough? Tell me it’s enough.',
+  'Yes, I’ll carry stone.': 'Yes, of course.',
+  'Will you pay us one of every eight bundles of cut barley? God bless you. We’ll come.':
+    'A sheaf in eight? God bless you. We’ll come.',
+  'I will come for a bundle of cut barley. Thank you.': 'For a sheaf, yes. Thank you.',
+  'I’ll work for the landowner, then. He’ll thank us personally, I’m sure.':
+    'For the agha, then. He’ll thank us personally, I’m sure.',
+  'Someone has to cut the landowner’s barley. I wish we did not have to do it.':
+    'The agha’s barley won’t cut itself. More’s the pity.',
+  'There is our share. It will feed the landowner’s horses.': 'There. Our gift to the agha’s horses.',
+  'Here is our share. Don’t spend it all at once.': 'Here. Don’t spend it all at once.',
+  'We could have a mill. I’ll carry stone.': 'A mill. Imagine. I’ll carry.',
+  'I’ll carry stones for the landowner. Why not?': 'Stones for the agha. Why not.',
+  'We will even be paid. Is the landowner unwell?': 'Paid, even. Is the agha unwell?',
+  'We will receive one of every eight bundles of cut barley as pay. Things are changing.':
+    'A sheaf in eight. The world is turning.',
+  'Here is our share. We owe nothing now.': 'There. We owe nothing.',
+  'I’ll come if you pay me a bundle of cut barley.': 'For a sheaf, I’ll come.',
+  'I’ll come because you insist.': 'Since you insist.',
+  'I can bring half now. I’ll bring the rest when I can.': 'Half now. The rest when I can.',
+  'Take half. We have people to feed.': 'Take half. We have mouths.',
+  'We must cut our own barley first. Then we can cut the landowner’s.':
+    'Our own barley first. Then the agha’s.',
+  'We must finish our own field first. It’s ripe too.': 'After our own field. It’s ripe too.',
+  'My barley will rot, steward. I must cut it first.': 'My barley will rot, kahya. After.',
+  'I cannot bring it yet. Winter is long.': 'Not yet. Winter is long.',
+  'Who will feed my family while I cut his barley?': 'Who feeds mine while I cut his?',
+  'I will not come just because you ask. I will not come today.': 'Not on your word. Not today.',
+  'The last steward said that too.': 'The last kahya said that too.',
+  'No. I will not do it for you.': 'No. Not for you.',
+  'I can’t work. My back hurts too much.': 'I can’t. My back’s gone.',
+  'I am too tired to work.': 'I’m dead on my feet.',
+  'There’s no bread in the house, steward.': 'There’s no bread in the house, kahya.',
+  'You can leave now.': 'You know where the door is.',
+  'The last steward also used to visit us with a smile.': 'The last one used to come like this too, smiling.',
+  'You are here, steward! Sit down. Someone bring the cushion.': 'Kahya! Sit, sit. Bring the cushion.',
+  'We’ve said what we have to say to the people at the residence.':
+    'We’ve said what we have to say to the konak.',
+  'Our food will last until spring if nobody falls ill.': 'We’ll get to the spring if nobody falls ill.',
+  'We have less grain than I would like. We’re eating less at night.':
+    'The jar is lower than I like. We’re eating less at night.',
+  'We’ll run short of food before spring. I know it already.':
+    'We’ll be short before the spring. I know it already.',
+  'We’ve started mixing the husks from grain into the bread.': 'We’ve started mixing chaff into the bread.',
+  'We did not ask for grain, but we accept it.': 'We weren’t asking, but we won’t say no.',
+  'That is kind of you. We’ll keep it for spring.': 'That’s kind. We’ll keep it for the spring.',
+  'I’ll do as you say, steward.': 'As you say, kahya.',
+  'We barely have enough food for ourselves, steward.': 'We’ve barely enough, kahya.',
+  'I already did what you asked once, steward. That was enough.': 'Once was enough, kahya.',
+  'I came when you insisted. Look what happened to me.': 'I came when you pushed. Look what it got me.',
+  'I have no strength left today.': 'I’ve nothing left in me today.',
+  'How can I work without food? Let me eat first.': 'On an empty stomach? Let me eat.',
+  'Snow covers the upper lanes. The {fam} children slid down the snow on a tray until dark.':
+    'Snow on the upper lanes. The {fam} children were out on a tray until dark.',
+  'People are washing clothes at the spring. {who} of {house} brought back all the news.':
+    'Washing day at the spring. {who} of {house} brought back all the news.',
+  'It was too hot to work at noon. {who} slept in the shade of the {fam} walnut.':
+    'Too hot to work at noon. {who} slept in the shade of the {fam} walnut.',
+  'People baked bread at the {fam} oven today. The smell spread down the lane.':
+    'Bread baked at the {fam} oven today; the smell went all down the lane.',
+  '{who} walked to the mosque through the snow for the night prayer, as on most evenings.':
+    '{who} walked to the mosque through the snow for the night prayer, as most evenings.',
+  '{who} of {house} took a donkey loaded with grapes down to the pot for making grape syrup.':
+    '{who} of {house} took a donkey of grapes down to the pekmez cauldron.',
+  'The {fam} roof is getting a new layer of mud before the rains. {who} is on the roof, shouting down.':
+    'The {fam} roof is being re-mudded before the rains. {who} is on it, shouting down.',
+};
+
+export function rememberedLine(line: string): string {
+  return REMEMBERED_LINES[line] ?? line;
+}
