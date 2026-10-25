@@ -260,6 +260,63 @@ it('holds the clock for the menu and info, and slows the ledger for reading', as
   }
 });
 
+it('keeps the prior recovery snapshot and latest input log when compression fails on hiding', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const snapshot = () =>
+    page.evaluate(async () => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('valley', 1);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        const bound = await new Promise<
+          { runId: string; seed: number; k: number; minute: number; gz: Blob } | undefined
+        >((resolve, reject) => {
+          const request = database.transaction('volumes').objectStore('volumes').get('current');
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        return bound ? { ...bound, gz: Array.from(new Uint8Array(await bound.gz.arrayBuffer())) } : null;
+      } finally {
+        database.close();
+      }
+    });
+  try {
+    await open(page);
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await expect.poll(snapshot).not.toBeNull();
+    const prior = await snapshot();
+    await page.evaluate(
+      `import('/src/ui/app.ts').then(({ _debug }) => _debug.order({ verb: 'visit', house: 'coban' }))`,
+    );
+    const latest = await state(page);
+    const receipt = await page.evaluate(() => JSON.parse(localStorage.getItem('valley-log-v1')!).continuity);
+    await page.evaluate(() => {
+      window.CompressionStream = class {
+        constructor() {
+          throw new Error('Simulated unloading compression failure');
+        }
+      } as unknown as typeof CompressionStream;
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await page.clock.runFor(50);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('valley-log-v1')!));
+    expect(saved.minute).toBe(latest.minute);
+    expect(JSON.stringify(saved.inputs)).toBe(latest.inputs);
+    expect(saved.continuity).toEqual(receipt);
+    expect(await snapshot()).toEqual(prior);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.close();
+  }
+});
+
 it.each(['other-chapter', undefined])(
   'ignores a same-seed bound volume without the current receipt (%s)',
   async (receipt) => {

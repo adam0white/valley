@@ -204,16 +204,16 @@ async function bindVolume() {
     g === boundGame && castSession.game === boundGame && castSession.generation === boundGeneration;
   const s = g.valley;
   const json = JSON.stringify(stateJson(s));
-  const bound: Bound = {
-    runId: castSession.runId,
-    seed: s.seed,
-    k: g.inputs.length,
-    minute: s.minute,
-    gz: await gzip(json),
-  };
-  if (!current()) return;
-  volume++;
   try {
+    const bound: Bound = {
+      runId: castSession.runId,
+      seed: s.seed,
+      k: g.inputs.length,
+      minute: s.minute,
+      gz: await gzip(json),
+    };
+    if (!current()) return;
+    volume++;
     const d = await db();
     if (!current()) return;
     await new Promise<void>((res, rej) => {
@@ -225,7 +225,9 @@ async function bindVolume() {
     });
     if (!current()) return;
     lab.captureSave({ seed: bound.seed, k: bound.k, minute: bound.minute, state: JSON.parse(json) });
-  } catch {}
+  } catch (error) {
+    console.warn('Recovery snapshot could not be saved. The input log is kept.', error);
+  }
   if (current()) writeLog();
 }
 
