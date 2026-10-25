@@ -84,7 +84,20 @@ it('fits the visible SDK notice and keeps grain controls clear of the toolbar', 
     const compact = await page.locator('.lk-telemetry-notice').evaluate((e) => {
       const range = document.createRange();
       range.selectNodeContents(e);
+      const style = getComputedStyle(e);
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (context) context.font = `${style.fontSize} ${style.fontFamily}`;
       return {
+        fontFamily: style.fontFamily,
+        contentWidth: e.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+        textWidth: context?.measureText(e.textContent ?? '').width,
+        lineRects: [...range.getClientRects()].map((r) => ({
+          x: r.x,
+          y: r.y,
+          width: r.width,
+          height: r.height,
+        })),
         text: e.textContent,
         font: parseFloat(getComputedStyle(e).fontSize),
         lines: range.getClientRects().length,
@@ -94,7 +107,7 @@ it('fits the visible SDK notice and keeps grain controls clear of the toolbar', 
     });
     expect(compact.text).toBe('We record and link play across games on this device.');
     expect(compact.font).toBeGreaterThanOrEqual(14);
-    expect(compact.lines).toBe(1);
+    expect(compact.lines, JSON.stringify(compact)).toBe(1);
     expect(compact.node).toBeLessThanOrEqual(40);
     expect(compact.wrapper).toBeLessThanOrEqual(40);
     expect(await page.getByRole('button', { name: 'Dismiss', exact: true }).count()).toBe(0);

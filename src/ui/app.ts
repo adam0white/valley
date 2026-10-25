@@ -90,9 +90,10 @@ interface Log {
 }
 
 const notice = telemetryNotice();
-// Leave room for portable system-ui metrics without shrinking the disclosure.
+// Use portable notice metrics without shrinking text or changing body typography.
 if (notice) {
   notice.style.paddingInline = '2px';
+  notice.style.fontFamily = 'Arial, "Liberation Sans", sans-serif';
   // Valley's root is 17px. Keep normal disclosure at 14px and scale enlarged roots.
   notice.style.fontSize = 'max(14px, 0.8rem)';
 }
