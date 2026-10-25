@@ -254,7 +254,10 @@ async function clearSaves() {
 
 async function gzip(text: string): Promise<Blob> {
   if (typeof CompressionStream === 'undefined') return new Blob([text]);
-  return new Response(new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))).blob();
+  // A Blob input stream belongs to its document and can fail during WebKit unload.
+  const input = new Response(text).body;
+  if (!input) throw new Error('Save compression input is unavailable.');
+  return new Response(input.pipeThrough(new CompressionStream('gzip'))).blob();
 }
 async function gunzip(b: Blob): Promise<string> {
   try {

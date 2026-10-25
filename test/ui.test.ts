@@ -260,6 +260,61 @@ it('holds the clock for the menu and info, and slows the ledger for reading', as
   }
 });
 
+it('saves a recovery snapshot without a document-owned Blob input stream', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  try {
+    await open(page);
+    await page.evaluate(
+      `import('/src/ui/app.ts').then(({ _debug }) => _debug.order({ verb: 'visit', house: 'coban' }))`,
+    );
+    const latest = await state(page);
+    await page.evaluate(() => {
+      // Model the document-owned stream becoming unavailable during WebKit unload.
+      Blob.prototype.stream = () => {
+        throw new Error('Document Blob input is unavailable');
+      };
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    const readBound = () =>
+      page.evaluate(async () => {
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('valley', 1);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        try {
+          const bound = await new Promise<{ k: number; minute: number; gz: Blob } | undefined>(
+            (resolve, reject) => {
+              const request = database.transaction('volumes').objectStore('volumes').get('current');
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject(request.error);
+            },
+          );
+          if (!bound) return null;
+          const bytes = await bound.gz.arrayBuffer();
+          const text = await new Response(
+            new Response(bytes).body!.pipeThrough(new DecompressionStream('gzip')),
+          ).text();
+          return { k: bound.k, minute: bound.minute, state: JSON.parse(text) };
+        } finally {
+          database.close();
+        }
+      });
+    await expect.poll(readBound).not.toBeNull();
+    const bound = await readBound();
+    expect(bound?.k).toBe(JSON.parse(latest.inputs).length);
+    expect(bound?.minute).toBe(latest.minute);
+    expect(bound?.state.minute).toBe(latest.minute);
+    expect(bound?.state.households).toHaveLength(16);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.close();
+  }
+});
+
 it('keeps the prior recovery snapshot and latest input log when compression fails on hiding', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   const errors: string[] = [];
