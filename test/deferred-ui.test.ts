@@ -73,13 +73,36 @@ it('offers new-edition actions and preserves a readable reply at 320px with enla
     await open(page, 'valley-2026-10');
     await page.locator('[data-h="coban"]').click();
     expect(await page.getByRole('button', { name: 'Ask for an extra sack', exact: true }).count()).toBe(1);
-    await page.evaluate(() => (document.documentElement.style.fontSize = '34px'));
+    await page.evaluate(
+      `(async()=>{const {_debug}=await import('/src/ui/app.ts');const {step}=await import('/src/sim/game.ts');step(_debug.game(),1920);_debug.order({verb:'visit',house:'coban'});})()`,
+    );
+    await page.clock.runFor(35000);
+    expect(await page.locator('.house-response').count()).toBe(1);
+    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(() => {
+      const sizes = [...document.querySelectorAll('body, body *')]
+        .filter((e): e is HTMLElement => e instanceof HTMLElement)
+        .map((e) => ({ e, size: parseFloat(getComputedStyle(e).fontSize) }));
+      for (const { e, size } of sizes) e.style.fontSize = `${size * 2}px`;
+    });
     await page.clock.runFor(500);
+    expect(await page.locator('#now').evaluate((e) => parseFloat(getComputedStyle(e).fontSize))).toBe(34);
+    expect(await page.locator('.play').getAttribute('data-reflow')).toBe('true');
+    expect(await page.evaluate(() => getComputedStyle(document.body).overflowY)).not.toBe('hidden');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
     expect(overflow).toBe(false);
+    const response = page.locator('.house-response');
+    await response.scrollIntoViewIfNeeded();
+    const responseBox = await response.boundingBox();
+    expect(
+      responseBox && responseBox.y >= -1 && responseBox.y + responseBox.height <= 691,
+      JSON.stringify(responseBox),
+    ).toBe(true);
     const visit = page.getByRole('button', { name: 'Visit', exact: true });
     await visit.scrollIntoViewIfNeeded();
     expect(await visit.isVisible()).toBe(true);
+    const action = await visit.boundingBox();
+    expect(action && action.y >= 0 && action.y + action.height <= 690).toBe(true);
     for (const colorScheme of ['dark', 'light'] as const) {
       await page.emulateMedia({ colorScheme });
       await page.clock.runFor(50);

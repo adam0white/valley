@@ -2218,3 +2218,88 @@ body {
     grid-column: 1;
   }
 }
+
+/* Text enlargement uses full page flow. State may scroll out of view, but no
+   reading body or command is trapped inside the normal fixed-height stage. */
+html:has(.play[data-reflow="true"]),
+body:has(.play[data-reflow="true"]) {
+  height: auto;
+  min-height: 100dvh;
+  overflow-y: auto;
+}
+body:has(.play[data-reflow="true"]) {
+  display: block;
+}
+#app:has(.play[data-reflow="true"]) {
+  height: auto;
+  overflow: visible;
+}
+#app > .play.lk-stage[data-reflow="true"] {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  block-size: auto;
+  min-height: 100dvh;
+  overflow: visible;
+}
+.play[data-reflow="true"] > .topbar {
+  height: auto;
+  min-height: 44px;
+  flex-wrap: wrap;
+}
+.play[data-reflow="true"] > .grain-bar {
+  position: static;
+  width: 100%;
+  height: auto;
+  flex: 0 0 auto;
+  flex-direction: column;
+}
+.play[data-reflow="true"] .grain-track {
+  width: 100%;
+  flex: 0 0 14px;
+}
+.play[data-reflow="true"] .grain-label {
+  max-width: none;
+  white-space: normal;
+}
+.play[data-reflow="true"] > .map {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+}
+.play[data-reflow="true"] #now,
+.play[data-reflow="true"] #steward {
+  position: static;
+}
+.play[data-reflow="true"] #map {
+  position: static;
+  height: 180px;
+  flex: 0 0 180px;
+  order: 1;
+}
+.play[data-reflow="true"] > #houses {
+  height: auto;
+  min-height: 52px;
+  flex: 0 0 auto;
+}
+.play.lk-stage[data-reflow="true"] > .lk-sheet {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  max-height: none;
+  max-block-size: none;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+.play[data-reflow="true"] .lk-sheet-body {
+  height: auto;
+  max-height: none;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+.play[data-reflow="true"] .verb-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}

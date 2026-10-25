@@ -169,13 +169,12 @@ a clean deployment and live verification; external delivery receipts are in
   controlled lab receipt specified in the 2026-10-20 follow-up. Routed to the shared lab
   owner for 2026-11-03. Private owner saves must not be sent. An intercepted receipt is
   not production acceptance.
-- Marriage brokering and a neighbouring valley: the supplied2026-10-25 Valley plan,
-  step 5, expressly permits this named owner-input gate. Adam already played on
-  October 20; that fact is not missing. The concrete proposal for November3 is one
-  optional pass visit, generated background residents, and introductions that create
-  opportunities for mutual HF choice, without forced marriage or a new canonical cast.
-  Adam chooses that authored scope before implementation. The original version2 scope
-  change above records why it is a separate increment.
+- Marriage brokering and a neighbouring valley remain open engineering (GDI065/066).
+  Director ruling, 2026-10-25: Adam already played on October 20; an old
+  after-first-play sequence is not an owner permission gate. The next reviewed host
+  slice is targeted for 2026-10-29: one optional pass visit and introductions that
+  create opportunities for mutual HF choice, without forced marriage or changing
+  the canonical cast. It follows this reviewed release and plain4's reserved copy pass.
 - Adam accepts game feel, difficulty and readiness on 2026-11-03. The existing
   first-goal/short-notebook fixes and new mechanics do not claim that acceptance.
   F-491 retest and F-492/F-465 acceptance stay real gates. Friends and Show HN stay paused.

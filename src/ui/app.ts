@@ -115,6 +115,7 @@ let last = 0;
 let carry = 0;
 let selected: string | null = null;
 let stage: PhoneStage | null = null;
+let textSizeObserver: ResizeObserver | null = null;
 let actionCaption = '';
 let importStatus = '';
 let houseDetails = false;
@@ -504,6 +505,8 @@ function title() {
       : log
         ? `Your ledger is open at ${dateWords(dayOfMinute(log.minute))} of year ${yearWord(yearOf(dayOfMinute(log.minute)))}.`
         : '';
+  textSizeObserver?.disconnect();
+  textSizeObserver = null;
   stage?.destroy();
   stage = null;
   app.innerHTML = `<div class="page title-page">
@@ -666,6 +669,8 @@ function enter() {
   lastDay = dayOfMinute(g.valley.minute);
   lastSnapDay = lastDay;
   seenNote = Math.max(seenNote, (g.valley.notes.at(-1)?.id ?? 0) - 6);
+  textSizeObserver?.disconnect();
+  textSizeObserver = null;
   stage?.destroy();
   app.innerHTML = `<div class="play lk-stage" data-sheet="fit">
     ${topbar('<span id="cap"></span>')}
@@ -676,15 +681,19 @@ function enter() {
   </div>`;
   app.querySelector('.grain-bar')?.addEventListener('click', () => openReading('ledger'));
   const root = app.querySelector<HTMLElement>('.lk-stage');
-  if (root)
-    stage = phoneStage(root, {
-      observeOnly: true,
-      onSceneRect: () => {
-        root.dataset.reflow = String(
-          parseFloat(getComputedStyle(root.querySelector('#now') ?? root).fontSize) > 24,
-        );
-      },
-    });
+  if (root) {
+    const checkTextSize = () => {
+      root.dataset.reflow = String(
+        parseFloat(getComputedStyle(root.querySelector('#now') ?? root).fontSize) > 24,
+      );
+    };
+    stage = phoneStage(root, { observeOnly: true, onSceneRect: checkTextSize });
+    const now = root.querySelector('#now');
+    if (now) {
+      textSizeObserver = new ResizeObserver(checkTextSize);
+      textSizeObserver.observe(now);
+    }
+  }
   app.querySelector('#sheet-head')?.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).closest('.house-close')) closeHouse();
     if ((e.target as HTMLElement).closest('.house-about')) {
@@ -2147,6 +2156,8 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
 // ---------- the ending ----------
 
 function ending() {
+  textSizeObserver?.disconnect();
+  textSizeObserver = null;
   stage?.destroy();
   stage = null;
   labScreen('ending');
