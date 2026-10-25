@@ -1,3 +1,77 @@
+# Valley handoff
+
+## Current source — 2026-10-25
+
+Remaining: plain4's reserved copy pass; GDI065/066 marriage and neighbouring-valley
+engineering; SDK adoption; an ordinary positive voluntary-contribution control;
+physical-phone and player evidence; Adam's feel and readiness acceptance.
+
+This summary describes signed source `beaa1c8c3c58162597cb3f22694e1eea66f6cf51`.
+The package is Valley 0.3.0 with HF 3.0.0, Person engine 2.23.0, client 0.4.10
+and kit 0.5.11. TypeScript is 7.0.2; Node 24 or later is required.
+Published client 0.4.11 and kit 0.5.12 have not been adopted here.
+See [README](README.md) for controls, storage and the framework/host boundary.
+
+The unchecked new-term option pins `valley-2026-10`. It adds completed mill wages,
+voluntary extra sacks, winter grain loans through actual ties, attended hearth topics,
+a third-year levy and a conserved separate store with inspection. Unmarked runs keep
+their original rules. Full and compact exports, local logs and bound continuations
+retain the edition. Prior recovery volumes are real saved pages read without rewinding.
+Binding reports actual success or failure; malformed logs remain until replacement.
+Music starts off. Household focus restoration and stale callback guards are implemented.
+The press adapter captures the actual next-morning answer during each simulation quantum;
+this is an adapter correction, not a new cohort result.
+
+The completed batch passed the normal lane: 151 passed, one skipped, with lint and types
+green. [Exact CI 40245290814](https://github.com/adam0white/valley/actions/runs/40245290814)
+succeeded on that source. Its clean deployment is Cloudflare
+`73f6fbbd-e818-4c0e-83fe-a70bb0ddb753`; release.json reports app 0.3.0,
+framework 3.0.0, that exact commit and `dirty:false`. Later documentation commits do not
+change that deployed source receipt. Source-only documentation requires no deployment.
+An app change requires a clean managed deployment and browser verification.
+
+Current full/compact replay controls and raw old-run equality are technical evidence.
+Unicode `topal-rıza` Resume and next-day continuation passed in both editions.
+The ordinary 220-input term did not establish a positive voluntary gift. Controlled HF
+transfer and conservation checks prove their tested paths, not ordinary positive giving,
+human continuation ownership, emotional payoff or owner acceptance.
+
+Existing Chrome checked the production title at 360×690 and 1280×800. Gameplay and
+actual doubled text used controlled loopback serving exact live asset bytes. This is
+desktop builder evidence, not a physical phone or WebKit result. Owner log/bound bytes
+were unchanged; no private run was exported or sent. Lab requests were blocked.
+Full receipts: `~/code/.lab-scratch/games-deferred/valley-report.md` and
+`valley-handoff-for-docsweb.md`. Earlier `666719d` ledger closures retain their dates
+and limits; they do not close current retest or acceptance gates.
+
+## Next work and acceptance
+
+- Plain4 owns its named gameplay copy routes. The docsweb pass changes only README,
+  this handoff and factual AGENTS text. Information and household About are gameplay
+  context, not general credits; no new About surface is required.
+- Games-deferred owns GDI065/066: the next optional marriage/neighbour slice follows
+  plain4, targeted 2026-10-29. It is open engineering, with no new owner-permission
+  gate. The next reviewed batch also owns SDK adoption and the ordinary positive
+  contribution control. See its `valley-next-batch.md`.
+- Adam/device review owns physical-phone keyboard, enlarged text and performance
+  checks, due 2026-11-03. Desktop geometry and throttling do not meet that gate.
+- New-player cold comprehension remains unproved; route through the playtest director
+  for the 2026-11-03 review. Lab-panel HF3 rounds are allowed under that director.
+  Docsweb runs no rounds. Friends' playtests and Show HN remain paused.
+- The shared lab owner/director owns the separately authorized controlled production
+  compact-notebook receipt, due 2026-11-03. Local/intercepted success is not that receipt.
+- Adam accepts feel, difficulty and readiness, due 2026-11-03. F-491 retest and
+  F-492/F-465 acceptance remain open. Technical CI/replay receipts do not establish them.
+
+Technical delivery ends with signed source, the normal lane, exact green CI and cleanup;
+app changes also require a clean matching live release and browser checks. Adam accepts
+game feel separately. Preserve the design's faith, household authority and replay rules.
+
+## Historical handoff — retained in full on 2026-10-25
+
+Everything below is the original handoff. Its version statements, delivery requirements
+and pause descriptions describe their dated increments, not current pins or policy.
+
 ## Frictionless recording direction, 2026-10-23
 
 Immutable client0.4.4 and kit0.5.4 implement this direction. The owner directs automatic linkage across games on this device whenever recording is on. The first-visit notice covers recording and linkage. One menu switch turns recording on even with DNT/GPC; those signals set the initial default off. Send word uses one optional unchecked “Share this run and my play with the lab” checkbox only while recording is off. Submit with it checked enables recording/linkage and sends an available run; unchecked sends the note alone. Old linkage choices migrate silently. No separate continuing-person recording consent applies, including identity changes and loaded histories. This supersedes earlier recording-consent sections below. Owner words and authority: human-framework/docs/owner-directions-2026-10-18.md (2026-10-23 frictionless feedback).
