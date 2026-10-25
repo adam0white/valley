@@ -302,7 +302,12 @@ export interface ValleyState {
 
 export const START_MINUTE = 7 * HOUR;
 
-export function newValley(seed: number, cast?: CastStart, preflight = false): ValleyState {
+export function newValley(
+  seed: number,
+  cast?: CastStart,
+  preflight = false,
+  plainEnglish = true,
+): ValleyState {
   if (community && communityFor) syncCommunity(communityFor);
   const { households, people } = foundValley(seed, 0);
   if (cast) {
@@ -315,6 +320,8 @@ export function newValley(seed: number, cast?: CastStart, preflight = false): Va
     }
   }
   const kahya = makeKahya(seed, 0);
+  // Opt in after admission, before any simulation. Full-save restoration bypasses this path.
+  for (const p of [...people, kahya]) p.lexicon = { ...p.lexicon, plainEnglish };
   const s: ValleyState = {
     v: 1,
     seed,
@@ -2146,6 +2153,9 @@ function born(s: ValleyState, mother: Person, father: Person, h: Household, at: 
     now: d.bornAt,
     sex: boy ? 'male' : 'female',
   });
+  // Preserve this run’s narration choice, including restored runs without the opt-in.
+  if (mother.lexicon?.plainEnglish !== undefined)
+    child.lexicon = { plainEnglish: mother.lexicon.plainEnglish };
   child.retention = { trace: 0, chronicleDays: 31 };
   s.people.push(child);
   h.members.push(child.id);

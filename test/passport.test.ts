@@ -1,12 +1,17 @@
-import { createPerson, MINUTES_PER_YEAR, snapshot } from '@adam0white/human-framework';
-import { createPersona, initialPersonaLife, preparePersonaLife } from '@adam0white/lab-client';
+import { createPerson, ENGINE_VERSION, MINUTES_PER_YEAR, snapshot } from '@adam0white/human-framework';
+import {
+  createPersona,
+  initialPersonaLife,
+  preparePersonaLife,
+  validatePersonaLife,
+} from '@adam0white/lab-client';
 import { expect, it } from 'vitest';
 import { admitCast, calendarPassport, checkpointReceipt } from '../src/sim/passport.ts';
 import { foundValley } from '../src/sim/people.ts';
 import { hunchOf } from '../src/sim/valley.ts';
 
 // Synthetic unit control; not a browser journey or evidence of a played source.
-async function source(role = 'danyal') {
+async function source(role = 'danyal', engine = ENGINE_VERSION) {
   const cast = ALLOCATION.find((c) => c.castId === `hf.cast.${role}.well`);
   if (!cast) throw new Error('missing fixture cast');
   const p = createPerson({
@@ -27,7 +32,7 @@ async function source(role = 'danyal') {
     castRevision: '1',
     branchId: `unit-${role}`,
     parentRevision: null,
-    source: { game: 'well', build: 'unit-control', engine: '2.17.0', rules: 'unit' },
+    source: { game: 'well', build: 'unit-control', engine, rules: 'unit' },
     transfer: {
       castPassport: 'site-cast/1',
       sourceRole: role,
@@ -38,17 +43,22 @@ async function source(role = 'danyal') {
     limitations: [],
   });
 }
-it('admits an explicit site dialect while carrying actual fitness, RNG and supported practice', async () => {
-  const envelope = await source();
-  const opening = foundValley(42, 0).people.find((p) => p.id === 'danyal');
-  if (!opening) throw new Error('missing actor');
-  const admitted = admitCast(opening, preparePersonaLife(envelope, 26 * 3600000));
-  expect(admitted.person.body.fitness).toBe(0.73);
-  expect(admitted.person.rng).toEqual((envelope.transfer.person as { person: { rng: unknown } }).person.rng);
-  expect(admitted.person.skills.farming?.level).toBe(0.64);
-  expect(admitted.person.skills.unrelated).toBeUndefined();
-  expect(admitted.limitations.join(' ')).toContain('unrelated');
-});
+it.each(['2.17.0', ENGINE_VERSION])(
+  'admits the explicit %s site dialect with actual fitness, RNG and practice',
+  async (engine) => {
+    const envelope = await source('danyal', engine);
+    const opening = foundValley(42, 0).people.find((p) => p.id === 'danyal');
+    if (!opening) throw new Error('missing actor');
+    const admitted = admitCast(opening, preparePersonaLife(envelope, 26 * 3600000));
+    expect(admitted.person.body.fitness).toBe(0.73);
+    expect(admitted.person.rng).toEqual(
+      (envelope.transfer.person as { person: { rng: unknown } }).person.rng,
+    );
+    expect(admitted.person.skills.farming?.level).toBe(0.64);
+    expect(admitted.person.skills.unrelated).toBeUndefined();
+    expect(admitted.limitations.join(' ')).toContain('unrelated');
+  },
+);
 it('refuses a public profile or an unregistered source role before admission', async () => {
   const envelope = await source();
   const opening = foundValley(42, 0).people.find((p) => p.id === 'danyal');
@@ -72,7 +82,7 @@ it('refuses a public profile or an unregistered source role before admission', a
 
 import { acceptPersonaBatch, type PersonaRequest, type PersonaShelfState } from '@adam0white/lab-client';
 import { ALLOCATION } from '../src/sim/cast.ts';
-import { act, fingerprint, load, replay, save, step } from '../src/sim/game.ts';
+import { act, compactRun, fingerprint, load, replay, save, step } from '../src/sim/game.ts';
 import { CastSession, type Shelf } from '../src/ui/cast-session.ts';
 
 class FakeShelf implements Shelf {
@@ -147,6 +157,8 @@ it('claims all applicable heads together, pins all actors, and keeps loaded/file
   expect(shelf.writes).toBe(1);
   const fp = fingerprint(g.valley);
   expect(fingerprint(replay(42, g.inputs, g.valley.minute, g.cast).valley)).toBe(fp);
+  for (const actor of [...g.valley.people, g.valley.kahya]) expect(actor.lexicon?.plainEnglish).toBe(true);
+  expect(fingerprint(load(compactRun(g)).valley)).toBe(fingerprint(g.valley));
   const metadata = session.metadata();
   const saved = save(g);
   await session.loaded(load(saved), metadata);
@@ -266,6 +278,10 @@ it('keeps imported receipts nonowned until a new explicit paused-source alternat
   expect(root.parentRevision).toBeNull();
   expect(root.branchId).not.toBe(initial.branchId);
   expect(root.transfer.castPassport).toBe('valley-cast/1');
+  expect(root.source.engine).toBe(ENGINE_VERSION);
+  const returnOpening = foundValley(43, 0).people.find((p) => p.id === 'danyal')!;
+  const returnClock = validatePersonaLife(root.transfer.life, root.castId).clock.watermark * 3600000;
+  expect(admitCast(returnOpening, preparePersonaLife(root, returnClock)).person.id).toBe('danyal');
   expect(root.transfer.checkpoint).toEqual(await checkpointReceipt(paused));
   expect(shelf.state.revisions.some((p) => p.revision === originalHead)).toBe(true);
   expect(JSON.stringify(restored.cast)).toBe(pinned);
@@ -298,4 +314,14 @@ it('refuses an unpaused source and cancels an alternative after its run generati
   await pending;
   expect(shelf.writes).toBe(0);
   expect(session.heads).toEqual({});
+});
+
+it('refuses an unreviewed source engine without admitting its state', async () => {
+  const envelope = await source('danyal', '99.0.0');
+  const opening = foundValley(42, 0).people.find((p) => p.id === 'danyal')!;
+  const before = JSON.stringify(snapshot(opening));
+  expect(() => admitCast(opening, preparePersonaLife(envelope, 0))).toThrow(
+    'Unsupported source engine dialect',
+  );
+  expect(JSON.stringify(snapshot(opening))).toBe(before);
 });

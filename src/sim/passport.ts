@@ -4,6 +4,7 @@
  */
 import {
   admitCalendarPersona,
+  ENGINE_VERSION,
   isContinuingCommitment,
   MINUTES_PER_YEAR,
   type NormDefinition,
@@ -106,7 +107,8 @@ export function admitCast(
   input: LifePreparation,
 ): { person: Person; limitations: string[] } {
   const parent = input.parent;
-  if (parent.source.engine !== '2.17.0') throw new Error('Unsupported source engine dialect.');
+  if (!['2.17.0', ENGINE_VERSION].includes(parent.source.engine))
+    throw new Error('Unsupported source engine dialect.');
   const role = localRole(parent.castId);
   const publicPerson = canonicalCast(parent.castId);
   if (opening.id !== role || parent.castRevision !== publicPerson.revision || parent.terminal)

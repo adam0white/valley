@@ -51,12 +51,13 @@ export type Input =
 export interface Game {
   valley: ValleyState;
   inputs: Input[];
+  plainEnglish?: boolean;
   cast?: CastStart;
 }
 
-export function newGame(seed: number, cast?: CastStart, preflight = false): Game {
-  const valley = newValley(seed, cast, preflight);
-  const g: Game = { valley, inputs: [], ...(cast ? { cast: structuredClone(cast) } : {}) };
+export function newGame(seed: number, cast?: CastStart, preflight = false, plainEnglish = true): Game {
+  const valley = newValley(seed, cast, preflight, plainEnglish);
+  const g: Game = { valley, inputs: [], plainEnglish, ...(cast ? { cast: structuredClone(cast) } : {}) };
   beats(g);
   return g;
 }
@@ -493,6 +494,8 @@ function readGathering(g: Game): { elders: ElderWord[]; letter: string } {
 // ---------- saves and the export ----------
 
 export interface SavedGame {
+  /** Initial narration choice; omitted current-edition files use the fresh-game default. */
+  plainEnglish?: boolean;
   castHeads?: Record<string, import('@adam0white/lab-client').PersonaEnvelope>;
   castSources?: Record<string, { revision: string; person: Person }>;
   cast?: CastStart;
@@ -583,6 +586,7 @@ export function save(g: Game, n = 0): SavedGame {
   return {
     ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
     game: 'valley',
+    plainEnglish: g.plainEnglish ?? true,
     version: GAME_VERSION,
     framework: FRAMEWORK_VERSION,
     seed: g.valley.seed,
@@ -604,6 +608,7 @@ export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
       game: g.game,
       version: g.version,
       framework: g.framework,
+      plainEnglish: g.plainEnglish ?? true,
       seed: g.seed,
       minute: g.minute,
       inputs: structuredClone(g.inputs),
@@ -613,6 +618,7 @@ export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
   return {
     ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
     game: 'valley',
+    plainEnglish: g.plainEnglish ?? true,
     version: GAME_VERSION,
     framework: FRAMEWORK_VERSION,
     seed: g.valley.seed,
@@ -630,10 +636,17 @@ export function load(saved: SavedGame | CompactRun): Game {
   if ('state' in saved)
     return {
       valley: restoreState(saved.state),
+      plainEnglish: saved.plainEnglish ?? true,
       inputs: structuredClone(saved.inputs),
       ...(saved.cast ? { cast: structuredClone(saved.cast) } : {}),
     };
-  const g = replay(saved.seed, structuredClone(saved.inputs), saved.minute, saved.cast);
+  const g = replay(
+    saved.seed,
+    structuredClone(saved.inputs),
+    saved.minute,
+    saved.cast,
+    saved.plainEnglish ?? true,
+  );
   if (fingerprint(g.valley) !== saved.fingerprint)
     throw new Error(
       'This file does not replay the same way in this version of The Valley. It may come from an older version. Start a new game instead.',
@@ -642,8 +655,14 @@ export function load(saved: SavedGame | CompactRun): Game {
 }
 
 /** Rebuild a run from its seed and inputs alone. */
-export function replay(seed: number, inputs: Input[], to: number, cast?: CastStart): Game {
-  const g = newGame(seed, cast);
+export function replay(
+  seed: number,
+  inputs: Input[],
+  to: number,
+  cast?: CastStart,
+  plainEnglish = true,
+): Game {
+  const g = newGame(seed, cast, false, plainEnglish);
   step(g, to, inputs);
   return g;
 }

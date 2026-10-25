@@ -16,18 +16,18 @@ afterAll(async () => {
   await browser?.close();
 }, 30000);
 
-async function open(page: Page, minute = 360, seed = 406153184, inputs: Input[] = []) {
+async function open(page: Page, minute = 360, seed = 406153184, inputs: Input[] = [], plainEnglish = true) {
   page.setDefaultTimeout(4000);
   await page.clock.install();
   await page.goto(origin);
   await page.clock.pauseAt(Date.now() + 500);
   await page.evaluate(
-    ({ minute, seed, inputs }) =>
+    ({ minute, seed, inputs, plainEnglish }) =>
       localStorage.setItem(
         'valley-log-v1',
-        JSON.stringify({ game: 'valley', version: '0.3.0', seed, inputs, minute, volume: 0 }),
+        JSON.stringify({ game: 'valley', version: '0.3.0', seed, inputs, minute, volume: 0, plainEnglish }),
       ),
-    { minute, seed, inputs },
+    { minute, seed, inputs, plainEnglish },
   );
   await page.reload();
   await page.getByRole('button', { name: 'Resume', exact: true }).click();
@@ -611,6 +611,53 @@ it.each([
       actions: true,
     });
     await fits(page);
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps a saved narration choice through local resume and log writes', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page, 1440, 7, [], false);
+    const choice = () =>
+      page.evaluate(`import('/src/ui/app.ts').then(({ _debug }) => {
+      const g = _debug.game();
+      return { initial: g.plainEnglish, actors: [...g.valley.people, g.valley.kahya].every(p => p.lexicon?.plainEnglish === false) };
+    })`);
+    expect(await choice()).toEqual({ initial: false, actors: true });
+    await page.evaluate(
+      `import('/src/ui/app.ts').then(({ _debug }) => _debug.order({ verb: 'visit', house: 'coban' }))`,
+    );
+    expect(
+      await page.evaluate(() => JSON.parse(localStorage.getItem('valley-log-v1') ?? '{}').plainEnglish),
+    ).toBe(false);
+    await page.reload();
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    for (let i = 0; i < 100 && !(await page.locator('#map').count()); i++) await page.clock.runFor(50);
+    expect(await choice()).toEqual({ initial: false, actors: true });
+  } finally {
+    await page.close();
+  }
+});
+
+it('refuses a legacy local log without a pinned narration choice', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await page.goto(origin);
+    const legacy = JSON.stringify({
+      game: 'valley',
+      version: '0.3.0',
+      seed: 7,
+      inputs: [],
+      minute: 1440,
+      volume: 0,
+    });
+    await page.evaluate((text) => localStorage.setItem('valley-log-v1', text), legacy);
+    await page.reload();
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    await expect.poll(() => page.locator('body').innerText()).toMatch(/Start a new game from the title page/);
+    expect(await page.evaluate(() => localStorage.getItem('valley-log-v1'))).toBe(legacy);
   } finally {
     await page.close();
   }

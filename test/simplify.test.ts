@@ -146,7 +146,7 @@ it('fits the visible SDK notice and keeps grain controls clear of the toolbar', 
     }
     await page.evaluate(`import('/src/sim/game.ts').then(({newGame,save}) => {
       const run=save(newGame(7));
-      localStorage.setItem('valley-log-v1',JSON.stringify({game:'valley',version:run.version,seed:7,inputs:[],minute:360,volume:0}));
+      localStorage.setItem('valley-log-v1',JSON.stringify({game:'valley',version:run.version,plainEnglish:true,seed:7,inputs:[],minute:360,volume:0}));
     })`);
     await page.reload();
     await page.getByRole('button', { name: 'Resume', exact: true }).click();

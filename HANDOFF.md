@@ -51,3 +51,26 @@ runner live in `test/fixtures/plain-english-mechanics.json` and
 `scripts/plain-english-proof.mjs`. The game version stays 0.3.0. New exports replay;
 older compact exports whose prose fingerprint differs receive a start-fresh message.
 Adam accepts game feel separately from technical release checks.
+
+## Published HF plain narration — 2026-10-25
+
+The host pins published HF2.21.0, including lab-client’s dependency through a root override.
+Fresh games opt every actor into persisted plain narration after cast admission and before
+simulation. Full-state loading preserves saved choices. Newborns inherit only the mother’s
+plainEnglish choice. Full and compact exports and the local input log pin the initial choice;
+replay uses it. The game version remains 0.3.0; incompatible older framework exports are
+refused with a start-fresh message. Host domain glosses and rememberedLine keys remain.
+
+Lesson: narration is saved state. A prose upgrade needs a pinned initial narration choice
+for compact replay, and a child must not inherit unrelated host lexicon overrides. Parity
+must retain semantic history and repetition keys. Convert only known generated narration
+back to its prior wording; do not blank all strings or episode history to obtain equality.
+The earlier source-rewrite proof fixture is specifically an HF2.18.0 baseline. The separate
+upgrade/control/plain paired proof, independent review, on-screen dump and delivery receipts
+are in `~/code/.lab-scratch/hfadopt/valley-report.md`. Adam accepts feel separately.
+
+The receiver explicitly admits both the legacy2.17.0 and current2.21.0 engine dialects
+through the same role, calendar, norm, duty and checkpoint validation. Unknown engines
+remain refused. This includes this host’s current exported histories; changing the outgoing
+engine stamp without updating this allowlist would block the next receiving chapter.
+Legacy local logs without a pinned narration choice are refused without deleting the log.

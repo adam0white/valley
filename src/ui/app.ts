@@ -78,6 +78,7 @@ let speed: Pace = 'automatic';
 const HUB = 'https://human.adamwhite.work';
 
 interface Log {
+  plainEnglish?: boolean;
   cast?: CastStart;
   continuity?: LocalCastReceipt;
   game: 'valley';
@@ -152,6 +153,7 @@ function writeLog() {
     ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
     continuity: castSession.metadata(),
     game: 'valley',
+    plainEnglish: g.plainEnglish ?? true,
     version: GAME_VERSION,
     seed: g.valley.seed,
     inputs: g.inputs,
@@ -270,7 +272,7 @@ async function gunzip(b: Blob): Promise<string> {
 
 /** Read the ledger back: the bound volume, then the days written after it, quantum by quantum. */
 async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> {
-  if (log.version !== GAME_VERSION)
+  if (log.version !== GAME_VERSION || typeof log.plainEnglish !== 'boolean')
     throw new Error('This saved game uses an older Valley version. Start a new game from the title page.');
   if (log.cast) newGame(log.seed, log.cast); // Validate the pinned semantic header even when a bound volume exists.
   const bound = await readVolume();
@@ -287,12 +289,13 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
   ) {
     game = {
       valley: restoreState(JSON.parse(await gunzip(bound.gz)) as ValleyState),
+      plainEnglish: log.plainEnglish ?? true,
       inputs: log.inputs.slice(0, bound.k),
       ...(log.cast ? { cast: structuredClone(log.cast) } : {}),
     };
     rest = log.inputs.slice(bound.k);
   } else {
-    game = newGame(log.seed, log.cast);
+    game = newGame(log.seed, log.cast, false, log.plainEnglish ?? true);
     rest = log.inputs;
   }
   while (game.valley.minute + QUANTUM <= log.minute && !game.valley.flags.ended) {
