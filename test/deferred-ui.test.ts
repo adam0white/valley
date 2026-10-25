@@ -241,3 +241,50 @@ it.each([undefined, 'valley-2026-10'] as const)(
     }
   },
 );
+it.each([false, true])(
+  'keeps the edition choice between title content and New game without overlap (lab=%s)',
+  async (lab) => {
+    const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+    try {
+      await page.goto(origin + (lab ? '/?lab=1' : '/'));
+      await page.evaluate(() => localStorage.setItem('valley-log-v1', '{"malformed":true}'));
+      await page.reload();
+      await page.evaluate(() => document.fonts.ready);
+      const geometry = await page.evaluate(() => {
+        const edition = document.querySelector('.edition-choice')?.getBoundingClientRect();
+        const tools = document.querySelector('[data-ways]')?.getBoundingClientRect();
+        const start = document.querySelector('[data-go="new"]')?.getBoundingClientRect();
+        if (!edition || !start) throw Error('Missing new-term choice');
+        const text = document.createRange();
+        const label = document.querySelector('.edition-choice');
+        if (!label) throw Error('Missing edition label');
+        text.selectNodeContents(label);
+        const lines = [...text.getClientRects()];
+        return {
+          editionTop: edition.top,
+          editionBottom: edition.bottom,
+          toolsBottom: tools?.bottom ?? 0,
+          startTop: start.top,
+          startBottom: start.bottom,
+          textFits: lines.every((r) => r.top >= edition.top - 1 && r.bottom <= edition.bottom + 1),
+          overflow: document.documentElement.scrollWidth > innerWidth + 1,
+        };
+      });
+      expect(geometry.editionTop).toBeGreaterThanOrEqual(geometry.toolsBottom);
+      expect(geometry.textFits).toBe(true);
+      expect(geometry.editionBottom).toBeLessThanOrEqual(geometry.startTop);
+      expect(geometry.startBottom).toBeLessThanOrEqual(690);
+      expect(geometry.overflow).toBe(false);
+      await page.locator('.edition-choice').evaluate((e) => {
+        (e as HTMLElement).style.fontSize = '34px';
+      });
+      const startButton = page.getByRole('button', { name: 'New game', exact: true });
+      await startButton.scrollIntoViewIfNeeded();
+      const enlarged = await startButton.boundingBox();
+      expect(enlarged && enlarged.y >= 0 && enlarged.y + enlarged.height <= 690).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    } finally {
+      await page.close();
+    }
+  },
+);

@@ -279,8 +279,14 @@ button {
 .title-page {
   display: grid;
   grid-template-rows: 44px auto 52px minmax(0, 1fr) auto;
+  grid-template-areas: "bar" "premise" "tools" "art" "actions";
+  overflow-y: auto;
+}
+.title-page > .topbar {
+  grid-area: bar;
 }
 .title-premise {
+  grid-area: premise;
   padding: 12px 18px 8px;
 }
 .title-premise h1 {
@@ -302,6 +308,7 @@ button {
   font-size: 15px;
 }
 .title-page > [data-ways] {
+  grid-area: tools;
   width: 100%;
   border-radius: 0;
   border-left: 0;
@@ -311,6 +318,8 @@ button {
   background: transparent;
 }
 .vignette {
+  grid-area: art;
+  overflow: hidden;
   display: block;
   width: 100%;
   height: 100%;
@@ -319,6 +328,7 @@ button {
   align-self: center;
 }
 .title-actions {
+  grid-area: actions;
   padding: 8px 16px max(4px, var(--safe-b));
   display: flex;
   flex-direction: column;
