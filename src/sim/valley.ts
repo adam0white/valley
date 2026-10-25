@@ -31,14 +31,13 @@ import {
   decide,
   deliver,
   finish,
-  glimpseOf,
+  glimpsePerson,
   tick as hfTick,
   MUSLIM_CUSTOM,
   marry,
   type Outcome,
   type Percept,
   type Person,
-  perceive,
   predictAs,
   pregnancyDue,
   promise,
@@ -52,7 +51,6 @@ import {
   spousesOf,
   stepCommunity,
   successChance,
-  tellDeath,
   type World,
 } from '@adam0white/human-framework';
 import {
@@ -63,12 +61,12 @@ import {
   doyOf,
   HOUR,
   minuteOfDay,
-  type Season,
   seasonOf,
   weatherOf,
   yearOf,
 } from './calendar.ts';
 import { ALLOCATION, CAST_IDS, DISCLOSURES, localRole } from './cast.ts';
+import { tellValleyDeath } from './death.ts';
 import { type CastStart, calendarPassport, lifeFacts, validateCastStart } from './passport.ts';
 import { foundValley, type Household, householdLabel, KAHYA, makeKahya, personLabel } from './people.ts';
 import { DRAW, hashUnit, mixSeed, strHash } from './rng.ts';
@@ -383,12 +381,12 @@ export function newValley(
         const p = personOf(s, m);
         if (!p || p === osman || ['guests', 'water-guest'].includes(h.id) || p.id === 'maryam') continue;
         for (let k = 0; k < 4; k++)
-          glimpseOf(osman, p, -k * 30 * DAY, h.id === 'kavak' || h.id === 'ak' ? 0.9 : 0.6);
+          glimpsePerson(osman, p, -k * 30 * DAY, h.id === 'kavak' || h.id === 'ak' ? 0.9 : 0.6);
       }
     }
   }
   // The kahya has met the reeve once, at the agha's house in the city.
-  if (osman) glimpseOf(s.kahya, osman, -60 * DAY, 0.5);
+  if (osman) glimpsePerson(s.kahya, osman, -60 * DAY, 0.5);
   ownFieldDuties(s, 0);
   chooseModes(s, 0);
   advanceTo(s, START_MINUTE);
@@ -427,11 +425,8 @@ export const personOf = (s: ValleyState, id: string) => s.people.find((p) => p.i
 export const houseOf = (s: ValleyState, id: string) => s.households.find((h) => h.id === id);
 export const houseOfPerson = (s: ValleyState, pid: string) =>
   s.households.find((h) => h.members.includes(pid));
-export const nameOf = (s: ValleyState, id: string) =>
-  id === KAHYA ? 'you' : (personOf(s, id)?.name ?? s.departed[id]?.name ?? id);
 export const isAdult = (p: Person) => ageYears(p) >= 15;
 export const underSeal = (s: ValleyState, h: Household) => s.flags.upper || h.hamlet === 'lower';
-const _seasonAt = (m: number): Season => seasonOf(doyOf(dayOfMinute(m)));
 
 /** The house's grain per mouth, in days of eating. */
 export function daysOfBread(_s: ValleyState, h: Household): number {
@@ -954,7 +949,7 @@ function captureReply(s: ValleyState, p: Person, offer: Affordance, record: Deci
   const h = houseOfPerson(s, p.id);
   const words = replyWords(s, p, ask, reply);
   // An answer is also a look at the person: the kahya's hunch about them moves a little.
-  glimpseOf(s.kahya, p, Math.max(reply.at, s.kahya.now), 0.5);
+  glimpsePerson(s.kahya, p, Math.max(reply.at, s.kahya.now), 0.5);
   // People pressed into it who now will not do it on your word share one line, not one line each.
   if (reply.verdict === 'refused' && reply.reason === 'distrust' && ask.insisted.includes(p.id)) {
     s.notes = s.notes.filter(
@@ -1584,12 +1579,7 @@ function markHard(s: ValleyState, hid: string) {
 }
 
 function dies(s: ValleyState, p: Person, h: Household, at: number) {
-  const all = createCommunity(s.people.filter((q) => q.now <= at || q === p));
-  try {
-    tellDeath(all, p, at);
-  } catch {
-    // Someone's clock ran past the news; they hear it at their next look (engineering fallback).
-  }
+  tellValleyDeath(s.people, p, at);
   if (CAST_IDS[p.id]) {
     s.castDeaths ??= {};
     s.castDeaths[p.id] = snapshot(p);
@@ -2813,7 +2803,7 @@ export function visit(s: ValleyState, hid: string, why: Knock['what'] | 'call' =
     promote(s, m);
     const p = personOf(s, m);
     if (!p) continue;
-    glimpseOf(s.kahya, p, Math.max(arrive, s.kahya.now), 1);
+    glimpsePerson(s.kahya, p, Math.max(arrive, s.kahya.now), 1);
     if (!isAdult(p)) continue;
     const warm = why === 'death' ? 0.6 : why === 'wedding' || why === 'birth' ? 0.5 : 0.25;
     adoptVoiceTrust(p, KAHYA, 0.8, why === 'call' ? 0.04 : 0.1);
@@ -2906,8 +2896,6 @@ export function walkOffer(h: Household, walk: number, stay: number): Affordance 
     tags: ['social', 'outdoors'],
   };
 }
-
-export { glimpseOf, perceive };
 
 /** The player can end a bounded visiting role. Capturing waits for a genuine action boundary;
  * HF refuses active projects/unsupported clinical/calendar state rather than clearing them. */

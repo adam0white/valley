@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { type Browser, chromium, type Page } from 'playwright-core';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { startBrowserServer } from './browser-server.ts';
+import { startBrowserServer, visibleText } from './browser-server.ts';
 
 let server: ChildProcess;
 let browser: Browser;
@@ -98,7 +98,7 @@ it('sends linked feedback with an optional remembered name and keeps a full loca
     await sendWord(page);
     await fits(page);
     const panel = feedback(page);
-    expect(await panel.innerText()).toContain('Send a note about this game.');
+    expect(await visibleText(panel)).toContain('Send a note about this game.');
     await panel.locator('summary').click();
     const privacy = await panel.locator('details a').boundingBox();
     expect(privacy?.height).toBeGreaterThanOrEqual(44);
@@ -106,12 +106,12 @@ it('sends linked feedback with an optional remembered name and keeps a full loca
     const note = panel.locator('textarea').first();
     await note.fill('The winter felt slow.');
     await panel.getByLabel('Your name or tester id', { exact: false }).fill('River tester');
-    expect(await panel.innerText()).toMatch(/name.*(player|history)|history.*name/is);
+    expect(await visibleText(panel)).toMatch(/name.*(player|history)|history.*name/is);
     await panel.getByRole('button', { name: 'Keep a copy of this run', exact: true }).click();
     expect(await page.evaluate('window.downloadCount')).toBe(1);
     expect(await page.evaluate('!!window.downloadedRun.state && !!window.downloadedRun.savedAt')).toBe(true);
     await panel.getByRole('button', { name: 'Submit', exact: true }).click();
-    await expect.poll(() => panel.innerText()).toContain('Sent. Your note is stored.');
+    await expect.poll(() => visibleText(panel)).toContain('Sent. Your note is stored.');
     const sent = await counts(page);
     expect(sent.feedback).toHaveLength(1);
     expect(sent.feedback[0]?.[0]).toContain('The winter felt slow.');
@@ -165,7 +165,7 @@ it('sends a privacy-signal note on the same page without a run-consent step', as
     await panel.getByRole('button', { name: 'Submit', exact: true }).click();
     await expect.poll(async () => (await counts(page)).feedback.length).toBe(1);
     expect((await counts(page)).runs).toHaveLength(0);
-    await expect.poll(() => panel.innerText()).toContain('Sent. Your note is stored.');
+    await expect.poll(() => visibleText(panel)).toContain('Sent. Your note is stored.');
   } finally {
     await page.close();
   }

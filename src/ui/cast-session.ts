@@ -50,7 +50,6 @@ export class CastSession {
     'Continuing people between games in this browser is separate from recording. When recording is on, recorded play links automatically.';
   private busy = false;
   private failedCheckpoint = false;
-  private choice = 0;
   private panel?: HTMLElement;
   private saveLocal?: () => void;
   constructor(
@@ -64,7 +63,7 @@ export class CastSession {
   }
   invalidate() {
     this.generation++;
-    this.choice++;
+
     this.lab.setPersonaRecording(`valley-group-${crypto.randomUUID()}`);
     this.lab.allowPersonaRecording(true);
     this.render();
@@ -219,11 +218,6 @@ export class CastSession {
       rules: HOST_RULES,
     };
   }
-  private pins() {
-    const map = new Map((this.game?.cast?.claims ?? []).map((p) => [p.castId, p]));
-    for (const p of Object.values(this.heads)) map.set(p.castId, p);
-    return [...map.values()].sort((a, b) => a.castId.localeCompare(b.castId));
-  }
   async queryRecording(_allow?: boolean): Promise<void> {
     this.lab.allowPersonaRecording(true);
     this.render();
@@ -247,7 +241,7 @@ export class CastSession {
           if (generation !== this.generation) break;
           this.lab.setPersonaRecording(`valley-group-${crypto.randomUUID()}`);
           this.lab.allowPersonaRecording(true);
-          this.choice++;
+
           this.heads[c.castId] = terminal;
           this.sources[c.castId] = { revision: terminal.revision, person: snapshot(dead) };
           this.saveLocal?.();
@@ -304,7 +298,7 @@ export class CastSession {
         if (generation !== this.generation) break;
         this.lab.setPersonaRecording(`valley-group-${crypto.randomUUID()}`);
         this.lab.allowPersonaRecording(true);
-        this.choice++;
+
         this.heads[c.castId] = envelope;
         this.sources = nextSources;
         if (canonicalPersona(this.sources).length > 1024 * 1024)
@@ -334,7 +328,7 @@ export class CastSession {
       if (!g || !c || !this.shelf.enabled)
         throw new Error('Open a game you have played and turn on continuing people in this browser first.');
       const raw = g.valley.castReleased?.[localRole(castId)];
-      if (!raw || !raw.body.alive || raw.activity)
+      if (!raw?.body.alive || raw.activity)
         throw new Error(
           'This person must finish their current work and pause first. This action does not remove any activity, care or goal.',
         );
@@ -379,7 +373,7 @@ export class CastSession {
       if (generation !== this.generation || this.game !== g || this.runId !== runId) return;
       this.lab.setPersonaRecording(`valley-group-${crypto.randomUUID()}`);
       this.lab.allowPersonaRecording(true);
-      this.choice++;
+
       this.heads[castId] = envelope;
       this.sources = sources;
       this.failedCheckpoint = false;
@@ -449,7 +443,7 @@ export class CastSession {
     this.panel.querySelector('[data-cast-download]')?.addEventListener('click', () => {
       const id = this.panel?.querySelector<HTMLSelectElement>('[data-cast-person]')?.value;
       const head = id ? this.heads[id] : undefined;
-      if (!head || head.transfer.castPassport !== 'valley-cast/1') return;
+      if (head?.transfer.castPassport !== 'valley-cast/1') return;
       const url = URL.createObjectURL(
         new Blob([JSON.stringify(head, null, 2)], { type: 'application/json' }),
       );

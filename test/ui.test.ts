@@ -2,7 +2,7 @@ import type { ChildProcess } from 'node:child_process';
 import { type Browser, chromium, type Page } from 'playwright-core';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { compactRun, type Input, newGame, save } from '../src/sim/game.ts';
-import { startBrowserServer } from './browser-server.ts';
+import { startBrowserServer, visibleText } from './browser-server.ts';
 
 let server: ChildProcess;
 let browser: Browser;
@@ -105,9 +105,10 @@ it.each([
     await open(page);
     await page.locator('#houses [data-h="coban"]').click();
     const instruction = await page.locator('#now').evaluate((e) => {
-      const map = e.parentElement!.getBoundingClientRect();
+      const map = e.parentElement?.getBoundingClientRect();
       const goal = e.getBoundingClientRect();
-      const steward = document.querySelector('#steward')!.getBoundingClientRect();
+      const steward = document.querySelector('#steward')?.getBoundingClientRect();
+      if (!map || !steward) throw new Error('Missing play scene');
       return { inside: goal.top >= map.top && goal.bottom <= steward.top };
     });
     expect(instruction.inside).toBe(true);
@@ -124,10 +125,10 @@ it('shows a visit conversation only when its scheduled time arrives', async () =
       `import('/src/ui/app.ts').then(({ _debug }) => _debug.order({ verb: 'visit', house: 'coban' }))`,
     );
     await page.clock.runFor(50);
-    expect(await page.locator('#steward').innerText()).toMatch(/walking to/);
+    expect(await visibleText(page.locator('#steward'))).toMatch(/walking to/);
     expect(await page.locator('.house-response').count()).toBe(0);
     await page.locator('.house-about').click();
-    expect(await page.locator('#sheet').innerText()).not.toContain('by the fire');
+    expect(await visibleText(page.locator('#sheet'))).not.toContain('by the fire');
     // Keep the sheet open: it must redraw when the existing future note becomes due.
     await page.clock.runFor(35000);
     expect(await page.locator('.house-response').count()).toBe(1);
@@ -147,7 +148,7 @@ it('refreshes current word when a new note replaces one at the note cap', async 
       for (let i = 0; i < 400; i++) note(s, { at: s.minute, kind: 'voice', text: 'Old word', weight: 3 });
       _debug.skipTo(0);
     })()`);
-    expect(await page.locator('.current-notes').innerText()).toContain('Old word');
+    expect(await visibleText(page.locator('.current-notes'))).toContain('Old word');
     await page.evaluate(`(async () => {
       const { _debug } = await import('/src/ui/app.ts');
       const { note } = await import('/src/sim/valley.ts');
@@ -155,7 +156,7 @@ it('refreshes current word when a new note replaces one at the note cap', async 
       note(s, { at: s.minute, kind: 'voice', text: 'A new word at the door', weight: 4 });
     })()`);
     await page.clock.runFor(1000);
-    expect(await page.locator('.current-notes').innerText()).toContain('A new word at the door');
+    expect(await visibleText(page.locator('.current-notes'))).toContain('A new word at the door');
   } finally {
     await page.close();
   }
@@ -174,8 +175,8 @@ it('replaces a call with Skip and opens replies without a fold', async () => {
     expect(await page.getByText('Replies to the call', { exact: false }).first().isVisible()).toBe(true);
     const replies = page.locator('.pending-replies');
     expect(await replies.locator('summary').count()).toBe(0);
-    expect(await replies.innerText()).toMatch(/came|put off|refused/);
-    expect(await page.locator('#houses').innerText()).toContain('●');
+    expect(await visibleText(replies)).toMatch(/came|put off|refused/);
+    expect(await visibleText(page.locator('#houses'))).toContain('●');
   } finally {
     await page.close();
   }
@@ -188,14 +189,14 @@ it('keeps the exact Çoban reply readable and requires a hold before insisting',
     await open(page, 1020, 42, inputs);
     await page.locator('#houses [data-h="coban"]').click();
     const reply = page.locator('.decision-reply');
-    expect(await reply.innerText()).toContain('own barley');
-    expect(await reply.innerText()).toMatch(/18 July, year one/);
+    expect(await visibleText(reply)).toContain('own barley');
+    expect(await visibleText(reply)).toMatch(/18 July, year one/);
     expect(await reply.evaluate((e) => e.scrollHeight <= e.clientHeight + 2)).toBe(true);
     const press = page.locator('.decision-reply .hold');
     const box = await press.boundingBox();
     expect(box && box.y >= 0 && box.y + box.height <= 690).toBe(true);
     await press.click();
-    expect(await page.locator('#hold-feedback').innerText()).toMatch(/hold/i);
+    expect(await visibleText(page.locator('#hold-feedback'))).toMatch(/hold/i);
     expect((await state(page)).inputs).not.toContain('"verb":"insist"');
     await press.focus();
     await page.keyboard.down('Enter');
@@ -222,7 +223,7 @@ it('explains a blocked house verb without adding an input', async () => {
     expect(await give.getAttribute('aria-disabled')).toBe('true');
     // aria-disabled communicates the block; a real tap still explains its reason.
     await give.click({ force: true });
-    expect(await page.locator('#thumbs').innerText()).toMatch(
+    expect(await visibleText(page.locator('#thumbs'))).toMatch(
       /granary.*(low|empty|too little)|grain.*arriv/i,
     );
     expect((await state(page)).inputs).toBe(before);
@@ -248,7 +249,7 @@ it('holds the clock for the menu and info, and slows the ledger for reading', as
     await page.clock.runFor(3000);
     expect(await state(page)).toEqual(reading);
     const popover = page.locator(':popover-open');
-    expect(await popover.innerText()).toMatch(/You are the steward.*landowner’s grain.*grain measures/s);
+    expect(await visibleText(popover)).toMatch(/You are the steward.*landowner’s grain.*grain measures/s);
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: /The ledger/ }).click();
     const ledgerStart = await state(page);
@@ -298,7 +299,7 @@ it('saves a recovery snapshot without a document-owned Blob input stream', async
           if (!bound) return null;
           const bytes = await bound.gz.arrayBuffer();
           const text = await new Response(
-            new Response(bytes).body!.pipeThrough(new DecompressionStream('gzip')),
+            new Response(bytes).body?.pipeThrough(new DecompressionStream('gzip')),
           ).text();
           return { k: bound.k, minute: bound.minute, state: JSON.parse(text) };
         } finally {
@@ -353,7 +354,9 @@ it('keeps the prior recovery snapshot and latest input log when compression fail
       `import('/src/ui/app.ts').then(({ _debug }) => _debug.order({ verb: 'visit', house: 'coban' }))`,
     );
     const latest = await state(page);
-    const receipt = await page.evaluate(() => JSON.parse(localStorage.getItem('valley-log-v1')!).continuity);
+    const receipt = await page.evaluate(
+      () => JSON.parse(localStorage.getItem('valley-log-v1') ?? 'null').continuity,
+    );
     await page.evaluate(() => {
       window.CompressionStream = class {
         constructor() {
@@ -363,7 +366,7 @@ it('keeps the prior recovery snapshot and latest input log when compression fail
       document.dispatchEvent(new Event('visibilitychange'));
     });
     await page.clock.runFor(50);
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('valley-log-v1')!));
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('valley-log-v1') ?? 'null'));
     expect(saved.minute).toBe(latest.minute);
     expect(JSON.stringify(saved.inputs)).toBe(latest.inputs);
     expect(saved.continuity).toEqual(receipt);
@@ -426,7 +429,7 @@ it('loads a compact playtest run through Other ways in and restores its fingerpr
       mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify(run)),
     });
-    await expect.poll(() => page.locator('body').innerText()).toMatch(/matches/i);
+    await expect.poll(() => visibleText(page.locator('body'))).toMatch(/matches/i);
     expect(await page.locator('#map').isVisible()).toBe(true);
     expect(
       await page.evaluate(
@@ -487,8 +490,8 @@ it('excludes a future note from the same day in Earlier replies', async () => {
     })`);
     await page.getByRole('button', { name: 'Earlier replies ▸', exact: true }).click();
     const reader = page.locator('#sheet');
-    expect(await reader.innerText()).toContain('UI present notebook note');
-    expect(await reader.innerText()).not.toContain('UI future notebook note');
+    expect(await visibleText(reader)).toContain('UI present notebook note');
+    expect(await visibleText(reader)).not.toContain('UI future notebook note');
   } finally {
     await page.close();
   }
@@ -511,7 +514,7 @@ it('opens the completed notebook from the ending without restoring play', async 
     expect(await reader.getByRole('heading', { name: 'Earlier replies', exact: true }).isVisible()).toBe(
       true,
     );
-    expect(await reader.innerText()).toContain('UI completed notebook note');
+    expect(await visibleText(reader)).toContain('UI completed notebook note');
     expect(await page.locator('.play').count()).toBe(0);
     const before = await state(page);
     await page.clock.runFor(3000);
@@ -562,10 +565,11 @@ it.each([
     await page.evaluate(() => document.fonts.ready);
     const readable = async () =>
       page.evaluate(() => {
-        const goal = document.querySelector<HTMLElement>('#now')!;
-        const caption = document.querySelector<HTMLElement>('.action-caption')!;
-        const body = document.querySelector<HTMLElement>('#sheet')!;
-        const actions = document.querySelector<HTMLElement>('#thumbs')!;
+        const goal = document.querySelector<HTMLElement>('#now');
+        const caption = document.querySelector<HTMLElement>('.action-caption');
+        const body = document.querySelector<HTMLElement>('#sheet');
+        const actions = document.querySelector<HTMLElement>('#thumbs');
+        if (!goal || !caption || !body || !actions) throw new Error('Missing house layout');
         return {
           goal: goal.scrollWidth <= goal.clientWidth && goal.scrollHeight <= goal.clientHeight,
           caption:
@@ -656,7 +660,9 @@ it('refuses a legacy local log without a pinned narration choice', async () => {
     await page.evaluate((text) => localStorage.setItem('valley-log-v1', text), legacy);
     await page.reload();
     await page.getByRole('button', { name: 'Resume', exact: true }).click();
-    await expect.poll(() => page.locator('body').innerText()).toMatch(/Start a new game from the title page/);
+    await expect
+      .poll(() => page.locator('body').textContent())
+      .toMatch(/Start a new game from the title page/);
     expect(await page.evaluate(() => localStorage.getItem('valley-log-v1'))).toBe(legacy);
   } finally {
     await page.close();
@@ -669,7 +675,7 @@ it('describes unnamed adults and children together on household cards', async ()
     await open(page);
     await page.locator('#houses [data-h="ak"]').click();
     await page.getByRole('button', { name: 'About ▾', exact: true }).click();
-    const text = await page.locator('#sheet').innerText();
+    const text = await visibleText(page.locator('#sheet'));
     expect(text).toContain('5 people');
     expect(text).not.toMatch(/A child|a household member|5 other people/);
     await fits(page);
@@ -684,14 +690,16 @@ it('offers an introductory visit and names the household a call reaches', async 
     await open(page, 360, 7);
     await page.locator('#houses [data-h="coban"]').click();
     await page.getByRole('button', { name: 'About ▾', exact: true }).click();
-    expect(await page.locator('#sheet').innerText()).not.toMatch(/postpones your request|only send requests/);
+    expect(await page.locator('#sheet').textContent()).not.toMatch(
+      /postpones your request|only send requests/,
+    );
     await page.getByRole('button', { name: 'Visit', exact: true }).click();
     await page.clock.runFor(50);
     expect((await state(page)).inputs).toContain('"verb":"visit"');
-    expect(await page.locator('#steward').innerText()).toMatch(/walking to/);
+    expect(await visibleText(page.locator('#steward'))).toMatch(/walking to/);
     await page.getByRole('button', { name: 'Call this house to cut barley', exact: true }).click();
     expect(JSON.parse((await state(page)).inputs).at(-1)).toMatchObject({ verb: 'call', houses: ['coban'] });
-    expect(await page.locator('.action-caption').innerText()).toMatch(/only.*Çoban house/);
+    expect(await visibleText(page.locator('.action-caption'))).toMatch(/only.*Çoban house/);
   } finally {
     await page.close();
   }
@@ -729,15 +737,16 @@ it('keeps the rain deadline and complete immediate reply visible with About open
     await page.evaluate(() => document.fonts.ready);
     const response = page.locator('.house-response');
     expect(await response.count()).toBe(1);
-    expect(await response.innerText()).toMatch(/“.+”/);
+    expect(await visibleText(response)).toMatch(/“.+”/);
     expect(
       await response.evaluate((e) => {
         const r = e.getBoundingClientRect();
-        const body = e.closest('#sheet')!.getBoundingClientRect();
+        const body = e.closest('#sheet')?.getBoundingClientRect();
+        if (!body) throw new Error('Missing reply sheet');
         return r.top >= body.top && r.bottom <= body.bottom && e.scrollWidth <= e.clientWidth;
       }),
     ).toBe(true);
-    expect(await page.locator('.grain-label').innerText()).toContain('Rain is due on 20 July.');
+    expect(await visibleText(page.locator('.grain-label'))).toContain('Rain is due on 20 July.');
     expect(await page.locator('.grain-label').evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
     await fits(page);
   } finally {

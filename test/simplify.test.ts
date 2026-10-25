@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { type Browser, chromium } from 'playwright-core';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { startBrowserServer } from './browser-server.ts';
+import { startBrowserServer, visibleText } from './browser-server.ts';
 
 let server: ChildProcess;
 let browser: Browser;
@@ -66,7 +66,7 @@ it('keeps the previous saved run and receipts after failed admission, with a lit
       .toContain('The game could not start. Your saved game is kept. Try again or open Feedback.');
     expect(await page.evaluate(() => localStorage.getItem('valley-log-v1'))).toBe(previous);
     expect(await page.getByRole('button', { name: /without carrying/ }).count()).toBe(0);
-    expect(await page.locator('body').innerText()).not.toContain('Shelf unavailable');
+    expect(await visibleText(page.locator('body'))).not.toContain('Shelf unavailable');
     await page.locator('[data-menu]').click();
     await page.locator('[data-feedback]').click();
     expect(await page.locator('[data-send]').isVisible()).toBe(true);

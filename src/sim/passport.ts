@@ -107,7 +107,7 @@ export function admitCast(
   input: LifePreparation,
 ): { person: Person; limitations: string[] } {
   const parent = input.parent;
-  if (!['2.17.0', ENGINE_VERSION].includes(parent.source.engine))
+  if (!['2.17.0', '2.21.0', ENGINE_VERSION].includes(parent.source.engine))
     throw new Error('Unsupported source engine dialect.');
   const role = localRole(parent.castId);
   const publicPerson = canonicalCast(parent.castId);

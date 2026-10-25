@@ -22,7 +22,6 @@ type RunControls = {
 let syncRunControls: (() => void) | undefined;
 let showMenu: (() => void) | undefined;
 let showFeedback: (() => void) | undefined;
-let currentScreen: 'title' | 'play' | 'ending' = 'title';
 const NAME_KEY = 'hf-lab-feedback-name';
 function readLocal(key: string): string {
   try {
@@ -70,9 +69,13 @@ export function mountLab(options: RunControls): void {
     <footer class="feedback-actions"><button type="submit" class="primary" data-send>Submit</button></footer></form>
   </dialog>`;
   document.body.append(controls);
-  const menu = controls.querySelector<HTMLDialogElement>('.game-menu-panel')!;
-  const feedback = controls.querySelector<HTMLDialogElement>('.feedback-panel')!;
-  const find = <T extends Element = HTMLElement>(selector: string) => controls.querySelector<T>(selector)!;
+  const find = <T extends Element = HTMLElement>(selector: string): T => {
+    const element = controls.querySelector<T>(selector);
+    if (!element) throw new Error(`Missing lab control: ${selector}`);
+    return element;
+  };
+  const menu = find<HTMLDialogElement>('.game-menu-panel');
+  const feedback = find<HTMLDialogElement>('.feedback-panel');
   const name = find<HTMLInputElement>('#valley-feedback-name');
   const note = find<HTMLTextAreaElement>('#valley-feedback-note');
   const send = find<HTMLButtonElement>('[data-send]');
@@ -108,9 +111,9 @@ export function mountLab(options: RunControls): void {
         ? 'We send only your note, your answer and your optional name. We send no saved game or linked history.'
         : 'We send your note, your answer and your optional name. We include available game details when recording allows it.';
     send.disabled = !sent && busy;
-    const download = find<HTMLButtonElement>('[data-download]');
+    const download = controls.querySelector<HTMLButtonElement>('[data-download]');
     if (download) download.disabled = !options.hasRun();
-    const notebook = find<HTMLButtonElement>('[data-notebook]');
+    const notebook = controls.querySelector<HTMLButtonElement>('[data-notebook]');
     if (notebook) notebook.hidden = !options.hasRun();
     find('[data-menu-date]').textContent = options.hasRun() ? `· ${options.date()}` : '';
     find('[data-resume]').textContent = 'Resume';
@@ -155,7 +158,7 @@ export function mountLab(options: RunControls): void {
   find('[data-feedback]').addEventListener('click', openFeedback);
   find('[data-close-feedback]').addEventListener('click', closeFeedback);
   find('[data-feedback-back]').addEventListener('click', openMenu);
-  find('[data-notebook]')?.addEventListener('click', () => {
+  controls.querySelector('[data-notebook]')?.addEventListener('click', () => {
     menu.close();
     options.notebook();
   });
@@ -188,11 +191,11 @@ export function mountLab(options: RunControls): void {
     });
   for (const button of controls.querySelectorAll<HTMLButtonElement>('[data-verdict]'))
     button.addEventListener('click', () => {
-      verdict = verdict === button.dataset.verdict ? '' : button.dataset.verdict!;
+      verdict = verdict === button.dataset.verdict ? '' : (button.dataset.verdict ?? '');
       for (const chip of controls.querySelectorAll<HTMLButtonElement>('[data-verdict]'))
         chip.setAttribute('aria-pressed', String(chip.dataset.verdict === verdict));
     });
-  find('[data-download]')?.addEventListener('click', options.download);
+  controls.querySelector('[data-download]')?.addEventListener('click', options.download);
   find<HTMLInputElement>('[data-events]').addEventListener('change', (event) => {
     const on = (event.target as HTMLInputElement).checked;
     lab.setTelemetryOff(!on);
@@ -258,7 +261,6 @@ export function mountLab(options: RunControls): void {
 }
 
 export function labScreen(screen: 'title' | 'play' | 'ending'): void {
-  currentScreen = screen;
   syncRunControls?.();
   lab.screen(screen);
   if (screen === 'play') lab.milestone('run started');

@@ -98,3 +98,31 @@ household. The changed chimney template keeps its original repetition key too.
 The exact-source final-state and export reruns are recorded separately from the
 earlier daily traces in the external proof report; do not present old traces as
 new-source runs.
+
+## HF3 adoption and maintenance — 2026-10-25
+
+Current packages: published HF3.0.0 (ENGINE_VERSION2.23.0), immutable verified
+client0.4.10 / kit0.5.11. Earlier pin notes above describe historical deliveries.
+Composite person observations now use glimpsePerson. The finite receiver engine set
+is2.17.0,2.21.0,2.23.0; existing source-role/passport/calendar/norm/duty and checkpoint
+gates still apply. Unknown engines and passport dialects remain refused.
+
+The host now delivers death news to related residents already advanced by routines,
+at their current clock. The prior filter silently excluded them. Other simulation
+rules and introductory visit/call controls remain unchanged. Native full/compact
+exports and the day-12 schedule are repinned to this exact framework edition.
+Old framework files retain the existing plain start-fresh refusal.
+
+Lint rejects warnings. Knip checks exports used outside their file. Full tests now
+acquire the machine-wide suite lock through scripts/suite-lock.ts. Only an actual
+outer holder may pass SUITE_LOCK=0 to a nested child. Historical playtest files are
+excluded from formatting to preserve quoted evidence bytes; lint remains enabled.
+
+Undici7.30.1 remains an explicit Miniflare5.20261019.2-beta compatibility exception:
+Wrangler4.152.0 uses its legacy onHeaders/onError421 guard, which Undici8 removes.
+Owner: Valley maintainer with shared runtime owner. Review2026-11-03 or at the next
+Miniflare release. Do not force an incompatible transitive major.
+
+Remaining technical receipts and per-ask decisions are in
+~/code/.lab-scratch/v3/valley/report.md. Adam's November3 reading/feel, F-492/F-465
+acceptance and F-491 retest remain separate. Friends' playtests and Show HN stay paused.

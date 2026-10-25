@@ -1,9 +1,10 @@
-import { FRAMEWORK_VERSION, linesFor } from '@adam0white/human-framework';
+import { ENGINE_VERSION, FRAMEWORK_VERSION, linesFor } from '@adam0white/human-framework';
 import { expect, it } from 'vitest';
 import { compactRun, fingerprint, load, newGame, save, step } from '../src/sim/game.ts';
 
 it('pins published HF and enables persisted plain narration for every fresh actor and newborn', () => {
-  expect(FRAMEWORK_VERSION).toBe('2.21.0');
+  expect(FRAMEWORK_VERSION).toBe('3.0.0');
+  expect(ENGINE_VERSION).toBe('2.23.0');
   const g = newGame(7);
   for (const p of [...g.valley.people, g.valley.kahya]) expect(p.lexicon?.plainEnglish).toBe(true);
   const initial = new Set(g.valley.people.map((p) => p.id));

@@ -43,7 +43,7 @@ async function source(role = 'danyal', engine = ENGINE_VERSION) {
     limitations: [],
   });
 }
-it.each(['2.17.0', ENGINE_VERSION])(
+it.each(['2.17.0', '2.21.0', ENGINE_VERSION])(
   'admits the explicit %s site dialect with actual fitness, RNG and practice',
   async (engine) => {
     const envelope = await source('danyal', engine);
@@ -123,7 +123,7 @@ class FakeShelf implements Shelf {
         revisions: (q.envelopes ?? []).map((p) => p.revision),
         recordingEpoch: 'unit-epoch',
       } as T;
-    throw new Error('unexpected ' + q.action);
+    throw new Error(`unexpected ${q.action}`);
   }
 }
 function fakeLab() {
@@ -279,7 +279,11 @@ it('keeps imported receipts nonowned until a new explicit paused-source alternat
   expect(root.branchId).not.toBe(initial.branchId);
   expect(root.transfer.castPassport).toBe('valley-cast/1');
   expect(root.source.engine).toBe(ENGINE_VERSION);
-  const returnOpening = foundValley(43, 0).people.find((p) => p.id === 'danyal')!;
+  const returnOpening =
+    foundValley(43, 0).people.find((p) => p.id === 'danyal') ??
+    (() => {
+      throw new Error('Missing fixture actor');
+    })();
   const returnClock = validatePersonaLife(root.transfer.life, root.castId).clock.watermark * 3600000;
   expect(admitCast(returnOpening, preparePersonaLife(root, returnClock)).person.id).toBe('danyal');
   expect(root.transfer.checkpoint).toEqual(await checkpointReceipt(paused));
@@ -316,12 +320,19 @@ it('refuses an unpaused source and cancels an alternative after its run generati
   expect(session.heads).toEqual({});
 });
 
-it('refuses an unreviewed source engine without admitting its state', async () => {
-  const envelope = await source('danyal', '99.0.0');
-  const opening = foundValley(42, 0).people.find((p) => p.id === 'danyal')!;
-  const before = JSON.stringify(snapshot(opening));
-  expect(() => admitCast(opening, preparePersonaLife(envelope, 0))).toThrow(
-    'Unsupported source engine dialect',
-  );
-  expect(JSON.stringify(snapshot(opening))).toBe(before);
-});
+it.each(['3.0.0', '2.22.0', '2.24.0', '99.0.0'])(
+  'refuses unreviewed source engine %s without admitting its state',
+  async (engine) => {
+    const envelope = await source('danyal', engine);
+    const opening =
+      foundValley(42, 0).people.find((p) => p.id === 'danyal') ??
+      (() => {
+        throw new Error('Missing fixture actor');
+      })();
+    const before = JSON.stringify(snapshot(opening));
+    expect(() => admitCast(opening, preparePersonaLife(envelope, 0))).toThrow(
+      'Unsupported source engine dialect',
+    );
+    expect(JSON.stringify(snapshot(opening))).toBe(before);
+  },
+);

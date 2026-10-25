@@ -21,6 +21,7 @@ The brief (`scratchpad` copy, summarised: the owner's taste signals, the idea, H
 **Pick.** The designer's size and verbs, the wildcard's fiction and opening, the veteran's two rules. They agree on the important things: no outliner, words instead of meters, refusals with causes, a fixed outside demand.
 
 ## Rules
+
 1. **No consequence without an ask.** Every note that matters traces to something the kahya asked, took, gave, or failed to show up for.
 2. **No outliner.** People live on the map and in notes. The only ledger with numbers is the agha's granary and the due (world truth). A household's own store is a guess ("their jars look low").
 3. **The kahya's read is approximate.** Hunches come from HF `predictAs` with the kahya as observer: words, with how sure you are. A visit refreshes them (HF `glimpseOf`). The reeve's hunches come from his own impressions, which favour his kin.
@@ -32,12 +33,14 @@ The brief (`scratchpad` copy, summarised: the owner's taste signals, the idea, H
 9. **Story is implied.** The empty house of the last kahya, the cut pages, the agha's letters that arrive late and sound the same.
 
 ## Core loop
+
 - **The minute you play (harvest, the due, a hungry winter).** Tap a house or a hamlet; a card offers the verbs with the kahya's hunch in his hand. The answer arrives in hours of game time as a dated note with the person's words. A no slows the clock.
 - **A season.** One pressure: the agha's barley before the rain (Call), the due at threshing (Take), the winter door (Give), the mill in spring (Call, a work over weeks).
 - **Years.** Trust moves slowly and falls fast. People marry, are born, die, and leave for the city. The second hamlet comes under your seal in year two with no history with you. In year three the agha's rider wants men. The term ends at the elders' gathering in the third winter; each elder speaks a line drawn from what happened.
 - **Lose.** The due is missed twice, or the elders write to the agha: you are replaced before your term ends.
 
 ## The world (host side, `src/sim`)
+
 - Calendar from the first day of the harvest. Weather is pre-rolled from the seed per day, so no input moves later weather.
 - Each household has a field (standing, reaped, threshed), a store, mouths, and a share it owes. The agha has his own field (worked by called labour) and a granary. The due is the agha's field plus the households' shares; easing a share is an exemption the other households can see.
 - Grain is world truth and may be shown as a number in the agha's ledger only.
@@ -48,16 +51,18 @@ The brief (`scratchpad` copy, summarised: the owner's taste signals, the idea, H
 - **Leaving.** Only the unattached young (17 to 32, unmarried, not the head, not with child) leave for the city, after the first two months, when the house's prospect (store plus field) is under 20 days or trust in the kahya is very low.
 
 ## The people (HF 2.8.0, pinned exactly)
+
 - Every resident is an HF `Person` with traits, values, norms, habits, ties to kin and neighbours, trust in the kahya as a voice, a body with the slow fatigue store, and a life course (age, marriage, birth, death, grief).
 - The kahya is an HF person too: the observer for hunches, a body that tires on the lanes, and an age.
 - An ask is a standing suggestion from the `kahya` voice over a window, weighed at each of the person's own decisions against their own day; the reply is the decision's resolution.
 
 ## Performance plan (measured 2026-10-19 on an Apple Silicon Mac, HF 2.7.0)
-| Mode | Cost | Use |
-|---|---|---|
-| Full (`stepCommunity`, minute-level decisions) | about 1.0 ms per person-day at 120 people (2.9 at 10, 1.4 at 40) | any household under an open ask, ill, hungry, near a birth, in mourning, visited in the last week, and everyone in harvest and sowing |
-| Routine (`routineDay`, closed form) | about 0.002 ms per person-day | quiet households, children, deep winter |
-| Save size | about 90 KB of JSON per person after a month (memory 42 KB, chronicle bounded to 31 days) | IndexedDB, gzip; never localStorage |
+
+| Mode                                           | Cost                                                                                      | Use                                                                                                                                   |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Full (`stepCommunity`, minute-level decisions) | about 1.0 ms per person-day at 120 people (2.9 at 10, 1.4 at 40)                          | any household under an open ask, ill, hungry, near a birth, in mourning, visited in the last week, and everyone in harvest and sowing |
+| Routine (`routineDay`, closed form)            | about 0.002 ms per person-day                                                             | quiet households, children, deep winter                                                                                               |
+| Save size                                      | about 90 KB of JSON per person after a month (memory 42 KB, chronicle bounded to 31 days) | IndexedDB, gzip; never localStorage                                                                                                   |
 
 The mode is chosen per household at each midnight from sim state, never from frame timing. The sim advances in fixed 30-minute quanta in play and replay alike, and inputs apply at quantum boundaries, so a replay of the input log reaches the same fingerprint (keys sorted).
 
@@ -77,12 +82,12 @@ Measured on 2026-10-19, desktop, whole term with a plain bot steward, seed 1, ab
 
 **The edges of the office (owner direction 2026-10-19: "keep those edges a bit fun and slightly in our calculations").** Two edge stewards are measured beside the plain and idle ones (`BOT=iron|open node scripts/measure.ts <seed>`). The iron kahya seizes from every unpaid house and turns away every hungry knock. The open hand eases every house and gives 15 kile to every knock. Each edge gets its own ending. The agha raises the iron kahya's stipend, while each house that lost someone to hunger after he was hard with it says "You had the key to the granary". The open hand's letter asks where the barley went, "In the margin you write the names of the houses that ate it". Term tallies live in `stats` (notes are capped at 400).
 
-| Steward, seed 1 (after iteration 2) | Riders | Deaths (hungry) | Left | Seized / given (kile) |
-|---|---|---|---|---|
-| idle | 354 and 467 short, dismissed day 426 | 0 | 0 | 0 / 0 |
-| plain | whole, 64 short; term reached; replay matches | 0 | 1 | 2 / 18 |
-| iron | whole, whole; term reached, stipend raised | 10 (10) | 3 | 15 / 0 |
-| open (gives to every knock and to the hungriest house every other day) | 79 and 34 short, dismissed day 791; the reeve's giveaway word twice | 0 | 0 | 0 / 135 |
+| Steward, seed 1 (after iteration 2)                                    | Riders                                                              | Deaths (hungry) | Left | Seized / given (kile) |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------- | ---- | --------------------- |
+| idle                                                                   | 354 and 467 short, dismissed day 426                                | 0               | 0    | 0 / 0                 |
+| plain                                                                  | whole, 64 short; term reached; replay matches                       | 0               | 1    | 2 / 18                |
+| iron                                                                   | whole, whole; term reached, stipend raised                          | 10 (10)         | 3    | 15 / 0                |
+| open (gives to every knock and to the hungriest house every other day) | 79 and 34 short, dismissed day 791; the reeve's giveaway word twice | 0               | 0    | 0 / 135               |
 
 After iteration 1 the open hand still reached the end of its term, with the rider whole in year one and 120 short in year two, having given 45 kile. Now it gives three times as much, pulls a run on the granary, and is dismissed. It ends with its own letter: the agha "is not a charity", and nobody died hungry. The iron seal is unchanged: paid, praised and remembered for its dead. Both edges are measured on every round (`BOT=iron|open REPLAY=0 node scripts/measure.ts 1`; the `WATCH` line counts forecasts, giveaway words, tallies and grouped press lines over the whole term).
 
@@ -95,7 +100,7 @@ After iteration 1 the open hand still reached the end of its term, with the ride
 - The kahya's last two acts toward a house are on its card. Roman volume numbers. An explicit early-ending letter. Text fixes.
 - Put-offs of one ask on one day are one line too, with a hold-to-press button for each name. Someone who puts it off in the morning and comes by noon is simply in the day's "came" line. Someone who came and then put it off gets their own line.
 - The game-design reviewer (Opus, read-only, after round 2) found the biggest first-five-minutes problem: the granary cannot move for 18 days, until the threshing, and the main line said "nowhere near his due" all that time. Two players in two rounds quit there. During the harvest the main line now describes the field: how much of his barley is cut, "Get it cut before the rain" before the first call, and when the sheaves reach the granary. The first harvest evening's tally heads the day. The giveaway word now sums a ten-day gift ledger kept in state, no longer the note text. Houses the open hand fed say so at the end ("The agha lost some barley and we kept our children").
-Replay still matches (seed 1, fingerprint 316dd7c1). The tests run with a 120 s timeout because this machine has run at a load average up to 121 with other agents' builds; HEAD timed the same under that load.
+  Replay still matches (seed 1, fingerprint 316dd7c1). The tests run with a 120 s timeout because this machine has run at a load average up to 121 with other agents' builds; HEAD timed the same under that load.
 
 ## Notebook export repair (2026-10-20)
 
@@ -104,6 +109,7 @@ The owner's seed 406153184, minute 17550 export loads and replays to its recorde
 Two independent code reviews found one input-aliasing issue in compact loading; the loader now clones inputs, with a regression test. `npm run check` passes all 11 tests. The production build passes. A local browser replay of the owner's file showed the compact run in the notebook preview and sent it through the real gzip client to a local request intercept (981-byte run, 1,065-byte envelope). The download remained 2,977,030 bytes with the same state and fingerprint. No external run was uploaded; the browser reported no page errors. Existing lint warnings remain outside this change's scope.
 
 ## Deferred (targets)
+
 - Complete the remaining DL checks and fixes listed in `playtests/follow-up-2026-10-20.md`: cold first-choice/cue testing, essential decision length, 360×690 immediate-response placement, non-grain choice slowdown, household focus restoration, 320 px/200% text/theme reflow, malformed-save validation, and explicit binding success/failure feedback. Target 2026-11-03.
 - Grain wages for carrying mill stone: the existing simulation uses the paid appeal but transfers no grain for mill work. The follow-up keeps this option visible and unavailable, explains that ordinary mill calls ask for labour, and preserves historic replay behavior. Implement and evaluate a versioned mechanic on 2026-11-03.
 - Production notebook acceptance of the compact run: verify after a separately authorized deployment, target 2026-11-03. The game deployment is authorized by the source-unread follow-up; sending a real notebook run remains a separate lab acceptance task.
@@ -143,6 +149,7 @@ Round-2 cost: the phone scene gives up geographic placement for a compact labell
 
 
 ## Owner speed restoration (2026-10-22)
+
 The original speed choices are restored. Inspection, new-event reading time and menu protections remain. The guarded Until something happens action remains. Simulation inputs, saves and replay rules are unchanged.
 
 ## Approved UI sweep (2026-10-22)

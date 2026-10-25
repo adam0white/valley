@@ -219,7 +219,7 @@ for (const n of s.notes.filter((n) => n.weight >= 2.5).slice(-25))
 const deaths = s.notes.filter((n) => n.kind === 'death');
 const riders = s.notes
   .filter((n) => n.kind === 'due')
-  .map((n) => (/short/.test(n.text) ? (n.text.match(/(\d+) short/)?.[1] ?? '?') + ' short' : 'whole'));
+  .map((n) => (/short/.test(n.text) ? `${n.text.match(/(\d+) short/)?.[1] ?? '?'} short` : 'whole'));
 console.log(
   `SUMMARY bot=${BOT} seed=${seed}: riders [${riders.join(', ')}], ended ${s.flags.ended ?? '-'} d${dayOfMinute(s.minute)}, deaths ${deaths.length} (hungry ${deaths.filter((n) => /nothing in the jar/.test(n.text)).length}), left ${Object.values(s.departed).filter((d) => d.why === 'left').length}, people ${s.people.length}, seized ${s.stats.seized ?? 0}, given ${Math.round(s.stats.given ?? 0)}`,
 );

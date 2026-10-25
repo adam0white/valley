@@ -11,20 +11,6 @@ export const HOUR = 60;
 export const START_DOY = 198;
 export const YEAR_DAYS = 365;
 
-const MONTHS = [
-  'Ocak',
-  'Şubat',
-  'Mart',
-  'Nisan',
-  'Mayıs',
-  'Haziran',
-  'Temmuz',
-  'Ağustos',
-  'Eylül',
-  'Ekim',
-  'Kasım',
-  'Aralık',
-];
 const MONTH_LEN = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 export const dayOfMinute = (m: number) => Math.floor(m / DAY);
@@ -44,20 +30,12 @@ export function monthDay(doy: number): { month: number; date: number } {
   return { month: 11, date: 31 };
 }
 
-/** "the 18th of Temmuz" */
-export function dateWords(day: number): string {
-  const { month, date } = monthDay(doyOf(day));
-  return `${date} ${MONTHS[month]}`;
-}
 /** English date for presentation and exported run labels. */
 export function dateEnglish(day: number): string {
   return `${monthDay(doyOf(day)).date} ${monthEnglish(day)}`;
 }
 export function monthEnglish(day: number): string {
   return month(monthDay(doyOf(day)).month + 1);
-}
-export function monthName(day: number): string {
-  return MONTHS[monthDay(doyOf(day)).month] ?? '';
 }
 
 export type Season = 'harvest' | 'threshing' | 'autumn' | 'sowing' | 'winter' | 'spring' | 'summer';

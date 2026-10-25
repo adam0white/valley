@@ -41,3 +41,9 @@ export async function startBrowserServer(cacheName: string): Promise<{
     clearTimeout(timer);
   }
 }
+
+/** Layout/visibility assertions need rendered copy, excluding hidden dialog content. */
+export async function visibleText(locator: import('playwright-core').Locator): Promise<string> {
+  // biome-ignore lint/performance/useDomNodeTextContent: Text content includes hidden dialogs and makes visibility polling pass too early.
+  return locator.innerText();
+}

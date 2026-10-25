@@ -5,7 +5,11 @@ import { foundValley } from '../src/sim/people.ts';
 describe('canonical historical Valley opening', () => {
   it('keeps the two Yusufs distinct and preserves family and pregnancy', () => {
     const { people } = foundValley(42, 0);
-    const byId = (id: string) => people.find((p) => p.id === id)!;
+    const byId = (id: string) =>
+      people.find((p) => p.id === id) ??
+      (() => {
+        throw new Error('Missing fixture actor');
+      })();
     expect(Math.floor(ageYears(byId('yusuf')))).toBe(34);
     expect(Math.floor(ageYears(byId('yusuf-usta')))).toBe(74);
     expect(Math.floor(ageYears(byId('meryem-visitor')))).toBe(19);
@@ -18,7 +22,11 @@ describe('canonical historical Valley opening', () => {
   });
   it('does not give the Christian water steward Muslim obligations or marry visitors', () => {
     const { people } = foundValley(42, 0);
-    const danyal = people.find((p) => p.id === 'danyal')!;
+    const danyal =
+      people.find((p) => p.id === 'danyal') ??
+      (() => {
+        throw new Error('Missing fixture actor');
+      })();
     expect(danyal.conscience.norms.some((n) => n.normId === 'salah')).toBe(false);
     expect(spousesOf(danyal)).toEqual([]);
   });

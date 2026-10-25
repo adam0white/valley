@@ -8,7 +8,6 @@ import type { CastStart } from './passport.ts';
 import { householdLabel, KAHYA, personLabel } from './people.ts';
 import { mixSeed, strHash } from './rng.ts';
 import {
-  type Ask,
   advanceTo,
   borrow,
   call,
@@ -671,4 +670,4 @@ export function replay(
 }
 
 export const seedFrom = (s: string) => mixSeed(strHash(s), 7) >>> 0;
-export { type Ask, DAY, HOUR };
+export { DAY, HOUR };

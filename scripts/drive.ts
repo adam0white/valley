@@ -116,13 +116,16 @@ async function look(page: Page, path: string): Promise<string> {
       .join(' ');
     if (speed) out.push(`[speed] ${speed}`);
     const main = document.querySelector('#sheet') ?? document.querySelector('.page') ?? document.body;
+    // biome-ignore lint/performance/useDomNodeTextContent: The driver reads rendered text; hidden text must stay excluded.
     out.push((main as HTMLElement).innerText.trim());
     const thumbs = document.querySelector('#thumbs') as HTMLElement | null;
+    // biome-ignore lint/performance/useDomNodeTextContent: The driver reads rendered text; hidden text must stay excluded.
     if (thumbs) out.push(`[bottom] ${thumbs.innerText.trim()}`);
     const buttons = [...document.querySelectorAll<HTMLButtonElement>('button')].filter(
       (b) => !b.closest('#houses') && !b.closest('#speed') && b.offsetParent !== null,
     );
     out.push(
+      // biome-ignore lint/performance/useDomNodeTextContent: The driver reads rendered text; hidden text must stay excluded.
       `[buttons] ${buttons.map((b, i) => `${i + 1}. ${b.innerText.replace(/\s+/g, ' ').trim()}${b.disabled ? ' (greyed)' : ''}${b.classList.contains('hold') ? ' (hold)' : ''}`).join(' | ')}`,
     );
     const houses = [...document.querySelectorAll('#houses button')].map((b) => b.textContent).join(', ');
@@ -146,7 +149,9 @@ async function tap(page: Page, arg: string): Promise<string | null> {
       b =
         Number.isInteger(n) && n > 0
           ? all[n - 1]
-          : (all.find((x) => x.innerText.replace(/\s+/g, ' ').trim().startsWith(arg)) ??
+          : // biome-ignore lint/performance/useDomNodeTextContent: The driver reads rendered text; hidden text must stay excluded.
+            (all.find((x) => x.innerText.replace(/\s+/g, ' ').trim().startsWith(arg)) ??
+            // biome-ignore lint/performance/useDomNodeTextContent: The driver reads rendered text; hidden text must stay excluded.
             all.find((x) => x.innerText.includes(arg)));
     }
     if (!b) return null;

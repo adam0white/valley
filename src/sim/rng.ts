@@ -46,9 +46,3 @@ export const DRAW = {
   line: 11,
   reap: 12,
 } as const;
-
-/** A small seeded stream for generation (households at the start). Not used during play. */
-export function stream(seed: number): () => number {
-  let i = 0;
-  return () => hashUnit(seed, DRAW.household, i++);
-}
