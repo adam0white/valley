@@ -686,17 +686,11 @@ function drawTop() {
     button.textContent = 'Skip ⏩';
   }
   const label = app.querySelector('.grain-label');
-  const knock = s.knocks.some((k) => !k.answered && k.at <= s.minute && k.until > s.minute);
   if (label)
-    label.textContent = knock
-      ? 'Someone is at your door.'
-      : selected || tab !== 'notes' || performance.now() < slowUntil
-        ? 'Time slows while you read.'
-        : hurrying
-          ? 'Waiting for the next event.'
-          : seasonOf(doyOf(dayOfMinute(s.minute))) === 'harvest'
-            ? 'Rain is due on 20 July.'
-            : `The rider comes on ${dateWords(nextRiderDay(s)).replace('September', 'Sep')}.`;
+    label.textContent =
+      seasonOf(doyOf(dayOfMinute(s.minute))) === 'harvest'
+        ? 'Rain is due on 20 July.'
+        : `The rider comes on ${dateWords(nextRiderDay(s)).replace('September', 'Sep')}.`;
   const total = Math.max(1, s.agha.due * 1.2, s.agha.granary + s.agha.reaped + s.agha.standing);
   for (const [selector, value] of [
     ['.grain-solid', s.agha.granary],
@@ -1608,7 +1602,7 @@ function giftHint(s: ValleyState): string {
 function visitHint(s: ValleyState): string {
   return busy(s) && s.kahyaState.visit
     ? `You can visit again when you return to the residence on ${fullDateEnglish(dayOfMinute(s.kahyaState.visit.back))}.`
-    : 'You can visit after a household delays answering your call. Send word through the village announcer first.';
+    : 'A visit takes time to walk and sit with the household.';
 }
 
 function houseThumbs(s: ValleyState, hh: Household): string {
@@ -1629,30 +1623,29 @@ function houseThumbs(s: ValleyState, hh: Household): string {
   if (job)
     add(
       job === 'reap-agha'
-        ? 'Call to cut barley'
+        ? 'Call this house to cut barley'
         : job === 'bring-share'
-          ? 'Call for grain payment'
-          : 'Call to build mill',
+          ? 'Call this house for grain payment'
+          : 'Call this house to build mill',
       () => order({ verb: 'call', job, houses: [hh.id] }),
       callUnavailable(s, job, hh),
-      'The village announcer carries your request. People can refuse.',
+      `The village announcer carries your request only to ${householdLabel(hh)}. People can refuse.`,
     );
   if (job === 'reap-agha' && yearOf(dayOfMinute(s.minute)) > 1)
     add(
-      'Call to cut barley for pay',
+      'Call this house to cut barley for pay',
       () => order({ verb: 'call', job, houses: [hh.id], wage: true }),
       callUnavailable(s, job, hh),
       'A small share of the cut grain goes to their jars.',
     );
-  if (s.flags.verbs.includes('visit'))
-    add(
-      'Visit',
-      () => order({ verb: 'visit', house: hh.id }),
-      empty ? 'Nobody lives here.' : busy(s) || !s.flags.verbs.includes('visit') ? visitHint(s) : null,
-      hh.hamlet === 'upper'
-        ? 'You will be away from the residence for most of a morning.'
-        : 'You will be away from the residence for a couple of hours.',
-    );
+  add(
+    'Visit',
+    () => order({ verb: 'visit', house: hh.id }),
+    empty ? 'Nobody lives here.' : busy(s) ? visitHint(s) : null,
+    hh.hamlet === 'upper'
+      ? 'You will be away from the residence for most of a morning.'
+      : 'You will be away from the residence for a couple of hours.',
+  );
   if (s.flags.verbs.includes('give'))
     add(
       'Send grain',

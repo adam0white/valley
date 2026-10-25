@@ -537,12 +537,12 @@ it('keeps Other orders below the scene and house row', async () => {
   }
 });
 
-it('opens the ledger directly below the state strip', async () => {
+it('opens the ledger below the household controls', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await open(page);
     await page.getByRole('button', { name: 'The ledger ▸', exact: true }).click();
-    expect((await page.locator('.lk-sheet').boundingBox())?.y).toBeCloseTo(80, 0);
+    expect((await page.locator('.lk-sheet').boundingBox())?.y).toBeCloseTo(332, 0);
     expect(await page.getByText('In the granary', { exact: true }).isVisible()).toBe(true);
   } finally {
     await page.close();
@@ -593,7 +593,7 @@ it.each([
       e.scrollTop = e.scrollHeight;
     });
     expect(await body.evaluate((e) => e.scrollTop + e.clientHeight >= e.scrollHeight - 1)).toBe(true);
-    await page.getByRole('button', { name: 'Call to cut barley', exact: true }).click();
+    await page.getByRole('button', { name: 'Call this house to cut barley', exact: true }).click();
     await page.clock.runFor(30000);
     expect(
       await page.getByRole('button', { name: 'About ▾', exact: true }).getAttribute('aria-expanded'),
@@ -672,6 +672,73 @@ it('describes unnamed adults and children together on household cards', async ()
     const text = await page.locator('#sheet').innerText();
     expect(text).toContain('5 people');
     expect(text).not.toMatch(/A child|a household member|5 other people/);
+    await fits(page);
+  } finally {
+    await page.close();
+  }
+});
+
+it('offers an introductory visit and names the household a call reaches', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page, 360, 7);
+    await page.locator('#houses [data-h="coban"]').click();
+    await page.getByRole('button', { name: 'About ▾', exact: true }).click();
+    expect(await page.locator('#sheet').innerText()).not.toMatch(/postpones your request|only send requests/);
+    await page.getByRole('button', { name: 'Visit', exact: true }).click();
+    await page.clock.runFor(50);
+    expect((await state(page)).inputs).toContain('"verb":"visit"');
+    expect(await page.locator('#steward').innerText()).toMatch(/walking to/);
+    await page.getByRole('button', { name: 'Call this house to cut barley', exact: true }).click();
+    expect(JSON.parse((await state(page)).inputs).at(-1)).toMatchObject({ verb: 'call', houses: ['coban'] });
+    expect(await page.locator('.action-caption').innerText()).toMatch(/only.*Çoban house/);
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps household selection reachable while the ledger is open on a phone', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page);
+    await page.getByRole('button', { name: 'The ledger ▸', exact: true }).click();
+    const house = page.getByRole('button', { name: 'the Çoban house', exact: true });
+    expect(
+      await house.evaluate((e) => {
+        const r = e.getBoundingClientRect();
+        return e.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+      }),
+    ).toBe(true);
+    await house.click();
+    expect(await house.getAttribute('aria-pressed')).toBe('true');
+    expect(await page.getByRole('button', { name: 'About ▾', exact: true }).isVisible()).toBe(true);
+    await fits(page);
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps the rain deadline and complete immediate reply visible with About open on a phone', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page, 360, 7);
+    await page.getByRole('button', { name: 'the Kavak house', exact: true }).click();
+    await page.getByRole('button', { name: 'About ▾', exact: true }).click();
+    await page.getByRole('button', { name: 'Call this house to cut barley', exact: true }).click();
+    await page.clock.runFor(30000);
+    await page.evaluate(() => document.fonts.ready);
+    const response = page.locator('.house-response');
+    expect(await response.count()).toBe(1);
+    expect(await response.innerText()).toMatch(/“.+”/);
+    expect(
+      await response.evaluate((e) => {
+        const r = e.getBoundingClientRect();
+        const body = e.closest('#sheet')!.getBoundingClientRect();
+        return r.top >= body.top && r.bottom <= body.bottom && e.scrollWidth <= e.clientWidth;
+      }),
+    ).toBe(true);
+    expect(await page.locator('.grain-label').innerText()).toContain('Rain is due on 20 July.');
+    expect(await page.locator('.grain-label').evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
     await fits(page);
   } finally {
     await page.close();

@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { compactRun, fingerprint, type Input, load, replay, save } from '../src/sim/game.ts';
+import {
+  act,
+  compactRun,
+  fingerprint,
+  type Input,
+  load,
+  newGame,
+  replay,
+  save,
+  step,
+} from '../src/sim/game.ts';
 
 // The owner's day-12 actions, without the private full-state replay file.
 const ownerInputs: Input[] = [
@@ -98,4 +108,21 @@ describe('notebook run exports', () => {
       expect(loaded.inputs[0]?.at).toBe(2580);
     }
   });
+});
+
+it('replays an introductory visit followed by a household call with the usual travel cost', () => {
+  const g = newGame(7);
+  const start = g.valley.minute;
+  expect(act(g, { verb: 'visit', house: 'coban' })).toBe(true);
+  expect(g.valley.kahyaState.visit).toMatchObject({
+    arrive: start + 20,
+    leave: start + 110,
+    back: start + 130,
+  });
+  expect(act(g, { verb: 'visit', house: 'ak' })).toBe(false);
+  step(g, start + 150);
+  expect(act(g, { verb: 'call', job: 'reap-agha', houses: ['coban'] })).toBe(true);
+  step(g, start + 360);
+  const exported = compactRun(g);
+  expect(fingerprint(load(JSON.parse(JSON.stringify(exported))).valley)).toBe(fingerprint(g.valley));
 });

@@ -1773,3 +1773,12 @@ body {
     right: 144px;
   }
 }
+
+/* Reading sheets keep the household controls uncovered on phones. */
+@media (max-width: 767px) {
+  .play[data-reader="true"] > .lk-sheet {
+    position: static;
+    grid-row: 5;
+    grid-column: 1;
+  }
+}

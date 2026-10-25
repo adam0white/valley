@@ -238,10 +238,6 @@ export function limitsWords(s: ValleyState, house?: Household): string {
     out.push('You have no authority over this house until the upper hamlet joins in the second summer.');
   if (s.kahyaState.visit && s.kahyaState.visit.back > s.minute)
     out.push('You can start another visit when you return to the residence.');
-  else if (!s.flags.verbs.includes('visit'))
-    out.push(
-      'At first, you can only send requests through the village announcer. If a household postpones your request, you can visit in person.',
-    );
   else out.push('A visit takes time to walk and sit with the household. You can go again when you return.');
   const job = currentJob(s);
   const ask =
