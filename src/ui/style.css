@@ -2308,3 +2308,6 @@ body:has(.play[data-reflow="true"]) {
   min-height: 44px;
   flex: 0 0 auto;
 }
+.play[data-reflow="true"] .grain-label {
+  line-height: 1.4;
+}

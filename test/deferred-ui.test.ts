@@ -97,6 +97,11 @@ it('offers new-edition actions and preserves a readable reply at 320px with enla
       return !!heading && heading.top >= box.top - 1 && heading.bottom <= box.bottom + 1;
     });
     expect(headingFits).toBe(true);
+    const captionFits = await page.locator('.grain-label').evaluate((caption) => {
+      const style = getComputedStyle(caption);
+      return parseFloat(style.lineHeight) >= parseFloat(style.fontSize);
+    });
+    expect(captionFits).toBe(true);
     const response = page.locator('.house-response');
     await response.scrollIntoViewIfNeeded();
     const responseBox = await response.boundingBox();
