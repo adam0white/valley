@@ -2303,3 +2303,8 @@ body:has(.play[data-reflow="true"]) {
 .play[data-reflow="true"] .verb-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.play[data-reflow="true"] .lk-sheet-head {
+  height: auto;
+  min-height: 44px;
+  flex: 0 0 auto;
+}

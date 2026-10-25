@@ -91,6 +91,12 @@ it('offers new-edition actions and preserves a readable reply at 320px with enla
     expect(await page.evaluate(() => getComputedStyle(document.body).overflowY)).not.toBe('hidden');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
     expect(overflow).toBe(false);
+    const headingFits = await page.locator('.lk-sheet-head').evaluate((header) => {
+      const heading = header.querySelector('b')?.getBoundingClientRect();
+      const box = header.getBoundingClientRect();
+      return !!heading && heading.top >= box.top - 1 && heading.bottom <= box.bottom + 1;
+    });
+    expect(headingFits).toBe(true);
     const response = page.locator('.house-response');
     await response.scrollIntoViewIfNeeded();
     const responseBox = await response.boundingBox();
