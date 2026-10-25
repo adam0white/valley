@@ -138,10 +138,23 @@ describe('owner-facing presentation', () => {
     expect(limitsWords(s)).toMatch(/go again when you return/);
   });
 
+  it('describes uncut barley and the landowner payment in complete sentences', () => {
+    const s = atDoy(198);
+    s.agha.reaped = 0;
+    s.agha.standing = 360;
+    expect(nextWords(s)).toContain('No barley is cut yet.');
+    expect(nextWords(s)).toContain('360 grain measures are still in the field.');
+    expect(nextWords(s)).toContain('The landowner’s payment must be ready');
+    expect(nextWords(s)).not.toMatch(/thresh|The due/);
+    s.agha.reaped = 1;
+    expect(nextWords(s)).toContain('Less than 5 grain measures are cut.');
+    expect(nextWords(s)).not.toContain('No barley is cut yet.');
+  });
+
   it('keeps later harvest guidance consistent with shares already revealed', () => {
     const s = atDoy(198);
     s.flags.verbs.push('take');
-    expect(nextWords(s)).toMatch(/during threshing/);
+    expect(nextWords(s)).toMatch(/while people separate the grain/);
     expect(nextWords(s)).not.toMatch(/9 August/);
     s.minute = 18 * DAY;
     s.agha.standing = 0;
@@ -330,12 +343,14 @@ it('keeps harvest results, rain deadline and grain date together through calls a
   s.agha.standing = 123;
   call(s, 'reap-agha', ['coban']);
   const before = fingerprint(s);
-  expect(nextWords(s)).toMatch(/about 185 grain measures are cut.*120 grain measures are still standing/i);
+  expect(nextWords(s)).toMatch(
+    /about 185 grain measures are cut.*120 grain measures are still in the field/i,
+  );
   expect(nextWords(s)).toMatch(/rain.*20 July/i);
   expect(nextWords(s)).toMatch(/5 August.*grain|grain.*5 August/i);
   expect(nowWords(s)).toMatch(/call.*underway|replies.*available/i);
   s.kahyaState.visit = { house: 'coban', arrive: 30, leave: 90, back: 120 };
-  expect(nextWords(s)).toMatch(/185 grain measures are cut.*120 grain measures are still standing/);
+  expect(nextWords(s)).toMatch(/185 grain measures are cut.*120 grain measures are still in the field/);
   delete s.kahyaState.visit;
   expect(fingerprint(s)).toBe(before);
 });

@@ -39,7 +39,7 @@ import {
   step,
 } from '../sim/game.ts';
 import type { CastStart } from '../sim/passport.ts';
-import type { Household } from '../sim/people.ts';
+import { type Household, householdLabel, personLabel } from '../sim/people.ts';
 import {
   type Hunch,
   houseOf,
@@ -463,7 +463,7 @@ function title() {
         };
         await castSession.loaded(g, previousMeta);
       }
-      result.textContent = 'This saved game does not match and could not be loaded.';
+      result.textContent = 'This saved game does not match this version. Start a new game instead.';
     }
   });
 }
@@ -973,10 +973,10 @@ function drawMap() {
         : (c['ink-soft'] ?? '#666');
     ctx.lineWidth = 1.4;
     house(ctx, X(hh.x), Y(hh.y), window.innerWidth < 900 ? 1.5 : 1);
-    label(ctx, hh.short, X(hh.x), Y(hh.y) + 17, c.sky ?? '#3d5a73', 12);
+    label(ctx, shortHouse(hh), X(hh.x), Y(hh.y) + 17, c.sky ?? '#3d5a73', 12);
     ctx.strokeStyle = c.sky ?? '#3d5a73';
     ctx.lineWidth = 1;
-    const halfLabel = ctx.measureText(hh.short).width / 2;
+    const halfLabel = ctx.measureText(shortHouse(hh)).width / 2;
     ctx.beginPath();
     ctx.moveTo(X(hh.x) - halfLabel, Y(hh.y) + 23);
     ctx.lineTo(X(hh.x) + halfLabel, Y(hh.y) + 23);
@@ -1059,12 +1059,14 @@ const growing = (season: string) => season === 'spring' || season === 'summer';
 
 function caption(s: ValleyState, _wx: string): string {
   const v = s.kahyaState.visit;
+  const destination = v ? houseOf(s, v.house) : undefined;
+  const destinationName = destination ? householdLabel(destination) : 'the house';
   const where =
     v && v.back > s.minute
       ? s.minute < v.arrive
-        ? `you are walking to ${houseOf(s, v.house)?.name ?? ''}`
+        ? `you are walking to ${destinationName}`
         : s.minute < v.leave
-          ? `you are at ${houseOf(s, v.house)?.name ?? ''}`
+          ? `you are at ${destinationName}`
           : 'you are walking back'
       : '';
   return where ? `You: ${where.replace('you are ', '')}` : 'You: at the residence';
@@ -1198,7 +1200,7 @@ function drawHouses(s: ValleyState) {
           dayOfMinute(n.at) === today &&
           (n.house === h.id || (n.who && h.members.includes(n.who))),
       );
-      return `${h.hamlet === 'upper' && list[i - 1]?.hamlet !== 'upper' ? '<span class="hamlet-divider">upper</span>' : ''}<button data-h="${h.id}" class="${selected === h.id ? 'selected' : ''}" aria-pressed="${selected === h.id}" aria-label="${esc(h.name)}"><span class="house-icon" aria-hidden="true">⌂</span>${esc(h.short)}${waiting ? '<span class="reply-mark" aria-label="reply waiting">●</span>' : news ? '<span aria-label="new reply today">○</span>' : ''}</button>`;
+      return `${h.hamlet === 'upper' && list[i - 1]?.hamlet !== 'upper' ? '<span class="hamlet-divider">upper</span>' : ''}<button data-h="${h.id}" class="${selected === h.id ? 'selected' : ''}" aria-pressed="${selected === h.id}" aria-label="${esc(householdLabel(h))}"><span class="house-icon" aria-hidden="true">⌂</span>${esc(shortHouse(h))}${waiting ? '<span class="reply-mark" aria-label="reply waiting">●</span>' : news ? '<span aria-label="new reply today">○</span>' : ''}</button>`;
     })
     .join('');
   if (nav.innerHTML !== content) {
@@ -1257,7 +1259,7 @@ function drawSheet(force = false) {
   if (header) {
     header.hidden = !hh && tab === 'notes';
     header.innerHTML = hh
-      ? `<button class="house-close" aria-label="Back to the notebook">←</button><b>${esc(hh.name)}</b><button class="house-about" aria-expanded="${houseDetails}">About ▾</button>`
+      ? `<button class="house-close" aria-label="Back to the notebook">←</button><b>${esc(householdLabel(hh))}</b><button class="house-about" aria-expanded="${houseDetails}">About ▾</button>`
       : tab !== 'notes'
         ? `<button class="house-close" aria-label="Back to the notebook">←</button><b>${tab === 'ledger' ? 'The landowner’s ledger' : tab === 'reader' ? 'Earlier replies' : 'Other orders'}</b>`
         : '';
@@ -1288,18 +1290,22 @@ function drawSheet(force = false) {
 
 const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
+function shortHouse(h: Household): string {
+  return h.id === 'water-guest' ? 'Danyal' : h.id === 'guests' ? 'Visitors' : h.short;
+}
+
 function knockCard(s: ValleyState, k: Knock): string {
   const p = personOf(s, k.personId);
   const hh = houseOf(s, k.house);
-  const who = `${p?.name ?? 'Someone'} of ${hh?.name ?? 'a house'}`;
+  const who = cap(personLabel(p ?? { name: 'someone' }, hh));
   const ask =
     k.what === 'grain'
       ? `${who} is at your door.`
       : k.what === 'birth'
-        ? `A child has been born at ${hh?.name}.`
+        ? `A child has been born at ${hh ? householdLabel(hh) : 'a house'}.`
         : k.what === 'death'
-          ? `Someone has died at ${hh?.name}.`
-          : `${cap(hh?.name ?? 'A house')} asks you to the wedding.`;
+          ? `Someone has died at ${hh ? householdLabel(hh) : 'a house'}.`
+          : `${cap(hh ? householdLabel(hh) : 'A house')} asks you to the wedding.`;
   const can = s.flags.verbs.includes('give') || k.what === 'grain';
   const row =
     k.what === 'grain'
@@ -1363,7 +1369,7 @@ function pendingReplies(s: ValleyState, house?: Household): string {
         continue;
       pressShown.add(id);
       rows.push(
-        `<div class="reply-row"><span><b>${esc(hh?.short ?? '')} · ${esc(personOf(s, id)?.name ?? 'Someone')}</b><span class="reply-words">“${esc(reply.says)}”</span></span>${btn('Hold to insist', () => order({ verb: 'insist', ask: ask.id, pid: id }), { hold: true })}</div>`,
+        `<div class="reply-row"><span><b>${esc(hh ? householdLabel(hh) : '')} · ${esc(cap(personLabel(personOf(s, id) ?? { name: 'someone' }, hh)))}</b><span class="reply-words">“${esc(reply.says)}”</span></span>${btn('Hold to insist', () => order({ verb: 'insist', ask: ask.id, pid: id }), { hold: true })}</div>`,
       );
     }
   }
@@ -1405,7 +1411,9 @@ function noteLine(n: Note): string {
 
 function datedReply(s: ValleyState, n: Note): string {
   const earlier = dayOfMinute(n.at) < dayOfMinute(s.minute) ? 'Earlier replies · ' : '';
-  const speaker = n.kind === 'voice' && n.who ? personOf(s, n.who)?.name : undefined;
+  const person = n.who ? personOf(s, n.who) : undefined;
+  const speaker =
+    n.kind === 'voice' && person ? cap(personLabel(person, houseOf(s, n.house ?? ''))) : undefined;
   const date = `${earlier}${speaker ? `${speaker} · ` : ''}${fullDateEnglish(dayOfMinute(n.at))}`;
   // The house header identifies the household; keep the person's complete words immediately below their name.
   const words =
@@ -1453,12 +1461,11 @@ function selectedRefusal(s: ValleyState, hh: Household): string {
   if (!choice) return '';
   const { ask, id, reply } = choice;
   return `<div class="decision-reply"><p class="reply-date soft">${esc(fullDateEnglish(dayOfMinute(reply.at)))}</p>
-    <p>${esc(personOf(s, id)?.name ?? 'They')}: “${esc(reply.says)}”</p>
-    ${btn(
-      `Hold to insist that ${personOf(s, id)?.name ?? 'they'} come`,
-      () => order({ verb: 'insist', ask: ask.id, pid: id }),
-      { hold: true, hint: 'They will come, and they will remember that you insisted.' },
-    )}</div>`;
+    <p>${esc(cap(personLabel(personOf(s, id) ?? { name: 'someone' }, hh)))}: “${esc(reply.says)}”</p>
+    ${btn(`Hold to insist on the work`, () => order({ verb: 'insist', ask: ask.id, pid: id }), {
+      hold: true,
+      hint: 'This person will come and will remember that you insisted.',
+    })}</div>`;
 }
 
 const BREAD: [number, string][] = [
@@ -1480,12 +1487,12 @@ const VERDICT: Record<string, string> = {
   refused: 'would say no',
 };
 const REASON: [RegExp, string][] = [
-  [/^material/, 'they must cut their own barley first'],
-  [/^commitment/, 'they have already promised to do something else'],
-  [/^distrust/, 'they don’t trust your office'],
-  [/^capacity/, 'they are not able to do this work'],
-  [/^norm/, 'they believe this is wrong'],
-  [/^habit/, 'they want to follow their usual routine'],
+  [/^material/, 'there is barley to cut at home first'],
+  [/^commitment/, 'another task is already promised'],
+  [/^distrust/, 'your office has not earned enough trust'],
+  [/^capacity/, 'this work is too difficult'],
+  [/^norm/, 'this request seems wrong'],
+  [/^habit/, 'the usual routine is hard to change'],
 ];
 
 function hunchLine(hc: Hunch | undefined, who: string): string {
@@ -1505,11 +1512,16 @@ function houseCard(s: ValleyState, hh: Household): string {
   pressShown.clear();
   const pending = pendingReplies(s, hh);
   const people = hh.members.map((m) => personOf(s, m)).filter((p) => !!p);
-  const names = people.map((p) => p?.name ?? '').join(', ');
+  const named = people.filter((p) => !['a household member', 'a child'].includes(p.name));
+  const unnamed = people.length - named.length;
+  const names = [
+    ...named.map((p) => cap(personLabel(p))),
+    ...(unnamed ? [`${unnamed} ${named.length ? 'other ' : ''}${unnamed === 1 ? 'person' : 'people'}`] : []),
+  ].join(', ');
   const job = jobInSeason(s);
   const guess = s.kahyaState.guess?.[hh.id];
   const lines: string[] = [];
-  if (!guess) lines.push(`You haven’t been inside ${hh.name} yet.`);
+  if (!guess) lines.push(`You haven’t been inside ${householdLabel(hh)} yet.`);
   else {
     const ago = dayOfMinute(s.minute) - dayOfMinute(guess.at);
     lines.push(
@@ -1521,11 +1533,11 @@ function houseCard(s: ValleyState, hh: Household): string {
   if (head && job) {
     const ck = `${hh.id}|${dayOfMinute(s.minute)}|${job}|${s.asks.length}`;
     if (hunchCache?.key !== ck) {
-      const mine = hunchLine(hunchOf(s, s.kahya, head, job), head.name);
+      const mine = hunchLine(hunchOf(s, s.kahya, head, job), personLabel(head, hh));
       const osman = personOf(s, 'osman');
       const his =
         osman && s.flags.beats.includes('reeve') && hh.hamlet === 'lower' && head.id !== 'osman'
-          ? hunchLine(hunchOf(s, osman, head, job), head.name)
+          ? hunchLine(hunchOf(s, osman, head, job), personLabel(head, hh))
               .replace(/^You can’t tell yet/, 'He can’t say')
               .replace(/^You think/, 'He thinks')
               .replace(/^You are fairly sure/, 'He is fairly sure')
@@ -1781,7 +1793,7 @@ function ledger(s: ValleyState): string {
     .filter((h) => underSeal(s, h))
     .map(
       (h) =>
-        `<tr><td>${esc(h.name)}</td><td class="n">${Math.round(h.paid)} of ${shareOwed(h)}${h.eased ? ' (reduced)' : ''}</td></tr>`,
+        `<tr><td>${esc(householdLabel(h))}</td><td class="n">${Math.round(h.paid)} of ${shareOwed(h)}${h.eased ? ' (reduced)' : ''}</td></tr>`,
     )
     .join('');
   const loan =
@@ -1880,7 +1892,19 @@ function ending() {
     ${topbar(dismissed ? 'The second letter' : 'The elders’ gathering')}<div class="ending-body"><h1>${dismissed ? 'The second letter' : 'The elders’ gathering'}</h1>
     <p class="soft">${esc(dateWords(dayOfMinute(s.minute)))} of year ${yearWord(yearOf(dayOfMinute(s.minute)))}.</p>
     ${dismissed ? '<p>The landowner’s rider came back with a sealed letter. The elders did not gather for you; they said these things at their own doors, and the local overseer wrote them down.</p>' : '<p>They sat along the wall of the residence, as they do at the end of a steward’s term, and each said one thing.</p>'}
-    ${elders.map((e) => `<div class="elder"><b>${esc(e.name)}</b>, ${esc(e.house)}<span class="w">“${esc(e.words)}”</span></div>`).join('')}
+    ${elders
+      .map(
+        (e) =>
+          `<div class="elder"><b>${esc(
+            cap(
+              personLabel(
+                personOf(s, e.id) ?? { name: e.name },
+                s.households.find((h) => h.name === e.house),
+              ),
+            ),
+          )}</b>, ${esc(e.house)}<span class="w">“${esc(e.words)}”</span></div>`,
+      )
+      .join('')}
     <p>${esc(letter)}</p>
     <details class="closing-grain"><summary>See the tally</summary><p data-closing-grain></p></details>
     </div><footer class="ending-actions"><div class="row"><button data-feedback>Feedback</button><button data-ending-notebook>Earlier replies</button>${LAB_TOOLS ? '<button data-download>Download this run</button>' : ''}</div><button class="primary" data-go="new">Begin a new term</button>${mark()}${footer()}</footer>

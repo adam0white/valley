@@ -108,7 +108,7 @@ export function nextWords(s: ValleyState): string {
     return `${rider} The households turn to sowing before winter.`;
   switch (seasonOf(doy)) {
     case 'harvest':
-      return `About ${Math.round(s.agha.reaped / 5) * 5} grain measures are cut. About ${Math.round(s.agha.standing / 10) * 10} grain measures are still standing. ${day < 18 ? 'Rain is expected on 20 July.' : 'Cut the barley before more rain.'} From 5 August, people thresh the cut barley to separate the grain from its stalks. The due must be ready by ${dateEnglish(nextRiderDay(s))}. ${s.flags.verbs.includes('take') ? 'Collect shares during threshing.' : 'You can collect shares from 9 August.'}`;
+      return `${s.agha.reaped === 0 ? 'No barley is cut yet.' : s.agha.reaped < 2.5 ? 'Less than 5 grain measures are cut.' : `About ${Math.round(s.agha.reaped / 5) * 5} grain measures are cut.`} About ${Math.round(s.agha.standing / 10) * 10} grain measures are still in the field. ${day < 18 ? 'Rain is expected on 20 July.' : 'Cut the barley before more rain.'} From 5 August, people will beat the cut barley to separate the grain from its stalks. The landowner’s payment must be ready by ${dateEnglish(nextRiderDay(s))}. ${s.flags.verbs.includes('take') ? 'Collect each household’s share while people separate the grain.' : 'You can collect each household’s share from 9 August.'}`;
     case 'threshing':
       return doy < 220 && !s.flags.verbs.includes('take')
         ? `People are separating grain from bundles of cut barley. Shares can be called in from 9 August. ${rider}`

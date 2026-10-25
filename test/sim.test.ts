@@ -89,7 +89,7 @@ describe('what a house says', () => {
     step(g, 2 * DAY);
     const voices = g.valley.notes.filter((n) => n.kind === 'voice');
     expect(voices.length).toBe(2);
-    expect(voices[0]?.text).toMatch(/of the Dere house speaks by the fire:/);
+    expect(voices[0]?.text).toMatch(/Someone from the Dere house speaks by the fire:/);
     expect(voices[0]?.words).toBeTruthy();
     expect(voices[0]?.words).not.toBe(voices[1]?.words);
   });

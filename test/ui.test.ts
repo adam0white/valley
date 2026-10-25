@@ -662,3 +662,18 @@ it('refuses a legacy local log without a pinned narration choice', async () => {
     await page.close();
   }
 });
+
+it('describes unnamed adults and children together on household cards', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page);
+    await page.locator('#houses [data-h="ak"]').click();
+    await page.getByRole('button', { name: 'About ▾', exact: true }).click();
+    const text = await page.locator('#sheet').innerText();
+    expect(text).toContain('5 people');
+    expect(text).not.toMatch(/A child|a household member|5 other people/);
+    await fits(page);
+  } finally {
+    await page.close();
+  }
+});

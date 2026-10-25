@@ -28,7 +28,7 @@ const ownerInputs: Input[] = [
 describe('notebook run exports', () => {
   it('keeps the current cast day-12 schedule below 5 KB and replays to its recorded fingerprint', () => {
     const g = replay(406153184, ownerInputs, 17550);
-    expect(fingerprint(g.valley)).toBe('f91fe170');
+    expect(fingerprint(g.valley)).toBe('9a783bd5');
     const run = compactRun(save(g));
     expect(run).toEqual(compactRun(g));
     expect(Buffer.byteLength(JSON.stringify(run))).toBeLessThan(5_000);
@@ -41,10 +41,10 @@ describe('notebook run exports', () => {
       framework: '2.21.0',
       minute: 17550,
       inputs: ownerInputs,
-      fingerprint: 'f91fe170',
+      fingerprint: '9a783bd5',
       label: 'Volume I, 30 July of year one',
     });
-    expect(fingerprint(load(JSON.parse(JSON.stringify(run))).valley)).toBe('f91fe170');
+    expect(fingerprint(load(JSON.parse(JSON.stringify(run))).valley)).toBe('9a783bd5');
   });
 
   it('keeps full-state downloads compatible and detaches the notebook input log', () => {

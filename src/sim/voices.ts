@@ -167,12 +167,12 @@ const JARS: { min: number; lines: Pool }[] = [
 
 const BORN = [
   'Come and see {child}. She has her grandmother’s scowl already.',
-  '{child} doesn’t sleep. Nobody in this house sleeps.',
+  '{child} hardly ever sleeps, so none of us get much sleep.',
   'Go on, hold {child}. Babies like strangers, though I do not know why.',
 ];
 const BORN_BOY = [
   'Come and see {child}. He has his grandfather’s ears, poor thing.',
-  '{child} doesn’t sleep. Nobody in this house sleeps.',
+  '{child} hardly ever sleeps, so none of us get much sleep.',
   'Go on, hold {child}. You will not hurt him.',
 ];
 const DIED = [
@@ -198,7 +198,7 @@ const SCENE: Record<'wedding' | 'birth' | 'death', Pool> = {
     'Sit with the men, steward. Eat first. We can talk afterward.',
   ],
   birth: [
-    'Come in, quietly. She’s only just asleep.',
+    'Come in quietly. We are trying to let the baby sleep.',
     'You came to see the child. Sit down.',
     'God is generous. Come and look.',
   ],
@@ -463,6 +463,12 @@ export const ASSENT: Record<Register, { reap: Pool; share: Pool; carry: Pool; pa
 /** Saved no-repeat histories use the original line as their identity. */
 
 const REMEMBERED_LINES: Record<string, string> = {
+  'There was no smoke from the {fam} chimney this morning. {who} says the household is saving wood.':
+    'There was no smoke from the {fam} chimney this morning. {who} says they are saving wood.',
+  '{child} hardly ever sleeps, so none of us get much sleep.':
+    '{child} doesn’t sleep. Nobody in this house sleeps.',
+  'Come in quietly. We are trying to let the baby sleep.': 'Come in, quietly. She’s only just asleep.',
+
   'People played backgammon late at the coffeehouse. {who} lost and blamed the dice.':
     'The men sat late over backgammon at the coffeehouse. {who} lost, and blamed the dice.',
   'Her frame for weaving cloth is still here. She’ll send for it.':

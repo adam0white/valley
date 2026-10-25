@@ -18,6 +18,26 @@ import { DAY } from './calendar.ts';
 import { canonicalOpening } from './cast.ts';
 import { hashUnit, mixSeed } from './rng.ts';
 
+/** Lodging names shown to the player; saved household names remain unchanged. */
+export function householdLabel(h: Pick<Household, 'name'> & Partial<Pick<Household, 'id'>>): string {
+  if (h.id === 'water-guest') return 'Danyal’s lodging';
+  if (h.id === 'guests') return 'the survey visitors’ lodging';
+  return h.name;
+}
+
+/** A readable role label without changing the person's saved name. */
+export function personLabel(
+  p: Pick<Person, 'name'>,
+  h?: Pick<Household, 'name'> & Partial<Pick<Household, 'id'>>,
+): string {
+  if (p.name === 'the reeve') return 'the local overseer';
+  if (p.name === 'a household member' || p.name === 'a child') {
+    const role = p.name === 'a child' ? 'a child' : 'someone';
+    return h ? `${role} from ${householdLabel(h)}` : role;
+  }
+  return p.name;
+}
+
 export const KAHYA = 'kahya';
 export type Hamlet = 'lower' | 'upper';
 
@@ -606,7 +626,7 @@ const VISITORS: HouseSpec[] = [
     store: 9,
     share: 0,
     looks:
-      'These visitors are staying for the survey season. Yusuf Usta, 74, advises on digging. His granddaughter Meryem, 19, helps with surveys. Samira, 29, gathers supplies and advises on food stores. Her husband Idris and children Lena and Pell have care arranged at home. The visitors brought food for a season. Their stay lasts thirty days. They will finish any current work that can be finished before their stay ends. Their duties will remain in their home records. Nobody has promised paid survey work. These guests come from different families.',
+      'These visitors are staying for the survey season. Yusuf Usta, 74, advises on digging; his title means master craftsman. His granddaughter Meryem, 19, helps with surveys. Samira, 29, gathers supplies and advises on food stores. Her husband Idris and children Lena and Pell have care arranged at home. The visitors brought food for a season. Their stay lasts thirty days. They will finish any current work that can be finished before their stay ends. Their duties will remain in their home records. Nobody has promised paid survey work. These guests come from different families.',
     people: [
       {
         id: 'yusuf-usta',

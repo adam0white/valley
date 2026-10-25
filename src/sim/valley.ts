@@ -70,7 +70,7 @@ import {
 } from './calendar.ts';
 import { ALLOCATION, CAST_IDS, DISCLOSURES, localRole } from './cast.ts';
 import { type CastStart, calendarPassport, lifeFacts, validateCastStart } from './passport.ts';
-import { foundValley, type Household, KAHYA, makeKahya } from './people.ts';
+import { foundValley, type Household, householdLabel, KAHYA, makeKahya, personLabel } from './people.ts';
 import { DRAW, hashUnit, mixSeed, strHash } from './rng.ts';
 import {
   ASSENT,
@@ -878,7 +878,7 @@ function pauseCastAtBoundary(s: ValleyState, p: Person): boolean {
         house: h.id,
         who: p.id,
         weight: 3,
-        text: `${p.name} ends the visit after finishing the current task. Their condition and duties are saved. The remaining grain stays in the lodging. Their trip home is not recorded. Any unfinished duties still apply.`,
+        text: `${personLabel(p)} finishes the current task and ends the visit. The grain ${p.life.sex === 'female' ? 'she' : 'he'} did not use stays at the lodging. Any unfinished duties still apply.`,
       });
       return true;
     } catch {
@@ -963,12 +963,7 @@ function captureReply(s: ValleyState, p: Person, offer: Affordance, record: Deci
     );
     const g = s.notes.findLast((n) => n.group === `pressed-${ask.id}` && n.at >= reply.at - 3 * HOUR);
     const names = [...(g?.names ?? []), p.name];
-    const list =
-      names.length === 1
-        ? names[0]
-        : names.length > 6
-          ? `${names.slice(0, 4).join(', ')} and ${COUNT[names.length - 4]?.toLowerCase() ?? names.length - 4} others`
-          : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+    const list = peopleList(names);
     const text =
       names.length === 1
         ? `${list} came when you pressed, and will not come again on your word today.`
@@ -1019,10 +1014,11 @@ function captureReply(s: ValleyState, p: Person, offer: Affordance, record: Deci
   if (mine) {
     const first = (mine.was ?? prev?.verdict ?? reply.verdict) as Reply['verdict'];
     mine.was = first;
-    mine.text =
+    mine.text = sentenceText(
       first === reply.verdict
         ? replyText(s, p, ask, reply)
-        : `${p.name} ${PAST[first]?.(ask.job) ?? 'answered'}, then ${PAST[reply.verdict]?.(ask.job) ?? 'answered'}.`;
+        : `${personLabel(p, houseOfPerson(s, p.id))} ${PAST[first]?.(ask.job) ?? 'answered'}, then ${PAST[reply.verdict]?.(ask.job) ?? 'answered'}.`,
+    );
     mine.words = words;
     mine.weight = Math.max(mine.weight, reply.verdict === 'refused' ? 3 : 2);
     return;
@@ -1031,7 +1027,7 @@ function captureReply(s: ValleyState, p: Person, offer: Affordance, record: Deci
     note(s, {
       at: p.now,
       kind: 'reply',
-      text: `${p.name} ${PAST[wasToday]?.(ask.job) ?? 'answered'}, then ${PAST[reply.verdict]?.(ask.job) ?? 'answered'}.`,
+      text: `${personLabel(p, houseOfPerson(s, p.id))} ${PAST[wasToday]?.(ask.job) ?? 'answered'}, then ${PAST[reply.verdict]?.(ask.job) ?? 'answered'}.`,
       words,
       who: p.id,
       ...(h ? { house: h.id } : {}),
@@ -1095,21 +1091,36 @@ const DAY_ACTIONS = new Set([
   'ask-kahya',
 ]);
 
+function residentLabel(p: Person, h: Household): string {
+  const label = personLabel(p, h);
+  return p.name === 'a household member' ||
+    p.name === 'a child' ||
+    h.id === 'water-guest' ||
+    h.id === 'guests'
+    ? label
+    : `${label} of ${householdLabel(h)}`;
+}
+
+/** Group only visible labels; retain the original names in Note.names. */
+export function peopleList(names: string[]): string {
+  if (names.length === 1) return personLabel({ name: names[0] ?? 'someone' });
+  const named = names.filter((name) => name !== 'a household member' && name !== 'a child');
+  const shown = named.slice(0, 6).map((name) => personLabel({ name }));
+  const others = names.length - shown.length;
+  if (others) shown.push(`${others} ${shown.length ? 'other ' : ''}${others === 1 ? 'person' : 'people'}`);
+  return shown.length === 1 ? (shown[0] ?? '') : `${shown.slice(0, -1).join(', ')} and ${shown.at(-1)}`;
+}
+
 /** The shared line for one ask's plain yeses or put-offs on one day. */
 function groupText(ask: Ask, verdict: 'assented' | 'deferred', names: string[]): string {
-  const list =
-    names.length === 1
-      ? names[0]
-      : names.length > 8
-        ? `${names.slice(0, 6).join(', ')} and ${COUNT[names.length - 6]?.toLowerCase() ?? names.length - 6} more`
-        : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  const list = peopleList(names);
   if (verdict === 'deferred') return sentenceText(`${list} postponed ${JOB_WORK[ask.job]} today.`);
   const head =
     ask.job === 'reap-agha'
       ? 'came to cut the landowner’s barley today'
       : ask.job === 'build-mill'
         ? 'carried stone for the mill today'
-        : 'brought their share today';
+        : 'brought grain to pay the landowner today';
   return sentenceText(`${list} ${head}.`);
 }
 
@@ -1128,7 +1139,8 @@ const JOB_WORK: Record<Job, string> = {
   'bring-share': 'bringing the grain payment',
 };
 
-function replyText(_s: ValleyState, p: Person, ask: Ask, r: Reply): string {
+function replyText(s: ValleyState, p: Person, ask: Ask, r: Reply): string {
+  const name = personLabel(p, houseOfPerson(s, p.id));
   const job =
     ask.job === 'reap-agha'
       ? 'cut the landowner’s barley'
@@ -1137,17 +1149,17 @@ function replyText(_s: ValleyState, p: Person, ask: Ask, r: Reply): string {
         : 'bring the grain payment';
   switch (r.verdict) {
     case 'assented':
-      return ask.job === 'bring-share' ? `${p.name} carried the share down.` : `${p.name} came to ${job}.`;
+      return ask.job === 'bring-share' ? `${name} carried the share down.` : `${name} came to ${job}.`;
     case 'complied':
-      return `${p.name} came slowly to ${job} because you insisted.`;
+      return `${name} came slowly to ${job} because you insisted.`;
     case 'deferred':
-      return `${p.name} postponed ${JOB_WORK[ask.job]}.`;
+      return `${name} postponed ${JOB_WORK[ask.job]}.`;
     case 'modified':
-      return ask.job === 'bring-share' ? `${p.name} brought half.` : `${p.name} did something else instead.`;
+      return ask.job === 'bring-share' ? `${name} brought half.` : `${name} did something else instead.`;
     case 'refused':
-      return `${p.name} refused the request.`;
+      return `${name} refused the request.`;
     default:
-      return `${p.name} answered.`;
+      return `${name} answered.`;
   }
 }
 
@@ -1332,7 +1344,7 @@ function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ende
         note(s, {
           at: now,
           kind: 'prayer',
-          text: `At dusk ${p.name} went down to the mosque, as he does.`,
+          text: `At dusk ${personLabel(p, houseOfPerson(s, p.id))} went down to the mosque, as he does.`,
           who: p.id,
           ...(h ? { house: h.id } : {}),
           weight: 0.2,
@@ -1360,7 +1372,7 @@ function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ende
         note(s, {
           at: now,
           kind: 'knock',
-          text: `${p.name} of ${h.name} came to your door.`,
+          text: `${residentLabel(p, h)} came to your door.`,
           words: k.words,
           who: p.id,
           house: h.id,
@@ -1403,7 +1415,7 @@ function depart(s: ValleyState, p: Person, h: Household, why: 'left' | 'died') {
     note(s, {
       at: s.minute,
       kind: 'left',
-      text: `${p.name} of ${h.name} left for the city at first light.`,
+      text: `${residentLabel(p, h)} left for the city at first light.`,
       words,
       who: p.id,
       house: h.id,
@@ -1591,7 +1603,7 @@ function dies(s: ValleyState, p: Person, h: Household, at: number) {
   note(s, {
     at,
     kind: 'death',
-    text: `${p.name} of ${h.name} died${age >= 60 ? ', old' : age < 5 ? ', a small child' : ''}${hungry ? ', while the household had very little food left' : ''}. They buried ${p.life.sex === 'female' ? 'her' : 'him'} ${p.id === 'danyal' ? 'with his Christian observance respected' : 'before the evening prayer'}.`,
+    text: `${residentLabel(p, h)} died${age >= 60 ? ', old' : age < 5 ? ', a small child' : ''}${hungry ? ', while the household had very little food left' : ''}. They buried ${p.life.sex === 'female' ? 'her' : 'him'} ${p.id === 'danyal' ? 'with his Christian observance respected' : 'before the evening prayer'}.`,
     who: p.id,
     house: h.id,
     weight: 3,
@@ -1894,7 +1906,7 @@ const LANE: Record<string, [number, string][]> = {
   ],
   lean: [
     [19, 'At the {fam} house they have been eating thin soup since the week began.'],
-    [8, 'There was no smoke from the {fam} chimney this morning. {who} says they are saving wood.'],
+    [8, 'There was no smoke from the {fam} chimney this morning. {who} says the household is saving wood.'],
   ],
 };
 
@@ -1940,8 +1952,9 @@ export function laneLife(s: ValleyState, day: number) {
       at: day * DAY + hour * 60,
       kind: 'story',
       text: line
-        .replace('{who}', p.name)
-        .replace('{house}', h.name)
+        .replace('{who} of {house}', residentLabel(p, h))
+        .replace('{who}', personLabel(p, h))
+        .replace('{house}', householdLabel(h))
         .replace('{fam}', h.name.replace(/^the /, '').replace(/ house$/, '')),
       who: p.id,
       house: h.id,
@@ -2014,7 +2027,7 @@ function hungerWord(s: ValleyState, day: number) {
     note(s, {
       at: day * DAY + 17 * 60,
       kind: 'knock',
-      text: `${by} there is nothing left in the jars of ${h.name}. They are eating what the neighbours bring, and that is not much.`,
+      text: `${by} there is nothing left in the jars of ${householdLabel(h)}. They are eating what the neighbours bring, and that is not much.`,
       house: h.id,
       weight: 3,
     });
@@ -2162,7 +2175,7 @@ function born(s: ValleyState, mother: Person, father: Person, h: Household, at: 
   note(s, {
     at: d.bornAt,
     kind: 'birth',
-    text: `${mother.name} of ${h.name} had a ${boy ? 'boy' : 'girl'}. They are calling ${boy ? 'him' : 'her'} ${name}.`,
+    text: `${residentLabel(mother, h)} had a ${boy ? 'boy' : 'girl'}. The family is calling ${boy ? 'him' : 'her'} ${name}.`,
     who: mother.id,
     house: h.id,
     weight: 2.5,
@@ -2215,7 +2228,7 @@ function weddings(s: ValleyState, day: number) {
     note(s, {
       at: t,
       kind: 'wedding',
-      text: `${b.name} of ${hb.name} married ${a.name} of ${ha.name}. The drum was heard from the upper lanes.`,
+      text: `${residentLabel(b, hb)} married ${residentLabel(a, ha)}. The drum was heard from the upper lanes.`,
       who: a.id,
       house: ha.id,
       weight: 2.5,
@@ -2365,7 +2378,7 @@ export function give(s: ValleyState, hid: string, kile: number): number {
       note(s, {
         at: s.minute,
         kind: 'gift',
-        text: `You had ${Math.round(amt)} grain measures carried to ${h.name}. They carried it on to ${needy.name} before dark.`,
+        text: `You had ${Math.round(amt)} grain measures carried to ${householdLabel(h)}. They carried it on to ${needy.name} before dark.`,
         house: hid,
         weight: 2,
       });
@@ -2375,7 +2388,7 @@ export function give(s: ValleyState, hid: string, kile: number): number {
       note(s, {
         at: s.minute,
         kind: 'gift',
-        text: `You had ${Math.round(amt)} grain measures carried to ${h.name}. The sack came back up the lane before dark.`,
+        text: `You had ${Math.round(amt)} grain measures carried to ${householdLabel(h)}. The sack came back up the lane before dark.`,
         house: hid,
         weight: 1.5,
       });
@@ -2388,7 +2401,7 @@ export function give(s: ValleyState, hid: string, kile: number): number {
   note(s, {
     at: s.minute,
     kind: 'gift',
-    text: `You had ${Math.round(amt)} grain measures carried to ${h.name}.`,
+    text: `You had ${Math.round(amt)} grain measures carried to ${householdLabel(h)}.`,
     house: hid,
     weight: 1.5,
   });
@@ -2485,7 +2498,7 @@ export function turnAway(s: ValleyState, knockId: string): boolean {
     note(s, {
       at: s.minute,
       kind: 'knock',
-      text: `You sent your regrets to ${h?.name ?? 'them'}. ${k.what === 'death' ? 'They thanked the boy who brought them, and shut the door.' : 'They were disappointed, and polite about it.'}`,
+      text: `You sent your regrets to ${h ? householdLabel(h) : 'the household'}. ${k.what === 'death' ? 'They thanked the boy who brought them, and shut the door.' : 'They were disappointed, and polite about it.'}`,
       house: k.house,
       weight: 1,
     });
@@ -2510,7 +2523,7 @@ export function turnAway(s: ValleyState, knockId: string): boolean {
   note(s, {
     at: s.minute,
     kind: 'knock',
-    text: `You sent ${personOf(s, k.personId)?.name ?? 'them'} away from the door with nothing.`,
+    text: `You sent ${personLabel(personOf(s, k.personId) ?? { name: 'someone' }, h)} away from the door with nothing.`,
     house: k.house,
     weight: 1.5,
   });
@@ -2557,7 +2570,7 @@ function lapseKnocks(s: ValleyState, upTo: number) {
     note(s, {
       at: k.until,
       kind: 'knock',
-      text: `${p?.name ?? 'Someone'} of ${houseOf(s, k.house)?.name ?? 'a house'} waited at your door, and went back down the lane.`,
+      text: `${p ? personLabel(p, houseOf(s, k.house)) : 'Someone'} waited at your door, and went back down the lane.`,
       house: k.house,
       weight: 2.5,
     });
@@ -2612,7 +2625,7 @@ export function seize(s: ValleyState, hid: string): number {
   note(s, {
     at: s.minute,
     kind: 'seize',
-    text: `The local overseer’s men took ${Math.round(amt)} grain measures from ${h.name}’s jars. The whole lane watched.`,
+    text: `The local overseer’s men took ${Math.round(amt)} grain measures from ${householdLabel(h)}’s jars. The whole lane watched.`,
     house: hid,
     weight: 3,
   });
@@ -2634,7 +2647,7 @@ export function ease(s: ValleyState, hid: string): boolean {
   note(s, {
     at: s.minute,
     kind: 'gift',
-    text: `You reduced ${h.name}’s share by half for this year.`,
+    text: `You reduced ${householdLabel(h)}’s share by half for this year.`,
     house: hid,
     weight: 1.5,
   });
@@ -2671,7 +2684,10 @@ function voiceCtx(s: ValleyState, h: Household, p: Person, at: number): VoiceCon
   const wed = s.notes.findLast(
     (n) =>
       n.kind === 'wedding' &&
-      (n.house === h.id || n.text.includes(` of ${h.name} married`)) &&
+      (n.house === h.id ||
+        n.text.includes(` of ${h.name} married`) ||
+        n.text.includes(` of ${householdLabel(h)} married`) ||
+        n.text.includes(` from ${h.name} married`)) &&
       dayOfMinute(n.at) >= day - 20 &&
       n.at <= at,
   );
@@ -2692,10 +2708,10 @@ function voiceCtx(s: ValleyState, h: Household, p: Person, at: number): VoiceCon
           born: `${birth.text.match(/calling (?:him|her) ([^.]+)\./)?.[1] ?? 'the baby'} (${/had a boy/.test(birth.text) ? 'boy' : 'girl'})`,
         }
       : {}),
-    ...(died ? { died: died.name } : {}),
-    ...(left ? { left: left.name } : {}),
+    ...(died ? { died: personLabel({ name: died.name }) } : {}),
+    ...(left ? { left: personLabel({ name: left.name }) } : {}),
     ...(wed ? { wed: wed.house === h.id ? ('in' as const) : ('out' as const) } : {}),
-    ...(needy && daysOfBread(s, needy) < 40 ? { needy: needy.name.replace(/^the /, 'The ') } : {}),
+    ...(needy && daysOfBread(s, needy) < 40 ? { needy: householdLabel(needy).replace(/^the /, 'The ') } : {}),
   };
 }
 
@@ -2714,7 +2730,7 @@ function houseSpeaks(
   note(s, {
     at,
     kind: 'voice',
-    text: `${p.name} of ${h.name} speaks ${where}:`,
+    text: `${residentLabel(p, h)} speaks ${where}:`,
     words: line,
     who: p.id,
     house: h.id,
@@ -2775,7 +2791,7 @@ export function visit(s: ValleyState, hid: string, why: Knock['what'] | 'call' =
           kind: 'story',
           who: speaker.id,
           house: h.id,
-          text: `${speaker.name} tells you about public work notes they read from ${facts.contacts.join(', ')}. Reading those notes does not show that they have met or know the writers.`,
+          text: `${personLabel(speaker)} tells you about public work notes ${speaker.life.sex === 'female' ? 'she' : 'he'} read from ${facts.contacts.join(', ')}. Reading those notes does not mean ${speaker.life.sex === 'female' ? 'she' : 'he'} knows the writers.`,
           weight: 1,
         });
       s.flags.beats.push(`cast-disclosed:${speaker.id}`);
@@ -2784,7 +2800,7 @@ export function visit(s: ValleyState, hid: string, why: Knock['what'] | 'call' =
         kind: 'voice',
         who: speaker.id,
         house: h.id,
-        text: `${speaker.name} speaks after sitting with you again:`,
+        text: `${personLabel(speaker, h)} speaks after sitting with you again:`,
         words: DISCLOSURES[speaker.id],
         weight: 3,
       });
@@ -2909,7 +2925,7 @@ export function requestCastRelease(s: ValleyState, id: string): boolean {
     kind: 'story',
     who: id,
     weight: 2,
-    text: `${p.name} agrees to end the visit after the current work. They must still meet their duties and follow any health limits. They have not left yet.`,
+    text: `${personLabel(p)} agrees to leave after the current work. ${p.life.sex === 'female' ? 'She' : 'He'} must still meet any duties and follow any health limits. The visit has not ended yet.`,
   });
   return true;
 }

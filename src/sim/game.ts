@@ -5,7 +5,7 @@
 import { FRAMEWORK_VERSION, type Person, recall, restore, snapshot } from '@adam0white/human-framework';
 import { DAY, dateEnglish, dayOfMinute, doyOf, HOUR, yearOf } from './calendar.ts';
 import type { CastStart } from './passport.ts';
-import { KAHYA } from './people.ts';
+import { householdLabel, KAHYA, personLabel } from './people.ts';
 import { mixSeed, strHash } from './rng.ts';
 import {
   type Ask,
@@ -106,7 +106,10 @@ function apply(g: Game, i: Input): boolean {
         note(s, {
           at: s.minute,
           kind: 'story',
-          text: `You sent word again to ${personOf(s, i.pid)?.name ?? 'them'}: they must not postpone the work again.`,
+          text: `You told ${personLabel(
+            personOf(s, i.pid) ?? { name: 'someone' },
+            s.households.find((h) => h.members.includes(i.pid)),
+          )} to do the work without another delay.`,
           who: i.pid,
           weight: 1,
         });
@@ -125,7 +128,7 @@ function apply(g: Game, i: Input): boolean {
       note(s, {
         at: s.minute,
         kind: 'visit',
-        text: `You walked down to ${h?.name ?? i.house}${i.why === 'wedding' ? ' for the wedding' : i.why === 'death' ? ' to sit with them' : i.why === 'birth' ? ' to see the child' : ''}.`,
+        text: `You walked down to ${h ? householdLabel(h) : 'the house'}${i.why === 'wedding' ? ' for the wedding' : i.why === 'death' ? ' to sit with them' : i.why === 'birth' ? ' to see the child' : ''}.`,
         house: i.house,
         weight: 0.6,
       });
@@ -438,13 +441,13 @@ function readGathering(g: Game): { elders: ElderWord[]; letter: string } {
     const visited = s.kahyaState.seen[h.id] !== undefined;
     // A death from hunger under your seal is what this house says, before anything else.
     const starved = (s.stats.starved ?? []).find((d) => d.house === h.id);
-    const deadName = starved?.name;
+    const deadName = starved ? personLabel({ name: starved.name }, h) : undefined;
     const hard = !!starved?.hard || (s.stats.hard ?? []).includes(h.id);
     let words: string;
     if (deadName)
       words = hard
-        ? `${deadName} died with nothing in the jar. You had the key to the granary. That is all I will say.`
-        : `${deadName} died hungry, the winter you were here. I am not saying you caused it. I am not saying you did not.`;
+        ? `${deadName.charAt(0).toUpperCase() + deadName.slice(1)} died with nothing in the jar. You had the key to the granary. That is all I will say.`
+        : `${deadName.charAt(0).toUpperCase() + deadName.slice(1)} died hungry, the winter you were here. I am not saying you caused it. I am not saying you did not.`;
     else if (worst && worst.at < 0 && (trust < 0.35 || !best))
       // A memory from before your term: the office, not you.
       words = `I remember ${worst.summary.replace(/^the kahya/, 'when the last kahya')}. The steward had the same authority.`;

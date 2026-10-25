@@ -24,7 +24,7 @@ export const DISCLOSURES: Record<string, string> = {
   maryam:
     'Maryam asks for a smooth scrap of wood, then shows you a little puzzle. “I collect these. Not everything needs to feed someone.” She puts the cooking aside for a while. She chooses whether to share her collection. Nobody has to solve a puzzle to receive food.',
   'yusuf-usta':
-    'Yusuf Usta chooses to unfold his private map. “That passage was unstable. I also kept the shift going to prove another man wrong. Someone was injured. I paid through another person; I never spoke to him.” He has admitted what he did. His admission does not tell you whether the injured worker has forgiven him. His duty to the worker remains.',
+    'Yusuf Usta, the master craftsman, chooses to unfold his private map. “That passage was unstable. I also kept the shift going to prove another man wrong. Someone was injured. I paid through another person; I never spoke to him.” He has admitted what he did. His admission does not tell you whether the injured worker has forgiven him. His duty to the worker remains.',
   'meryem-visitor':
     'Meryem agrees to show the map she has been working on. “I traced Grandfather’s survey and called it new. I corrected parts, but I did not walk all of this.” She shows two marks in her notebook. One marks what she saw herself. The other marks what she copied. You have heard her story. You still do not know whether the map matches the ground.',
   samira:

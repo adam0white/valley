@@ -74,3 +74,27 @@ through the same role, calendar, norm, duty and checkpoint validation. Unknown e
 remain refused. This includes this host’s current exported histories; changing the outgoing
 engine stamp without updating this allowlist would block the next receiving chapter.
 Legacy local logs without a pinned narration choice are refused without deleting the log.
+
+## Plain-English second pass — 2026-10-25
+
+The reading-audit follow-up uses natural household descriptions and counted groups for
+incidental residents. `personLabel` and `householdLabel` preserve saved Person and
+household names while giving prose sources and cards readable labels. New authored
+notes start sentences with capitals. Birth greetings no longer assume a girl or
+contradict the following baby sentence. The two changed templates keep their exact
+legacy `rememberedLine` identities. Do not replace `Note.names` or saved names to tidy
+prose; these are replay state. Text-consuming marriage detection accepts the new
+household wording as well as legacy wording.
+
+Technical done means a signed main commit, exact green CI, deployed matching
+`release.json` with `dirty:false`, the required replay/text/layout evidence, and task
+cleanup. Adam accepts game feel separately. The final evidence, remaining limits and
+ten before/after examples are in `~/code/.lab-scratch/plain3/valley-report.md`.
+
+The headless self-read also caught a single-person grain-payment summary using
+“their”. The summary now says the person brought grain to pay the landowner.
+Birth notices name the family as the subject; wood-saving notices name the
+household. The changed chimney template keeps its original repetition key too.
+The exact-source final-state and export reruns are recorded separately from the
+earlier daily traces in the external proof report; do not present old traces as
+new-source runs.
