@@ -212,9 +212,8 @@ export function mountLab(options: RunControls): void {
     const text = [verdict ? `Verdict: ${verdict}.` : '', note.value.trim()].filter(Boolean).join('\n\n');
     try {
       const sharePlay = feedbackSharePlay(personaChoice);
-      const noteOnly = !lab.telemetryOn && !sharePlay;
       const receipt = await lab.sendFeedback(text, { name: chosenName, run: feedbackRun(), sharePlay });
-      const sentMessage = `${noteOnly ? 'Your note and answer are waiting to be sent without a saved game or linked history' : 'Your note and answer are waiting to be sent. Game details depend on recording and what is available. Recorded play is linked across games on this device'} · ${receipt}`;
+      const sentMessage = `Sent. Your note is stored. · ${receipt}`;
       try {
         if (chosenName) localStorage.setItem(NAME_KEY, chosenName);
         else localStorage.removeItem(NAME_KEY);
