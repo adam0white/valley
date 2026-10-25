@@ -271,10 +271,6 @@ h3 {
 .title-actions .mark {
   align-self: center;
 }
-.telemetry-notice {
-  font-size: 12px;
-  line-height: 1.25;
-}
 .play,
 .play.lk-stage {
   position: relative;
@@ -1635,9 +1631,6 @@ select {
 .notice-footer:empty {
   display: none;
 }
-.notice-footer [role] {
-  font-size: 14px;
-}
 [hidden] {
   display: none !important;
 }
@@ -1756,7 +1749,7 @@ select {
   white-space: nowrap;
 }
 
-/* The first-visit footer owns its actual height, including wrapped text and Dismiss. */
+/* The first-visit footer owns its actual height, including enlarged wrapped text. */
 body {
   display: flex;
   flex-direction: column;

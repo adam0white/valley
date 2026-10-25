@@ -90,7 +90,12 @@ interface Log {
 }
 
 const notice = telemetryNotice();
-if (notice) Object.assign(notice.style, { position: 'static', transform: 'none', margin: '0 auto' });
+// Leave room for portable system-ui metrics without shrinking the disclosure.
+if (notice) {
+  notice.style.paddingInline = '2px';
+  // Valley's root is 17px. Keep normal disclosure at 14px and scale enlarged roots.
+  notice.style.fontSize = 'max(14px, 0.8rem)';
+}
 const noticeFooter = document.createElement('footer');
 noticeFooter.className = 'notice-footer';
 if (notice) noticeFooter.append(notice);

@@ -14,3 +14,9 @@ Tablet widths use fluid text and a two-column household layout from768px. Househ
 ## CI scroll-check follow-up — 2026-10-24
 
 Source1210914 failed the phone About scroll assertion in CI40137397100. The local geometry probe found that About starts loading Literata italic, while the immediate scroll check runs with the font set still loading. The focused test now waits for `document.fonts.ready` before measuring and scrolling the displayed About content, including after the call refresh. It keeps the same scroll-to-bottom assertions and tolerances. Local reproduction did not fail before the change; probe traces and exact CI outcome are recorded in the external worker report. No game rules, culture, or layout changes accompany this test synchronization.
+
+## Compact shared footer adoption — 2026-10-24
+
+Final delivery adopts immutable kit0.5.7 with unchanged client0.4.6 and current package HF2.18.0 (engine2.17.0). The actual SDK notice node and its async suppression remain intact. The complete disclosure has no Dismiss control. Obsolete host notice font/position overrides are removed; horizontal notice padding is2px for portable system-ui metrics. The notice uses max(14px,0.8rem) to keep14px at Valley’s17px root and still grow with enlarged text. The footer keeps its natural height so enlarged text can wrap. Focused checks pin the full sentence, at least14px, one line and node/wrapper at most40px at360, plus enlarged wrapping. Existing reviewed copy, culture, simulation and authority rules are unchanged. Exact CI, fresh deployment, live eight-case proof and cleanup are tracked in the external worker report; owner readiness stays separate.
+
+Pin clarification: the older simplify note above says HF2.8.0. The actual manifest and lock at this task’s baseline and current origin use HF2.18.0. This adoption preserves that actual pin; the earlier note was stale.

@@ -81,6 +81,44 @@ it('fits the visible SDK notice and keeps grain controls clear of the toolbar', 
     await page.route('https://human.adamwhite.work/**', (r) => r.fulfill({ status: 204, body: '' }));
     await page.goto(origin);
     await page.locator('.lk-telemetry-notice').waitFor({ state: 'visible' });
+    const compact = await page.locator('.lk-telemetry-notice').evaluate((e) => {
+      const range = document.createRange();
+      range.selectNodeContents(e);
+      return {
+        text: e.textContent,
+        font: parseFloat(getComputedStyle(e).fontSize),
+        lines: range.getClientRects().length,
+        node: e.getBoundingClientRect().height,
+        wrapper: e.parentElement?.getBoundingClientRect().height,
+      };
+    });
+    expect(compact.text).toBe('We record and link play across games on this device.');
+    expect(compact.font).toBeGreaterThanOrEqual(14);
+    expect(compact.lines).toBe(1);
+    expect(compact.node).toBeLessThanOrEqual(40);
+    expect(compact.wrapper).toBeLessThanOrEqual(40);
+    expect(await page.getByRole('button', { name: 'Dismiss', exact: true }).count()).toBe(0);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '32px';
+    });
+    const enlarged = await page.locator('.lk-telemetry-notice').evaluate((e) => {
+      const range = document.createRange();
+      range.selectNodeContents(e);
+      return {
+        lines: range.getClientRects().length,
+        font: parseFloat(getComputedStyle(e).fontSize),
+        widthFits: e.scrollWidth <= e.clientWidth,
+        heightFits: e.scrollHeight <= e.clientHeight + 1,
+        bottom: e.getBoundingClientRect().bottom,
+      };
+    });
+    expect(enlarged.lines).toBeGreaterThan(1);
+    expect(enlarged.font).toBeGreaterThan(compact.font);
+    expect(enlarged.widthFits && enlarged.heightFits).toBe(true);
+    expect(enlarged.bottom).toBeLessThanOrEqual(691);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '';
+    });
     for (const [width, height] of [
       [360, 690],
       [820, 1180],
@@ -92,10 +130,7 @@ it('fits the visible SDK notice and keeps grain controls clear of the toolbar', 
       const app = await page.locator('#app').boundingBox();
       expect((notice?.y ?? Infinity) + (notice?.height ?? Infinity)).toBeLessThanOrEqual(height + 1);
       expect((app?.y ?? 0) + (app?.height ?? 0)).toBeLessThanOrEqual((notice?.y ?? 0) + 1);
-      const dismiss = await page.getByRole('button', { name: 'Dismiss', exact: true }).boundingBox();
-      expect((dismiss?.y ?? Infinity) + (dismiss?.height ?? Infinity)).toBeLessThanOrEqual(height + 1);
     }
-    await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
     await page.evaluate(`import('/src/sim/game.ts').then(({newGame,save}) => {
       const run=save(newGame(7));
       localStorage.setItem('valley-log-v1',JSON.stringify({game:'valley',version:run.version,seed:7,inputs:[],minute:360,volume:0}));
