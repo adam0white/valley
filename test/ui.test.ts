@@ -199,27 +199,211 @@ it('replaces a call with Skip and opens replies without a fold', async () => {
   }
 });
 
-it('keeps the exact Çoban reply readable and requires a hold before insisting', async () => {
+it('reads a named refusal, cancels and completes one hold, then visits and confirms grain on a phone', async () => {
   const inputs: Input[] = [{ verb: 'call', job: 'reap-agha', houses: ['coban'], at: 750 }];
   const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
   try {
-    await open(page, 1020, 42, inputs);
+    await page.route('**/api/**', (route) => route.abort());
+    await open(page, 990, 42, inputs);
     await page.locator('#houses [data-h="coban"]').click();
+    const facts = () =>
+      page.evaluate<{
+        ask: string;
+        pid: string;
+        name: string;
+        reply: { at: number; says: string; verdict: string };
+        replies: Record<string, { at: number; says: string; verdict: string }>;
+        insisted: string[];
+        inputs: Input[];
+        granary: number;
+        visit: { arrive: number; leave: number; back: number };
+        minute: number;
+      }>(`import('/src/ui/app.ts').then(({ _debug }) => {
+      const g = _debug.game(), s = g.valley, a = s.asks.at(-1);
+      const [pid, reply] = Object.entries(a.replies).filter(([id,r]) => s.households.find(h => h.id === 'coban').members.includes(id) && !a.insisted.includes(id) && ['deferred','refused','modified'].includes(r.verdict)).sort((a,b) => b[1].at-a[1].at)[0] ?? [];
+      return { ask: a.id, pid, name: s.people.find(p => p.id === pid)?.name, reply, replies: a.replies, insisted: [...a.insisted], inputs: g.inputs, granary: s.agha.granary, visit: s.kahyaState.visit, minute: s.minute };
+    })`);
+    const before = await facts();
     const reply = page.locator('.decision-reply');
+    expect(await visibleText(reply)).toContain(before.reply.says);
     expect(await visibleText(reply)).toContain('own barley');
     expect(await visibleText(reply)).toMatch(/18 July, year one/);
-    expect(await reply.evaluate((e) => e.scrollHeight <= e.clientHeight + 2)).toBe(true);
+    await page.locator('#sheet').evaluate((e) => {
+      e.scrollTop = e.scrollHeight;
+    });
+    await reply.scrollIntoViewIfNeeded();
+    expect(await reply.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
     const press = page.locator('.decision-reply .hold');
-    const box = await press.boundingBox();
-    expect(box && box.y >= 0 && box.y + box.height <= 690).toBe(true);
-    await press.click();
-    expect(await visibleText(page.locator('#hold-feedback'))).toMatch(/hold/i);
-    expect((await state(page)).inputs).not.toContain('"verb":"insist"');
+    const bounds = await press.boundingBox();
+    if (!bounds) throw new Error('Missing real hold control');
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await page.mouse.down();
+    await page.clock.runFor(300);
+    expect(await press.locator('.hold-progress').textContent()).toMatch(/%/);
+    expect((await facts()).inputs).toEqual(before.inputs);
+    await page.mouse.move(0, 0);
+    await page.mouse.up();
+    expect(await press.locator('.hold-progress').textContent()).toBe('');
+    await page.clock.runFor(700);
+    expect((await facts()).inputs).toEqual(before.inputs);
     await press.focus();
     await page.keyboard.down('Enter');
-    await page.clock.runFor(700);
+    await page.clock.runFor(300);
+    const progress = Number.parseFloat(
+      await press.evaluate((e) => e.style.getPropertyValue('--hold-progress')),
+    );
+    expect(progress).toBeGreaterThan(30);
+    expect(progress).toBeLessThan(60);
+    expect((await facts()).inputs).toEqual(before.inputs);
     await page.keyboard.up('Enter');
-    expect(JSON.parse((await state(page)).inputs).filter((i: Input) => i.verb === 'insist')).toHaveLength(1);
+    expect(await press.locator('.hold-progress').textContent()).toBe('');
+    expect(await press.evaluate((e) => e.style.getPropertyValue('--hold-progress'))).toBe('0%');
+    await page.clock.runFor(700);
+    expect((await facts()).inputs).toEqual(before.inputs);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await press.focus();
+    await page.keyboard.down('Enter');
+    await page.clock.runFor(300);
+    expect(await press.locator('.hold-progress').textContent()).toMatch(/%/);
+    expect((await facts()).inputs).toEqual(before.inputs);
+    await page.clock.runFor(350);
+    await page.keyboard.up('Enter');
+    const after = await facts();
+    const insist = after.inputs.filter((i: Input) => i.verb === 'insist');
+    expect(insist).toHaveLength(1);
+    expect(insist[0]).toMatchObject({ verb: 'insist', ask: before.ask, pid: before.pid });
+    expect(after.insisted).toEqual([...before.insisted, before.pid]);
+    const receipt = await visibleText(page.locator('#action-receipt'));
+    expect(receipt).toContain(`You insisted that ${before.name}`);
+    expect(receipt).toContain('cut the landowner’s barley');
+    expect(receipt).toContain(
+      JSON.stringify(after.replies[before.pid]) === JSON.stringify(before.reply)
+        ? 'Their next answer is pending.'
+        : (after.replies[before.pid]?.says ?? 'Missing current answer'),
+    );
+    for (const [pid, r] of Object.entries(before.replies))
+      if (pid !== before.pid) expect(after.replies[pid]).toEqual(r);
+    await page.getByRole('button', { name: 'About ▾', exact: true }).click();
+    const actual = await facts();
+    const counts = Object.values(actual.replies).reduce(
+      (c: Record<string, number>, r: { verdict: string }) => {
+        const key =
+          r.verdict === 'deferred'
+            ? 'delayed'
+            : r.verdict === 'refused'
+              ? 'refused'
+              : r.verdict === 'modified'
+                ? 'modified'
+                : 'came';
+        c[key] = (c[key] ?? 0) + 1;
+        return c;
+      },
+      {} as Record<string, number>,
+    );
+    const countText = await visibleText(page.locator('.reply-count'));
+    expect(countText).toContain(`${counts.came ?? 0} came`);
+    expect(countText).toContain(`${counts.delayed ?? 0} delayed`);
+    expect(countText).toContain(`${counts.refused ?? 0} refused`);
+    await page.getByRole('button', { name: 'Visit', exact: true }).click();
+    const visit = await facts();
+    expect(await visibleText(page.locator('#reading-travel'))).toContain('walking to the Çoban house');
+    expect(await visibleText(page.locator('#reading-travel'))).toContain(
+      `${visit.visit.arrive - visit.minute} game minutes until arrival; ${visit.visit.back - visit.minute} until home.`,
+    );
+    await page.clock.runFor(60000);
+    const attended = await facts();
+    expect(attended.minute).toBeGreaterThanOrEqual(attended.visit.arrive);
+    expect(attended.minute).toBeLessThan(attended.visit.leave);
+    expect(await visibleText(page.locator('#reading-travel'))).toContain(
+      `at the Çoban house. ${attended.visit.leave - attended.minute} game minutes left here; ${attended.visit.back - attended.minute} until home.`,
+    );
+    const control = page.getByRole('button', { name: 'Send grain', exact: true });
+    const sameControl = await control.elementHandle();
+    await control.focus();
+    const scroll = await page.locator('#sheet').evaluate((e) => {
+      e.scrollTop = e.scrollHeight;
+      return e.scrollTop;
+    });
+    await page.clock.runFor(30000);
+    const countdown = await facts();
+    expect(countdown.minute).toBeGreaterThan(attended.minute);
+    expect(countdown.minute).toBeLessThan(countdown.visit.leave);
+    expect(
+      await control.evaluate((e, original) => e === original, sameControl),
+      JSON.stringify({ attended, countdown }),
+    ).toBe(true);
+    expect(await control.evaluate((e) => e === document.activeElement)).toBe(true);
+    expect(await page.locator('#sheet').evaluate((e) => e.scrollTop)).toBe(scroll);
+    // Read every current reply line through its real scroll container.
+    const current = page.locator('.house-response');
+    if (await current.count()) {
+      await current.scrollIntoViewIfNeeded();
+      expect(await current.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+    }
+    const grainBefore = await facts();
+    await control.click();
+    expect((await facts()).inputs).toEqual(grainBefore.inputs);
+    expect(await visibleText(page.locator('.pending-grain'))).toContain(
+      `Send ${Math.min(6, grainBefore.granary)} measures of grain to the Çoban house`,
+    );
+    expect(
+      await page.locator('#sheet').evaluate((e) => {
+        const body = e.getBoundingClientRect(),
+          thumbs = document.querySelector('#thumbs')?.getBoundingClientRect();
+        if (!thumbs) throw new Error('Missing real controls');
+        const measured = Number.parseFloat(
+          getComputedStyle(document.querySelector('.play') as Element).getPropertyValue('--thumbs-height'),
+        );
+        return (
+          body.height > 0 &&
+          body.bottom <= thumbs.top + 1 &&
+          thumbs.bottom <= innerHeight &&
+          Math.abs(measured - thumbs.height) < 1
+        );
+      }),
+    ).toBe(true);
+    await page.locator('#now').evaluate((e) => {
+      e.style.fontSize = '34px';
+    });
+    await page.locator('.house-response .w').evaluateAll((es) => {
+      for (const e of es) (e as HTMLElement).style.fontSize = '34px';
+    });
+    await page.clock.runFor(50);
+    await expect.poll(() => page.locator('.play').getAttribute('data-reflow')).toBe('true');
+    expect(
+      await page.locator('#sheet').evaluate((e) => {
+        const body = e.getBoundingClientRect(),
+          thumbs = document.querySelector('#thumbs')?.getBoundingClientRect();
+        if (!thumbs) throw new Error('Missing actual pending controls');
+        e.scrollTop = e.scrollHeight;
+        return (
+          body.height > 0 &&
+          body.bottom <= thumbs.top + 1 &&
+          e.scrollTop + e.clientHeight >= e.scrollHeight - 1
+        );
+      }),
+    ).toBe(true);
+    await page.getByRole('button', { name: 'Confirm send grain', exact: true }).click();
+    const grainAfter = await facts();
+    expect(grainAfter.inputs.filter((i: Input) => i.verb === 'give')).toHaveLength(1);
+    expect(grainAfter.inputs.at(-1)).toMatchObject({ verb: 'give', house: 'coban', kile: 6 });
+    expect(await visibleText(page.locator('#action-receipt'))).toContain(
+      `Dispatched ${Math.min(6, grainBefore.granary)} measures to the Çoban house.`,
+    );
+    expect(await visibleText(page.locator('#action-receipt'))).toContain(
+      `Net granary cost: ${grainBefore.granary - grainAfter.granary} measures. Your granary now holds ${grainAfter.granary} measures.`,
+    );
+    await page.locator('#sheet').evaluate((e) => {
+      e.scrollTop = e.scrollHeight;
+    });
+    expect(
+      await page.locator('#sheet').evaluate((e) => e.scrollTop + e.clientHeight >= e.scrollHeight - 1),
+    ).toBe(true);
+    await page.locator('#now').evaluate((e) => {
+      e.style.removeProperty('font-size');
+    });
+    await page.clock.runFor(50);
+    await expect.poll(() => page.locator('.play').getAttribute('data-reflow')).toBe('false');
     await fits(page);
   } finally {
     await page.close();
@@ -240,7 +424,7 @@ it('explains a blocked house verb without adding an input', async () => {
     expect(await give.getAttribute('aria-disabled')).toBe('true');
     // aria-disabled communicates the block; a real tap still explains its reason.
     await give.click({ force: true });
-    expect(await visibleText(page.locator('#thumbs'))).toMatch(
+    expect(await visibleText(page.locator('#action-receipt'))).toMatch(
       /granary.*(low|empty|too little)|grain.*arriv/i,
     );
     expect((await state(page)).inputs).toBe(before);
@@ -896,7 +1080,9 @@ it('guards grain cancel, changed stock, recipient changes and repeated confirmat
       stock: 0,
       inputs: [{ verb: 'give', house: 'kavak', kile: 6, at: 450 }],
     });
-    expect(await visibleText(page.locator('.action-caption'))).toContain('Sent grain to the Kavak house.');
+    expect(await visibleText(page.locator('.action-caption'))).toContain(
+      'Dispatched 3.25 measures to the Kavak house.',
+    );
     // Compare the native payload and full world delta against the unchanged action path.
     expect(
       await page.evaluate(`Promise.all([import('/src/ui/app.ts'), import('/src/sim/game.ts')]).then(([{ _debug }, { newGame, step, act, stateJson }]) => {

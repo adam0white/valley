@@ -3,11 +3,16 @@ export function clockWords(minute: number): string {
   const day = Math.floor(minute) % 1440;
   return `${String(Math.floor(day / 60)).padStart(2, '0')}:${String(day % 60).padStart(2, '0')}`;
 }
-export function grainReceipt(house: string, before: number, after: number): string {
-  const sent = before - after;
-  return sent > 0
-    ? `Sent grain to ${house}. The gift is recorded in the ledger and leaves less for the landowner.`
-    : 'No grain was sent.';
+export function grainReceipt(
+  house: string,
+  dispatched: number,
+  before: number,
+  after: number,
+  note = '',
+): string {
+  const onward = note.match(/They carried it on to .+ before dark\./)?.[0];
+  const returned = note.includes('The sack came back up the lane before dark.');
+  return `Dispatched ${dispatched} measures to ${house}.${returned ? ' The sack returned.' : onward ? ` ${onward}` : ''} Net granary cost: ${before - after} measures. Your granary now holds ${after} measures.`;
 }
 export function paceWords(s: { waiting: boolean; reading: boolean; hurrying: boolean }): string {
   return s.waiting

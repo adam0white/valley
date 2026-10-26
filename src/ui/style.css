@@ -966,8 +966,7 @@ summary {
   pointer-events: none;
 }
 .holding .fill {
-  width: 100%;
-  transition: width 0.6s linear;
+  width: var(--hold-progress, 0%);
 }
 .hold-feedback {
   margin: 0;
@@ -1632,8 +1631,7 @@ dialog::backdrop {
   min-height: 44px;
 }
 .holding .fill {
-  width: 100%;
-  transition: width 0.6s linear;
+  width: var(--hold-progress, 0%);
 }
 .ledger table {
   border-collapse: collapse;
@@ -2352,4 +2350,28 @@ body:has(.play[data-reflow="true"]) {
     line-height: 1.35;
     min-height: 44px;
   }
+}
+
+/* Reading uses the space left by the actual action controls. */
+.play[data-house="true"] .lk-sheet-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.play[data-house="true"] .action-caption,
+.reading-status {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+.hold-progress {
+  margin-left: 0.4em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Enlarged text can scroll the page and keeps a separate reading body. */
+.play.lk-stage[data-reflow="true"][data-house="true"] > .lk-sheet {
+  height: max(80dvh, calc(var(--reading-chrome-height, 200px) + 40dvh));
+  overflow: visible;
 }

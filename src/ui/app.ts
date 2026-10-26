@@ -132,6 +132,7 @@ let selected: string | null = null;
 let stage: PhoneStage | null = null;
 let textSizeObserver: ResizeObserver | null = null;
 let actionCaption = '';
+let insistReceipt: { ask: string; pid: string; previous: string; name: string; job: string } | null = null;
 let pendingGrain: { game: Game; house: Household; stock: number; members: string } | null = null;
 let importStatus = '';
 let houseDetails = false;
@@ -689,6 +690,7 @@ function enter() {
   carry = 0;
   hurrying = false;
   actionCaption = '';
+  insistReceipt = null;
   sheetKey = '';
   lastDay = dayOfMinute(g.valley.minute);
   lastSnapDay = lastDay;
@@ -707,6 +709,15 @@ function enter() {
   const root = app.querySelector<HTMLElement>('.lk-stage');
   if (root) {
     const checkTextSize = () => {
+      const thumbs = root.querySelector<HTMLElement>('#thumbs');
+      if (thumbs) {
+        root.style.setProperty('--thumbs-height', `${thumbs.getBoundingClientRect().height}px`);
+        const chromeHeight = ['#thumbs', '#sheet-head', '#pace'].reduce(
+          (height, selector) => height + (root.querySelector(selector)?.getBoundingClientRect().height ?? 0),
+          0,
+        );
+        root.style.setProperty('--reading-chrome-height', `${chromeHeight}px`);
+      }
       root.dataset.reflow = String(
         parseFloat(getComputedStyle(root.querySelector('#now') ?? root).fontSize) > 24,
       );
@@ -716,6 +727,8 @@ function enter() {
     if (now) {
       textSizeObserver = new ResizeObserver(checkTextSize);
       textSizeObserver.observe(now);
+      for (const chrome of root.querySelectorAll('#thumbs, #sheet-head, #pace'))
+        textSizeObserver.observe(chrome);
     }
   }
   app.querySelector('#sheet-head')?.addEventListener('click', (e) => {
@@ -909,14 +922,32 @@ function order(o: Order) {
   if (!g) return;
   pendingGrain = null;
   const grainBefore = g.valley.agha.granary;
+  const noteBefore = new Set(g.valley.notes.map((n) => n.id));
+  const ask = o.verb === 'insist' ? g.valley.asks.find((a) => a.id === o.ask) : undefined;
+  const previous = o.verb === 'insist' ? JSON.stringify(ask?.replies[o.pid]) : '';
+  insistReceipt = null;
   if (act(g, o)) {
     if (o.verb === 'give') {
       const h = houseOf(g.valley, o.house);
       actionCaption = grainReceipt(
         h ? householdLabel(h) : 'the household',
+        Math.min(o.kile, grainBefore),
         grainBefore,
         g.valley.agha.granary,
+        g.valley.notes.findLast((n) => !noteBefore.has(n.id) && n.kind === 'gift' && n.house === o.house)
+          ?.text,
       );
+    }
+    if (o.verb === 'insist' && ask) {
+      const person = personOf(g.valley, o.pid);
+      insistReceipt = {
+        ask: ask.id,
+        pid: o.pid,
+        previous: previous ?? '',
+        name: cap(personLabel(person ?? { name: 'someone' })),
+        job: JOB_LABEL[ask.job],
+      };
+      actionCaption = '';
     }
     if (o.verb === 'reply') actionCaption = 'You said: “I came to listen. What you said matters to me.”';
     if (o.verb === 'visit' || o.verb === 'give') {
@@ -926,7 +957,21 @@ function order(o: Order) {
     writeLog();
     hunchCache = null;
     drawSheet(true);
+  } else {
+    actionCaption = 'No action was recorded.';
+    drawSheet(true);
   }
+}
+
+function actionWords(s: ValleyState): string {
+  if (!insistReceipt) return actionCaption;
+  const r = insistReceipt;
+  const reply = s.asks.find((a) => a.id === r.ask)?.replies[r.pid];
+  const answer =
+    reply && JSON.stringify(reply) !== r.previous
+      ? `Their current answer is ${reply.verdict}: “${reply.says}”`
+      : 'Their next answer is pending.';
+  return `You insisted that ${r.name} answer the request ${r.job}. ${answer}`;
 }
 
 // ---------- the map ----------
@@ -1235,7 +1280,7 @@ function drawMap() {
   if (cap)
     cap.textContent = `${dateWords(dayOfMinute(s.minute))} · year ${yearOf(dayOfMinute(s.minute))} · ${wx}`;
   const steward = app.querySelector('#steward');
-  if (steward) steward.textContent = englishText(caption(s, wx));
+  if (steward) steward.textContent = englishText(caption(s, wx).split('. ')[0] ?? '');
 }
 
 const growing = (season: string) => season === 'spring' || season === 'summer';
@@ -1333,6 +1378,7 @@ function pick(id: string | null) {
   pendingGrain = null;
   selected = id && selected !== id ? id : null;
   actionCaption = '';
+  insistReceipt = null;
   tab = 'notes';
   houseDetails = false;
   carry = 0;
@@ -1347,6 +1393,7 @@ function closeHouse() {
   selected = null;
   tab = 'notes';
   actionCaption = '';
+  insistReceipt = null;
   drawSheet(true);
   drawMap();
   app.querySelector<HTMLButtonElement>(`#houses button[data-h="${origin}"]`)?.focus({ preventScroll: true });
@@ -1442,7 +1489,11 @@ function drawSheet(force = false) {
   const visitPhase = visit
     ? `${visit.house}:${visit.arrive}:${s.minute < visit.arrive ? 'out' : s.minute < visit.leave ? 'here' : s.minute < visit.back ? 'return' : 'home'}:${s.reply?.visits.includes(`${visit.house}:${visit.arrive}`) ?? false}`
     : '';
-  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${s.asks.length}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${visitPhase}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}`;
+  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${JSON.stringify(s.asks.map((a) => a.replies))}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${visitPhase}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}`;
+  const travel = app.querySelector<HTMLElement>('#reading-travel');
+  if (travel) travel.textContent = englishText(caption(s, ''));
+  const receipt = app.querySelector<HTMLElement>('#action-receipt');
+  if (receipt && insistReceipt) receipt.textContent = actionWords(s);
   if (!force && sheetKey === key) return;
   sheetKey = key;
   lastSheet = performance.now();
@@ -1514,7 +1565,7 @@ function drawSheet(force = false) {
               ? reader(s)
               : tab === 'orders'
                 ? otherOrders(s)
-                : notebook(s));
+                : `<p id="reading-travel" class="reading-status">${esc(englishText(caption(s, '')))}</p>${notebook(s)}`);
   thumbs.hidden = !!knock || !!term || tab !== 'notes';
   thumbs.innerHTML = thumbs.hidden ? '' : hh ? houseThumbs(s, hh) : valleyThumbs(s);
   const generation = sheetGeneration;
@@ -1757,7 +1808,7 @@ function selectedRefusal(s: ValleyState, hh: Household): string {
     <p>${esc(cap(personLabel(personOf(s, id) ?? { name: 'someone' }, hh)))}: “${esc(reply.says)}”</p>
     ${btn(`Hold to insist on the work`, () => order({ verb: 'insist', ask: ask.id, pid: id }), {
       hold: true,
-      hint: 'This person will come and will remember that you insisted.',
+      hint: 'You press this person to answer again. They may still refuse.',
     })}</div>`;
 }
 
@@ -1878,10 +1929,11 @@ function houseCard(s: ValleyState, hh: Household): string {
       : '';
   const response = recent.find((n) => n.words && (n.kind === 'voice' || n.ask));
   const refusal = selectedRefusal(s, hh);
+  const status = `<p id="reading-travel" class="reading-status">${esc(englishText(caption(s, '')))}</p><p id="action-receipt" class="action-caption" role="status">${esc(actionWords(s) || limitsWords(s, hh))}</p>`;
   if (!houseDetails)
-    return `<div class="card">${response ? `<div class="house-response">${datedReply(s, response)}</div>` : ''}${refusal || (!response ? '<p class="soft">There is no new reply from this house.</p>' : '')}</div>`;
+    return `<div class="card">${response ? `<div class="house-response">${datedReply(s, response)}</div>` : ''}${status}${refusal || (!response ? '<p class="soft">There is no new reply from this house.</p>' : '')}</div>`;
   return `<div class="card">
-    ${response ? `<div class="house-response">${datedReply(s, response)}</div>` : ''}${refusal}
+    ${response ? `<div class="house-response">${datedReply(s, response)}</div>` : ''}${status}${refusal}
     <div class="house-context">
     ${lines
       .filter(Boolean)
@@ -1908,7 +1960,7 @@ function giftHint(s: ValleyState): string {
 
 function visitHint(s: ValleyState): string {
   return busy(s) && s.kahyaState.visit
-    ? `You can visit again when you return. ${travelWords(s.kahyaState.visit, s.minute)}`
+    ? 'You can visit again when you return.'
     : 'A visit takes time to walk and sit with the household.';
 }
 
@@ -1919,6 +1971,7 @@ function houseThumbs(s: ValleyState, hh: Household): string {
   const add = (label: string, fn: () => void, reason: string | null, hint: string, hold = false) => {
     const k = actions.length;
     actions.push(() => {
+      insistReceipt = null;
       actionCaption = `${label}: ${reason ?? hint}`;
       if (!reason) fn();
       else drawSheet(true);
@@ -2013,6 +2066,7 @@ function houseThumbs(s: ValleyState, hh: Household): string {
           : null;
   const previewGrain = () => {
     if (!g) return;
+    insistReceipt = null;
     const reason = grainBlocked();
     pendingGrain = reason
       ? null
@@ -2077,7 +2131,7 @@ function houseThumbs(s: ValleyState, hh: Household): string {
       'They take the grain payment from the jars. The household will remember that you used force.',
       true,
     );
-  return `<p class="action-caption" role="status">${esc(actionCaption || limitsWords(s, hh))}</p><div class="verb-grid">${out.join('')}</div>`;
+  return `<div class="verb-grid">${out.join('')}</div>`;
 }
 
 function pauseToCover() {
@@ -2286,6 +2340,16 @@ function ledger(s: ValleyState): string {
 function bindHold(b: HTMLButtonElement, fn: () => void) {
   let timer = 0;
   let fired = false;
+  let progressTimer = 0;
+  const duration = 650;
+  const progress = document.createElement('span');
+  progress.className = 'hold-progress';
+  progress.setAttribute('aria-hidden', 'true');
+  b.append(progress);
+  const showProgress = (fraction: number) => {
+    b.style.setProperty('--hold-progress', `${fraction * 100}%`);
+    progress.textContent = fraction > 0 ? `${Math.floor(fraction * 100)}%` : '';
+  };
   b.addEventListener('contextmenu', (e) => e.preventDefault());
   const feedback = () => {
     if (fired || b.disabled) return;
@@ -2299,15 +2363,23 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
   };
   b.addEventListener('click', feedback);
   const startHold = () => {
-    if (b.disabled) return;
-    clearTimeout(timer);
-    fired = false;
+    if (b.disabled || fired || timer || !b.isConnected) return;
+    const started = performance.now();
+    showProgress(0);
+    progressTimer = window.setInterval(() => {
+      if (!b.isConnected) return cancel();
+      showProgress(Math.min(1, (performance.now() - started) / duration));
+    }, 16);
     b.classList.add('holding');
     timer = window.setTimeout(() => {
+      clearInterval(progressTimer);
+      timer = 0;
+      if (!b.isConnected || b.disabled) return cancel();
       fired = true;
+      showProgress(1);
       b.classList.remove('holding');
       fn();
-    }, 650);
+    }, duration);
   };
   b.addEventListener('pointerdown', startHold);
   b.addEventListener('keydown', (e) => {
@@ -2325,6 +2397,9 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
   b.addEventListener('blur', () => cancel());
   const cancel = () => {
     clearTimeout(timer);
+    clearInterval(progressTimer);
+    timer = 0;
+    showProgress(0);
     b.classList.remove('holding');
   };
   b.addEventListener('pointerleave', cancel);
