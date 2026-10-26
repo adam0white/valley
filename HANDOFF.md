@@ -1,5 +1,9 @@
 # Valley handoff
 
+## Installer migration — 2026-10-26
+
+Use shared Node 26.12.0 and pnpm 12.14.0. Install with `pnpm install --frozen-lockfile`; run `pnpm run check:lane`. Preserve dirty source before converting old npm trees: remove only their own node_modules, install frozen, then delete dist, .types and *.tsbuildinfo before rebuilding. No project runtime download and no game deployment are part of this migration. Earlier delivery receipts below remain historical.
+
 ## Current source — 2026-10-26
 
 Remaining: physical-phone and cold-player evidence; the separately authorized production

@@ -1,5 +1,5 @@
 // Headless measure: a plain steward plays the whole term; prints the refusal band, the valley's life, timings and
-// a replay check. `npm run measure -- [seed] [days]`.
+// a replay check. `pnpm run measure -- [seed] [days]`.
 
 import { DAY, dayOfMinute, doyOf, seasonOf, yearOf } from '../src/sim/calendar.ts';
 import { act, END_DAY, fingerprint, type Game, gathering, newGame, replay, step } from '../src/sim/game.ts';

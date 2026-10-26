@@ -134,10 +134,10 @@ Vite 8.3.5, Vitest 5.0.5, Biome 2.6.3 and Wrangler 4.152.0. The UI uses DOM and 
 production serves static assets.
 
 ```sh
-npm ci
-npm run dev
-npm run check:lane
-npm run build
+pnpm install --frozen-lockfile
+pnpm run dev
+pnpm run check:lane
+pnpm run build
 ```
 
 The lane runs lint, typecheck and the full test suite under the normal shared suite lock.
@@ -150,3 +150,5 @@ Read [AGENTS](AGENTS.md), [HANDOFF](HANDOFF.md), [the design](docs/design.md) an
 current source, historical delivery receipts, remaining engineering and owner acceptance.
 Adam accepts game feel separately. Lab-panel HF3 rounds run under the playtest director;
 friends' playtests and Show HN remain paused.
+
+Use the shared Node 26.12.0 runtime and exact pnpm 12.14.0 packageManager pin. No project runtime is downloaded. Existing npm worktrees must preserve dirty source, remove only their own node_modules, run `pnpm install --frozen-lockfile`, then delete dist, .types and *.tsbuildinfo before rebuilding. `npm run` remains usable but bypasses pnpm's stale-dependency guard.
