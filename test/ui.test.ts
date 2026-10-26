@@ -812,6 +812,7 @@ it('offers the opt-in answer at first arrival without reopening the household', 
     await open(page, 450, 7, [], true, 'valley-replies-2026-10');
     await page.getByRole('button', { name: 'the Kavak house', exact: true }).click();
     await page.getByRole('button', { name: 'Send grain', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm send grain', exact: true }).click();
     await page.getByRole('button', { name: 'Visit', exact: true }).click();
     expect(await page.getByRole('button', { name: 'Say: I came to listen', exact: true }).count()).toBe(0);
     for (let i = 0; i < 30; i++) {
@@ -825,6 +826,131 @@ it('offers the opt-in answer at first arrival without reopening the household', 
     await answer.click();
     expect(await answer.isEnabled()).toBe(false);
     expect(await visibleText(page.locator('.action-caption'))).toContain('You said:');
+  } finally {
+    await page.close();
+  }
+});
+
+// Grain confirmation must guard the actual household action, not only a receipt helper.
+it('previews grain without recording an order or spending stock', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await page.route('**/api/**', (route) => route.abort());
+    await open(page, 450, 7, [], true, 'valley-replies-2026-10');
+    await page.getByRole('button', { name: 'the Kavak house', exact: true }).click();
+    const before = await state(page);
+    await page.getByRole('button', { name: 'Send grain', exact: true }).click();
+    expect(await state(page)).toEqual(before);
+    expect(await visibleText(page.locator('.action-caption'))).toContain(
+      '6 measures of grain to the Kavak house',
+    );
+    expect(await page.getByRole('button', { name: 'Confirm send grain', exact: true }).count()).toBe(1);
+  } finally {
+    await page.close();
+  }
+});
+
+it('guards grain cancel, changed stock, recipient changes and repeated confirmation', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await page.route('**/api/**', (route) => route.abort());
+    await open(page, 450, 7, [], true, 'valley-replies-2026-10');
+    await page.getByRole('button', { name: 'the Kavak house', exact: true }).click();
+    const snapshot = () =>
+      page.evaluate<{ stock: number; inputs: Input[] }>(
+        `import('/src/ui/app.ts').then(({ _debug }) => ({ stock: _debug.game().valley.agha.granary, inputs: _debug.game().inputs }))`,
+      );
+    const before = await snapshot();
+    await page.getByRole('button', { name: 'Send grain', exact: true }).click();
+    expect(await snapshot()).toEqual(before);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect(await snapshot()).toEqual(before);
+    expect(await page.locator('#houses [data-h="kavak"]').getAttribute('aria-pressed')).toBe('true');
+    await page.getByRole('button', { name: 'Send grain', exact: true }).click();
+    await page.evaluate(
+      `import('/src/ui/app.ts').then(({ _debug }) => { _debug.game().valley.agha.granary = 3.25; })`,
+    );
+    await page.getByRole('button', { name: 'Confirm send grain', exact: true }).click();
+    expect(await snapshot()).toEqual({ stock: 3.25, inputs: [] });
+    expect(await visibleText(page.locator('.action-caption'))).toContain(
+      '3.25 measures of grain to the Kavak house',
+    );
+    // Reenter the still-mounted confirmation during the actual log write.
+    await page.evaluate(() => {
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        Storage.prototype.setItem = original;
+        document.querySelector<HTMLButtonElement>('#thumbs button[data-grain-confirm]')?.click();
+        return original.call(this, key, value);
+      };
+      const button = [...document.querySelectorAll<HTMLButtonElement>('#thumbs button')].find(
+        (b) => b.textContent === 'Confirm send grain',
+      );
+      button?.setAttribute('data-grain-confirm', '');
+    });
+    await page.getByRole('button', { name: 'Confirm send grain', exact: true }).evaluate((button) => {
+      (button as HTMLButtonElement).click();
+      (button as HTMLButtonElement).click();
+    });
+    expect(await snapshot()).toEqual({
+      stock: 0,
+      inputs: [{ verb: 'give', house: 'kavak', kile: 6, at: 450 }],
+    });
+    expect(await visibleText(page.locator('.action-caption'))).toContain('Sent grain to the Kavak house.');
+    // Compare the native payload and full world delta against the unchanged action path.
+    expect(
+      await page.evaluate(`Promise.all([import('/src/ui/app.ts'), import('/src/sim/game.ts')]).then(([{ _debug }, { newGame, step, act, stateJson }]) => {
+      const expected = newGame(7, undefined, false, true, 'valley-replies-2026-10'); step(expected, 450); expected.valley.agha.granary = 3.25;
+      act(expected, { verb: 'give', house: 'kavak', kile: 6 });
+      return JSON.stringify(stateJson(expected.valley)) === JSON.stringify(stateJson(_debug.game().valley));
+    })`),
+    ).toBe(true);
+    await page.evaluate(
+      `import('/src/ui/app.ts').then(({ _debug }) => { _debug.game().valley.agha.granary = 6; _debug.skipTo(0); })`,
+    );
+    await page.getByRole('button', { name: 'Send grain', exact: true }).click();
+    await page.locator('#houses [data-h="coban"]').click();
+    expect(await page.getByRole('button', { name: 'Confirm send grain', exact: true }).count()).toBe(0);
+    await page.getByRole('button', { name: 'Send grain', exact: true }).click();
+    await page.evaluate(
+      `import('/src/ui/app.ts').then(({ _debug }) => { _debug.game().valley.flags.verbs = _debug.game().valley.flags.verbs.filter(v => v !== 'give'); })`,
+    );
+    await page.getByRole('button', { name: 'Confirm send grain', exact: true }).click();
+    expect((await snapshot()).stock).toBe(6);
+    expect((await snapshot()).inputs).toHaveLength(1);
+    expect(await page.getByRole('button', { name: 'Confirm send grain', exact: true }).count()).toBe(0);
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps the pending grain disclosure after a blocked Visit click', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await page.route('**/api/**', (route) => route.abort());
+    await open(page, 450, 7, [], true, 'valley-replies-2026-10');
+    await page.getByRole('button', { name: 'the Kavak house', exact: true }).click();
+    await page.getByRole('button', { name: 'Visit', exact: true }).click();
+    const before = await state(page);
+    await page.getByRole('button', { name: 'Send grain', exact: true }).click();
+    expect(await state(page)).toEqual(before);
+    const visit = page.getByRole('button', { name: 'Visit', exact: true });
+    expect(await visit.getAttribute('aria-disabled')).toBe('true');
+    // aria-disabled buttons still receive ordinary DOM clicks in this application.
+    await visit.evaluate((button) => (button as HTMLButtonElement).click());
+    expect(await visibleText(page.locator('.action-caption'))).toMatch(/Visit: /);
+    expect(await page.getByRole('button', { name: 'Confirm send grain', exact: true }).count()).toBe(1);
+    expect(await visibleText(page.locator('#thumbs'))).toContain(
+      'Send 6 measures of grain to the Kavak house?',
+    );
+    expect(await state(page)).toEqual(before);
+    await page.getByRole('button', { name: 'Confirm send grain', exact: true }).click();
+    const after = await state(page);
+    expect(after.minute).toBe(before.minute);
+    expect(JSON.parse(after.inputs)).toEqual([
+      ...JSON.parse(before.inputs),
+      { verb: 'give', house: 'kavak', kile: 6, at: 450 },
+    ]);
   } finally {
     await page.close();
   }

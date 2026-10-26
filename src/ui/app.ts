@@ -132,6 +132,7 @@ let selected: string | null = null;
 let stage: PhoneStage | null = null;
 let textSizeObserver: ResizeObserver | null = null;
 let actionCaption = '';
+let pendingGrain: { game: Game; house: Household; stock: number; members: string } | null = null;
 let importStatus = '';
 let houseDetails = false;
 let tab: 'notes' | 'ledger' | 'reader' | 'orders' = 'notes';
@@ -509,6 +510,7 @@ function infoWords(): string {
 }
 
 function title() {
+  pendingGrain = null;
   labScreen('title');
   cancelAnimationFrame(raf);
   const log = readLog();
@@ -678,6 +680,7 @@ async function begin(seed: number, localOnly = false, rules?: RulesEdition) {
 // ---------- play ----------
 
 function enter() {
+  pendingGrain = null;
   labScreen('play');
   if (!g) return;
   if (g.valley.flags.ended) return ending();
@@ -894,6 +897,7 @@ function openNotebook() {
 }
 
 function openReading(which: 'ledger' | 'reader' | 'orders') {
+  pendingGrain = null;
   selected = null;
   hurrying = false;
   tab = which;
@@ -903,6 +907,7 @@ function openReading(which: 'ledger' | 'reader' | 'orders') {
 
 function order(o: Order) {
   if (!g) return;
+  pendingGrain = null;
   const grainBefore = g.valley.agha.granary;
   if (act(g, o)) {
     if (o.verb === 'give') {
@@ -1325,6 +1330,7 @@ function tapMap(cv: HTMLCanvasElement, e: MouseEvent) {
 
 /** Select a house (or none): the map tap and the accessible house list both land here. */
 function pick(id: string | null) {
+  pendingGrain = null;
   selected = id && selected !== id ? id : null;
   actionCaption = '';
   tab = 'notes';
@@ -1336,6 +1342,7 @@ function pick(id: string | null) {
 }
 
 function closeHouse() {
+  pendingGrain = null;
   const origin = selected;
   selected = null;
   tab = 'notes';
@@ -1479,6 +1486,7 @@ function drawSheet(force = false) {
     hurrying = false;
   }
   const hh = selected ? houseOf(s, selected) : undefined;
+  if (!hh || tab !== 'notes') pendingGrain = null;
   const root = app.querySelector<HTMLElement>('.play');
   root?.setAttribute('data-house', String(!!hh));
   root?.setAttribute('data-knock', String(!!knock || !!term));
@@ -1995,19 +2003,57 @@ function houseThumbs(s: ValleyState, hh: Household): string {
       ? 'You will be away from the residence for most of a morning.'
       : 'You will be away from the residence for a couple of hours.',
   );
-  if (s.flags.verbs.includes('give'))
-    add(
-      'Send grain',
-      () => order({ verb: 'give', house: hh.id, kile: 6 }),
-      empty
-        ? 'Nobody lives here.'
-        : !s.flags.verbs.includes('give')
-          ? 'You can give grain when a household is short of food or asks at your door.'
-          : s.agha.granary < 2
-            ? giftHint(s)
-            : null,
-      `${knownFood(s, hh)} ${giftHint(s)}`,
+  const grainBlocked = () =>
+    !hh.members.length
+      ? 'Nobody lives here.'
+      : !s.flags.verbs.includes('give')
+        ? 'You can give grain when a household is short of food or asks at your door.'
+        : s.agha.granary < 2
+          ? giftHint(s)
+          : null;
+  const previewGrain = () => {
+    if (!g) return;
+    const reason = grainBlocked();
+    pendingGrain = reason
+      ? null
+      : { game: g, house: hh, stock: s.agha.granary, members: JSON.stringify(hh.members) };
+    actionCaption =
+      reason ??
+      `Send ${Math.min(6, s.agha.granary)} measures of grain to ${householdLabel(hh)}? This leaves your granary. No grain has been sent.`;
+    drawSheet(true);
+  };
+  if (pendingGrain?.house === hh) {
+    const preview = pendingGrain;
+    out.push(
+      `<p class="pending-grain">Send ${Math.min(6, preview.stock)} measures of grain to ${esc(householdLabel(preview.house))}? This leaves your granary. No grain has been sent.</p>`,
+      btn('Confirm send grain', () => {
+        // Consume before act: repeated or reentrant callbacks cannot spend twice.
+        if (pendingGrain !== preview) return;
+        pendingGrain = null;
+        if (g !== preview.game || selected !== hh.id || tab !== 'notes') return;
+        if (
+          s.agha.granary !== preview.stock ||
+          JSON.stringify(hh.members) !== preview.members ||
+          grainBlocked()
+        ) {
+          previewGrain();
+          return;
+        }
+        order({ verb: 'give', house: hh.id, kile: 6 });
+      }),
     );
+    add(
+      'Cancel',
+      () => {
+        pendingGrain = null;
+        actionCaption = 'No grain was sent.';
+        drawSheet(true);
+      },
+      null,
+      'Keep the grain in your granary.',
+    );
+  } else if (s.flags.verbs.includes('give'))
+    add('Send grain', previewGrain, grainBlocked(), `${knownFood(s, hh)} ${giftHint(s)}`);
   const blocked = empty
     ? 'Nobody lives here.'
     : !underSeal(s, hh)
