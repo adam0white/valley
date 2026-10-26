@@ -1,5 +1,7 @@
+import { dialogueChoices, dialogueStatus, dialogueWords } from '../sim/dialogue.ts';
 import {
   ALLIANCE_EDITION,
+  DIALOGUE_EDITION,
   passEdition,
   REPLY_EDITION,
   RULES_EDITION,
@@ -385,6 +387,8 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
   let game: Game;
   let rest: Input[];
   if (
+    // Dialogue receipts require authoritative input replay; a volume digest proves only integrity.
+    log.rules !== DIALOGUE_EDITION &&
     bound &&
     typeof bound.runId === 'string' &&
     bound.runId.length > 0 &&
@@ -532,16 +536,28 @@ function title() {
     <section class="title-premise"><h1>The Valley</h1><p class="purpose">${esc(PURPOSE)}</p><p class="soft">People can refuse you, and they remember how you answer.</p></section>
     ${LAB_TOOLS ? '<button data-ways>Lab tools ▸</button>' : ''}
     <div class="vignette" aria-hidden="true"><svg viewBox="0 0 360 140"><path d="M0 95Q80 15 160 90T360 70M0 130Q90 50 180 120T360 95M250 0Q200 70 260 140" fill="none" stroke="currentColor"/><g fill="none" stroke="currentColor" stroke-width="2"><path d="M70 95v-18l12-12 12 12v18zM130 105V87l12-12 12 12v18zM190 90V72l12-12 12 12v18zM280 100V82l12-12 12 12v18z"/></g></svg></div>
-    <footer class="title-actions"><label class="edition-choice"><input type="checkbox" data-reply-edition> Include a spoken answer during visits. This uses the original grain rules and local people, instead of the other editions below.</label><label class="edition-choice"><input type="checkbox" data-edition> Include grain wages, voluntary contributions, winter loans and inspections in this new term.</label><label class="edition-choice"><input type="checkbox" data-pass-edition> Also include pass journeys, family arrangements and a road agreement. This includes the grain rules. The steward eats from real provisions and rests between walks. Continuing people stay local in this edition.</label>${where ? `<p class="hand">${esc(where)}</p>` : ''}
+    <footer class="title-actions"><label class="edition-choice"><input type="checkbox" data-reply-edition><span>Include a spoken answer during visits. <select data-visit-version aria-label="Visit version"><option value="reply">Original sentence</option><option value="dialogue">Questions for Zehra</option></select> Original grain rules and local people.</span></label><label class="edition-choice"><input type="checkbox" data-edition> Include grain wages, voluntary contributions, winter loans and inspections in this new term.</label><label class="edition-choice"><input type="checkbox" data-pass-edition> Also include pass journeys, family arrangements and a road agreement. This includes the grain rules. The steward eats from real provisions and rests between walks. Continuing people stay local in this edition.</label>${where ? `<p class="hand">${esc(where)}</p>` : ''}
     ${hasSave ? `${log && log.version === GAME_VERSION ? '<button class="primary" data-go="open">Resume</button>' : ''}<button data-go="new" class="hold">New game<span class="fill"></span></button><p class="soft">This replaces your saved game.</p>` : '<button class="primary" data-go="new">New game</button>'}${mark()}</footer>
     ${LAB_TOOLS ? `<dialog class="ways-panel" aria-label="Other ways to start"><header><h2>Other ways to start</h2><button data-ways-close aria-label="Close other ways to start">×</button></header><label for="valley-name">A named valley</label><input id="valley-name" placeholder="Kuyulu" maxlength="80"><p>The same name gives the same valley.</p><button data-seed${log ? ' class="hold"' : ''}>Begin this valley${log ? '<span class="fill"></span>' : ''}</button>${log ? '<p class="soft">This replaces your saved game.</p>' : ''}<label for="load-run">Load a playtest run</label><input id="load-run" type="file" accept=".json,application/json"><p id="load-result" role="status"></p></dialog>` : ''}
   </div>`;
   app.querySelector('[data-go="open"]')?.addEventListener('click', () => {
     if (log && log.version === GAME_VERSION) openLedger(log);
   });
+  for (const option of app.querySelectorAll<HTMLInputElement>('.edition-choice input')) {
+    option.addEventListener('change', () => {
+      if (!option.checked) return;
+      const reply = app.querySelector<HTMLInputElement>('[data-reply-edition]');
+      if (option === reply) {
+        for (const other of app.querySelectorAll<HTMLInputElement>('.edition-choice input'))
+          if (other !== option) other.checked = false;
+      } else if (reply) reply.checked = false;
+    });
+  }
   const fresh = (seed: number) => {
     const rules = app.querySelector<HTMLInputElement>('[data-reply-edition]')?.checked
-      ? REPLY_EDITION
+      ? app.querySelector<HTMLSelectElement>('[data-visit-version]')?.value === 'dialogue'
+        ? DIALOGUE_EDITION
+        : REPLY_EDITION
       : app.querySelector<HTMLInputElement>('[data-pass-edition]')?.checked
         ? ALLIANCE_EDITION
         : app.querySelector<HTMLInputElement>('[data-edition]')?.checked
@@ -1489,7 +1505,7 @@ function drawSheet(force = false) {
   const visitPhase = visit
     ? `${visit.house}:${visit.arrive}:${s.minute < visit.arrive ? 'out' : s.minute < visit.leave ? 'here' : s.minute < visit.back ? 'return' : 'home'}:${s.reply?.visits.includes(`${visit.house}:${visit.arrive}`) ?? false}`
     : '';
-  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${JSON.stringify(s.asks.map((a) => a.replies))}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${visitPhase}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}`;
+  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${JSON.stringify(s.asks.map((a) => a.replies))}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${visitPhase}|${s.dialogue ? JSON.stringify([s.dialogue, dialogueChoices(s)]) : ''}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}`;
   const travel = app.querySelector<HTMLElement>('#reading-travel');
   if (travel) travel.textContent = englishText(caption(s, ''));
   const receipt = app.querySelector<HTMLElement>('#action-receipt');
@@ -1852,6 +1868,19 @@ function jobInSeason(s: ValleyState): Job | null {
   return currentJob(s) ?? null;
 }
 
+function dialogueCard(s: ValleyState, hh: Household): string {
+  if (!s.dialogue || s.kahyaState.visit?.house !== hh.id) return '';
+  const out: string[] = [];
+  const exchange = s.dialogue.exchanges.at(-1);
+  if (exchange?.house === hh.id) {
+    out.push(`<p role="status">${esc(dialogueStatus(exchange))}</p>`);
+    if (['pending', 'heard', 'talking'].includes(exchange.status))
+      out.push(btn('End this question', () => order({ verb: 'dialogue-cancel', turn: exchange.turn })));
+  }
+  for (const choice of dialogueChoices(s)) out.push(btn(dialogueWords(s, choice), () => order(choice)));
+  return out.length ? `<section class="dialogue"><h2>Speak with Zehra</h2>${out.join('')}</section>` : '';
+}
+
 function houseCard(s: ValleyState, hh: Household): string {
   pressShown.clear();
   const pending = pendingReplies(s, hh);
@@ -1929,11 +1958,12 @@ function houseCard(s: ValleyState, hh: Household): string {
       : '';
   const response = recent.find((n) => n.words && (n.kind === 'voice' || n.ask));
   const refusal = selectedRefusal(s, hh);
+  const conversation = dialogueCard(s, hh);
   const status = `<p id="reading-travel" class="reading-status">${esc(englishText(caption(s, '')))}</p><p id="action-receipt" class="action-caption" role="status">${esc(actionWords(s) || limitsWords(s, hh))}</p>`;
   if (!houseDetails)
-    return `<div class="card">${response ? `<div class="house-response">${datedReply(s, response)}</div>` : ''}${status}${refusal || (!response ? '<p class="soft">There is no new reply from this house.</p>' : '')}</div>`;
+    return `<div class="card">${response ? `<div class="house-response">${datedReply(s, response)}</div>` : ''}${status}${conversation}${refusal || (!response ? '<p class="soft">There is no new reply from this house.</p>' : '')}</div>`;
   return `<div class="card">
-    ${response ? `<div class="house-response">${datedReply(s, response)}</div>` : ''}${status}${refusal}
+    ${response ? `<div class="house-response">${datedReply(s, response)}</div>` : ''}${status}${conversation}${refusal}
     <div class="house-context">
     ${lines
       .filter(Boolean)

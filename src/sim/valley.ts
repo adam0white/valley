@@ -70,8 +70,17 @@ import {
 import { ALLOCATION, CAST_IDS, DISCLOSURES, localRole } from './cast.ts';
 import { tellValleyDeath } from './death.ts';
 import {
+  captureDialogue,
+  type DialogueState,
+  dialogueHear,
+  dialogueOffers,
+  dialogueTick,
+  resolveDialogue,
+} from './dialogue.ts';
+import {
   ALLIANCE_EDITION,
   captureTermReply,
+  DIALOGUE_EDITION,
   type EditionState,
   millPay,
   passEdition,
@@ -274,6 +283,7 @@ export interface ValleyState {
   introduction?: IntroductionState;
   edition?: EditionState;
   /** Explicit reply-only edition. Original grain rules remain unmarked. */
+  dialogue?: DialogueState;
   reply?: { id: typeof REPLY_EDITION; visits: string[] };
   castFacts?: Record<string, ReturnType<typeof lifeFacts>>;
   castReleaseRequests?: string[];
@@ -354,10 +364,11 @@ export function newValley(
   // Opt in after admission, before any simulation. Full-save restoration bypasses this path.
   for (const p of [...people, kahya]) p.lexicon = { ...p.lexicon, plainEnglish };
   const s: ValleyState = {
-    ...(rules && rules !== REPLY_EDITION ? { edition: { id: rules } } : {}),
+    ...(rules && rules !== REPLY_EDITION && rules !== DIALOGUE_EDITION ? { edition: { id: rules } } : {}),
     ...(rules === REPLY_EDITION ? { reply: { id: REPLY_EDITION, visits: [] } } : {}),
     ...(rules === ALLIANCE_EDITION ? { stewardCare: { grain: 0, eaten: 0 } } : {}),
     ...(passEdition(rules) ? { pass: { stock: 3, stone: 0, grainReceived: 0 } } : {}),
+    ...(rules === DIALOGUE_EDITION ? { dialogue: { id: DIALOGUE_EDITION, exchanges: [] } } : {}),
     v: 1,
     seed,
     minute: 0,
@@ -554,6 +565,7 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
   // Bed is for the dark, or for someone who can no longer keep their eyes open; a tired day-worker rests instead.
   const sleepy = !light || p.body.sleepPressure > 0.65 || p.body.sleepDebt > 0.5 || p.body.health < 0.5;
   const out: Affordance[] = [
+    ...dialogueOffers(s, p, at),
     ...introductionOffers(s, p, at),
     ...brokerOffers(s, p, at),
     ...allianceOffers(s, p, at),
@@ -950,6 +962,7 @@ export function makeWorld(s: ValleyState): World {
       return h ? scarcityOf(s, h) : 0;
     },
     beginOptions: (p, offer, record) => {
+      captureDialogue(s, p, offer, record);
       if (!captureIntroduction(s, p, offer, record) && !captureTermReply(s, p, offer, record))
         captureReply(s, p, offer, record);
       return undefined;
@@ -1299,6 +1312,8 @@ function replyWords(s: ValleyState, p: Person, ask: Ask, r: Reply): string {
 }
 
 function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ended' | 'interrupted'): Outcome {
+  const dialogue = resolveDialogue(s, p, act, reason);
+  if (dialogue) return dialogue;
   const broker = resolveBroker(s, p, act, reason);
   if (broker) return broker;
   const road = resolveAlliance(s, p, act, reason);
@@ -1593,6 +1608,7 @@ export function advanceTo(s: ValleyState, to: number): SimEvent[] {
     const day = dayOfMinute(s.minute);
     const midnight = (day + 1) * DAY;
     const stepTo = Math.min(to, midnight);
+    dialogueHear(s);
     const c = communityOf(s);
     const suggestions: Record<string, Suggestion | readonly Suggestion[]> = {};
     for (const p of c.people) {
@@ -1610,6 +1626,8 @@ export function advanceTo(s: ValleyState, to: number): SimEvent[] {
       contagion: false,
     });
     for (const e of ev) if (e.kind === 'died' || e.kind === 'finish') events.push(e);
+    dialogueHear(s);
+    dialogueTick(s, stepTo, ev);
     kahyaTo(s, stepTo);
     s.minute = stepTo;
     afterStep(s, ev);

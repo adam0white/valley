@@ -6,9 +6,11 @@ import { FRAMEWORK_VERSION, type Person, recall, restore, snapshot } from '@adam
 import { type AllianceChoice, allianceChoice } from './alliance.ts';
 import { type BrokerChoice, brokerChoice } from './brokering.ts';
 import { DAY, dateEnglish, dayOfMinute, doyOf, HOUR, yearOf } from './calendar.ts';
+import { cancelDialogue, type DialogueOrder, speakDialogue, validateDialogueState } from './dialogue.ts';
 import {
   ALLIANCE_EDITION,
   chooseTerm,
+  DIALOGUE_EDITION,
   type HearthTopic,
   knownEdition,
   passEdition,
@@ -54,6 +56,8 @@ import {
 export const GAME_VERSION = '0.3.0';
 
 export type Input =
+  | (DialogueOrder & { at: number })
+  | { at: number; verb: 'dialogue-cancel'; turn: number }
   | { at: number; verb: 'alliance'; choice: AllianceChoice }
   | { at: number; verb: 'broker'; choice: BrokerChoice }
   | { at: number; verb: 'pass'; choice: 'depart' | 'buy' | 'deliver' }
@@ -107,6 +111,12 @@ export function act(g: Game, input: Order): boolean {
 function apply(g: Game, i: Input): boolean {
   const s = g.valley;
   switch (i.verb) {
+    case 'dialogue': {
+      const { at: _at, ...order } = i;
+      return speakDialogue(s, order);
+    }
+    case 'dialogue-cancel':
+      return Object.keys(i).every((k) => ['at', 'verb', 'turn'].includes(k)) && cancelDialogue(s, i.turn);
     case 'reply':
       return replyAtHearth(s, i.house);
     case 'broker':
@@ -627,6 +637,7 @@ function validateReplyState(s: ValleyState): void {
 
 export function restoreState(json: ValleyState): ValleyState {
   validateReplyState(json);
+  validateDialogueState(json);
   const { people, kahya, ...rest } = json;
   resetCaches();
   return {
@@ -726,9 +737,23 @@ export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
   };
 }
 
+/** Key order is not state. Preserve every value when comparing the new edition's replay. */
+const exactKeys = (_key: string, value: unknown): unknown =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)))
+    : value;
+
 export function load(saved: SavedGame | CompactRun): Game {
+  if (
+    saved.inputs.some(
+      (i) => (i.verb === 'dialogue' || i.verb === 'dialogue-cancel') && saved.rules !== DIALOGUE_EDITION,
+    )
+  )
+    throw new Error('Dialogue commands require the dialogue edition.');
   if (saved.rules !== undefined && !knownEdition(saved.rules))
     throw new Error('Unknown Valley rules edition.');
+  if ('state' in saved && (saved.rules === DIALOGUE_EDITION) !== !!saved.state.dialogue)
+    throw new Error('Invalid Valley dialogue configuration.');
   if ('state' in saved && rulesOf(saved.state) !== saved.rules)
     throw new Error('The saved rules do not match the run.');
   if (
@@ -747,6 +772,22 @@ export function load(saved: SavedGame | CompactRun): Game {
   if (saved.version !== GAME_VERSION || saved.framework !== FRAMEWORK_VERSION)
     throw new Error('This run uses an older Valley edition. Export it for safekeeping and start fresh.');
   if (saved.cast) newGame(saved.seed, saved.cast);
+  if ('state' in saved && saved.state.dialogue) {
+    validateDialogueState(saved.state);
+    const rebuilt = replay(
+      saved.seed,
+      structuredClone(saved.inputs),
+      saved.minute,
+      saved.cast,
+      saved.plainEnglish ?? true,
+      saved.rules,
+    );
+    if (
+      JSON.stringify(stateJson(rebuilt.valley), exactKeys) !== JSON.stringify(saved.state, exactKeys) ||
+      JSON.stringify(rebuilt.inputs) !== JSON.stringify(saved.inputs)
+    )
+      throw new Error('Invalid Valley dialogue replay state.');
+  }
   if ('state' in saved)
     return {
       valley: restoreState(saved.state),
@@ -762,6 +803,8 @@ export function load(saved: SavedGame | CompactRun): Game {
     saved.plainEnglish ?? true,
     saved.rules,
   );
+  if (saved.rules === DIALOGUE_EDITION && JSON.stringify(g.inputs) !== JSON.stringify(saved.inputs))
+    throw new Error('Invalid Valley dialogue commands.');
   if (fingerprint(g.valley) !== saved.fingerprint)
     throw new Error(
       'This file does not replay the same way in this version of The Valley. It may come from an older version. Start a new game instead.',

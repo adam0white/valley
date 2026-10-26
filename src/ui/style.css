@@ -2375,3 +2375,18 @@ body:has(.play[data-reflow="true"]) {
   height: max(80dvh, calc(var(--reading-chrome-height, 200px) + 40dvh));
   overflow: visible;
 }
+
+/* The visit version is one explicit choice inside the existing visit option. */
+.title-actions .edition-choice:has([data-visit-version]) > span {
+  min-width: 0;
+}
+.title-actions [data-visit-version] {
+  max-width: 100%;
+  min-width: 0;
+}
+.title-page:has([data-visit-version]) [data-go="new"] {
+  scroll-margin-block: 2px;
+}
+.title-actions:has([data-visit-version]) {
+  min-width: 0;
+}

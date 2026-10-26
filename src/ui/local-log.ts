@@ -3,7 +3,14 @@
  */
 
 import { DAY } from '../sim/calendar.ts';
-import { ALLIANCE_EDITION, grainEdition, knownEdition, passEdition, REPLY_EDITION } from '../sim/edition.ts';
+import {
+  ALLIANCE_EDITION,
+  DIALOGUE_EDITION,
+  grainEdition,
+  knownEdition,
+  passEdition,
+  REPLY_EDITION,
+} from '../sim/edition.ts';
 import { END_DAY, GAME_VERSION, QUANTUM } from '../sim/game.ts';
 
 const object = (x: unknown): x is Record<string, unknown> =>
@@ -44,6 +51,11 @@ export function validLocalLog(value: unknown): boolean {
       return false;
     prior = input.at as number;
     switch (input.verb) {
+      case 'dialogue':
+      case 'dialogue-cancel':
+        // Replay performs semantic admission and must retain every accepted input.
+        if (v.rules !== DIALOGUE_EDITION) return false;
+        break;
       case 'broker':
         if (
           v.rules !== ALLIANCE_EDITION ||

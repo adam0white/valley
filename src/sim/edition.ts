@@ -26,21 +26,25 @@ import {
   underSeal,
   type ValleyState,
 } from './valley.ts';
+export const DIALOGUE_EDITION = 'valley-dialogue-2026-10';
 export const REPLY_EDITION = 'valley-replies-2026-10';
-export const rulesOf = (s: ValleyState): RulesEdition | undefined => s.reply?.id ?? s.edition?.id;
+export const rulesOf = (s: ValleyState): RulesEdition | undefined =>
+  s.dialogue?.id ?? s.reply?.id ?? s.edition?.id;
 export const RULES_EDITION = 'valley-2026-10';
 export const PASS_EDITION = 'valley-pass-2026-10';
 export const ALLIANCE_EDITION = 'valley-alliance-2026-10';
-export const localEdition = (rules: unknown): boolean => rules === REPLY_EDITION || passEdition(rules);
+export const localEdition = (rules: unknown): boolean =>
+  rules === DIALOGUE_EDITION || rules === REPLY_EDITION || passEdition(rules);
 export const grainEdition = (rules: unknown): boolean => rules === RULES_EDITION || passEdition(rules);
 export const passEdition = (rules: unknown): boolean => rules === PASS_EDITION || rules === ALLIANCE_EDITION;
 export type RulesEdition =
   | typeof RULES_EDITION
   | typeof PASS_EDITION
   | typeof ALLIANCE_EDITION
-  | typeof REPLY_EDITION;
+  | typeof REPLY_EDITION
+  | typeof DIALOGUE_EDITION;
 export const knownEdition = (rules: unknown): rules is RulesEdition =>
-  rules === RULES_EDITION || rules === REPLY_EDITION || passEdition(rules);
+  rules === RULES_EDITION || rules === DIALOGUE_EDITION || rules === REPLY_EDITION || passEdition(rules);
 export type HearthTopic = 'person' | 'debt' | 'grievance';
 interface Request {
   id: string;

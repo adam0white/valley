@@ -271,3 +271,68 @@ acceptance, physical-phone behavior, cold comprehension and the authorized produ
 notebook receipt remain input gates for2026-11-03. Existing first-goal, short-notebook,
 plain4 projections, focus, slowdown and SDK11/12 fixes remain implemented; this slice
 adds no duplicate fix or new model/network service. Friends and Show HN remain paused.
+
+## Deferred: bounded Zehra exchange source — 2026-10-26
+
+Select “Questions for Zehra” in the visit-version chooser and check the otherwise
+unchecked spoken-answer option to use `valley-dialogue-2026-10`. Selecting a version
+alone enables nothing. This edition uses the replies edition's local
+people and original grain rules. It adds no October, pass or alliance mechanics.
+Original 0.3.0, October, pass, replies and alliance histories retain their own rules.
+Their old reply command and words remain unchanged. This source batch is not a release.
+
+`src/sim/dialogue.ts` owns one authored scene. The actor is registry id `zehra`,
+currently a member of the Çoban household; name equality never selects the actor.
+An attended current visit, awake living presence at that house and an already public
+specific reply or voice record are required. The two lines quote that record or
+explain the current real harvest request against the already public 20 July warning.
+The work line requires an open harvest ask that actually includes her. The scene
+reveals no private body, household stock, prediction or new family secret.
+
+Speech is logged once per numbered input. Pending hearing waits for ordinary actor
+catch-up. A public HF heard percept is delivered through `perceive` at her actual
+clock; returned attention and actual matching memory times are retained separately.
+This explicit host queue does not invoke automatic conversation or add the steward
+to the resident community. It does not wake or interrupt her to obtain an answer.
+A five-minute ordinary resident offer competes with the normal body, prayer and work
+alternatives. HF owns decide, begin, duration rounding, reviews, interruption and finish.
+There is no second steward suggestion that could be confused with the real work ask.
+Only a completed matching activity inside the visit can produce the authored outward
+answer, including “It is not a promise to leave my work.” Talk consumes actual time.
+It grants no resources, work credit, obligation or scalar trust adjustment.
+
+The work result retains her actual existing reply as existing. A later real reply and
+matching current activity/useful hours are separate evidence. Talking alone leaves
+the work request pending. No sentence guarantees compliance, travel or arrival.
+Withholding permits a fresh explicit input only while presence and visit guards still
+hold. Cancellation retains history and elapsed time and cannot produce an answer.
+Full and compact saves pin the edition and retain scene receipts and complete native
+people, world, queues and RNG. New full files replay into a detached game and compare
+every state value and accepted input before installation. Bound recovery validates the
+scene configuration; it does not obtain an external continuing-person claim.
+
+The fixed seed-7 ordinary control reached speech, attended hearing and a different
+ordinary choice at actor minute 1114. It retained a withheld answer. The next public
+step found Zehra asleep. The work-line and cancellation forks use the same public
+scene; no traits, body, RNG or clocks were assigned. Completed/running talk, interrupted
+running talk and completed-answer replay remain unproved in this control. No seed search
+or player/model round supplies acceptance. Pending, withheld, cancelled and continued
+native full/compact equality are the tested facets. All five old configurations have
+one seed-7 raw all-field before/after fixture comparison, including continuations.
+
+Remaining engineering disposition is due 2026-10-27: independently review this source
+and its negative control; establish or reject the naturally completed talk facet;
+Yusuf/birth, Tepe/son, Danyal/Maryam and other people remain open. Mutual future help
+requires lawful terms, actual resources and separate voluntary choices; no bargain is
+implemented. Harvest forecasts, Skip/pacing, named reply grouping and arbitrary grain
+amount selection remain separate open clauses. No whole frozen-34 or original-20 ask
+set is closed. The f711 grain blocker collection remains additional R1, not a fixed-build
+retest. The newer-deploy hold remains active. Existing reading, travel, focus, hold,
+gift receipts and preview guards are preserved.
+
+The batch ends with source and native evidence ready for one independent review.
+Technical delivery still requires authorized signed source, exact green CI and a clean
+matching release with browser verification. Actual existing-Chrome local verification
+is a gap in this batch. Adam accepts feel separately; owner/device and cold-player
+input remain due 2026-11-03 where previously assigned. These are separate gates, not a
+blanket owner block on remaining engineering.

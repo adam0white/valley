@@ -1,5 +1,44 @@
 # Valley handoff
 
+## Actual exchange source batch — 2026-10-26
+
+Remaining: one independent source review; a naturally completed talk and its running,
+completed and interrupted native replay evidence; authorized signed/green delivery and
+any later permitted release. This source-only batch makes no delivery or feel claim.
+
+Select “Questions for Zehra” in the visit-version chooser, then check the spoken-answer
+option. Both default to the old sentence and unchecked. The explicit
+`valley-dialogue-2026-10` option adds only the bounded Zehra
+scene described in the design's Deferred section. It uses replies-based local people
+and original grain rules. `src/sim/dialogue.ts` owns the scene. The actual actor id is
+`zehra`, in `coban`; the input binds an attended visit and retained specific public words.
+Follow-up and current harvest-need lines are separate. Speech, delayed lawful-clock HF
+hearing/attention, ordinary voluntary choice, timed talk and real work replies stay
+separate. There is no automatic conversation partner, forced choice, free work, promise,
+new secret or private-body/stock disclosure. A completed matching five-minute activity
+alone may author the boundary “It is not a promise to leave my work.”
+
+The fixed seed-7 control retained an attended percept/memory at 1110 and an ordinary
+alternative at 1114. It proves honest withholding, not a completed exchange. The next
+public step finds her asleep, so it offers no retry then. Work-question and cancellation
+forks share that same public scene. Pending/withheld/cancelled full, compact, reload and
+continuation controls pass. Running/completed/interrupted talk remains unproved; do not
+substitute a scheduled greeting or old work reply. Full new-edition files replay all state
+values and inputs before installation. Raw one-seed fixtures preserve all five old
+configurations and their complete native continuations.
+
+Engineering review/disposition remains due 2026-10-27. Yusuf, Tepe, Danyal and other
+people, reciprocal-help terms, forecasts, Skip/pacing, grouping and grain amount choice
+remain open. Frozen actual evidence is 34 current literal rows plus the separate original
+20; neither whole set is closed. f711 stays additional R1 for the grain blocker. The newer
+deployment hold stays active. Adam's feel and previously assigned owner/device/cold-player
+input remain due 2026-11-03. No new round, review, signature, CI, deployment or production
+browser result belongs to this batch. Existing-Chrome local verification is also a gap.
+
+Review artifact: `~/code/.lab-scratch/games-deferred/valley-actual-exchange-report.md`
+and its task-specific manifest, source archive, minimal patch, raw fixtures and proof logs.
+The parent accepts this batch's source/evidence handback; Adam accepts game feel.
+
 ## Installer migration — 2026-10-26
 
 Use shared Node 26.12.0 and pnpm 12.14.0. Install with `pnpm install --frozen-lockfile`; run `pnpm run check:lane`. Preserve dirty source before converting old npm trees: remove only their own node_modules, install frozen, then delete dist, .types and *.tsbuildinfo before rebuilding. No project runtime download and no game deployment are part of this migration. Earlier delivery receipts below remain historical.
