@@ -12,8 +12,10 @@ import {
   type HearthTopic,
   knownEdition,
   passEdition,
+  REPLY_EDITION,
   type RulesEdition,
   requestContribution,
+  rulesOf,
   talkAtHearth,
 } from './edition.ts';
 import { introduce } from './introductions.ts';
@@ -36,6 +38,7 @@ import {
   newValley,
   note,
   personOf,
+  replyAtHearth,
   requestCastRelease,
   resetCaches,
   seize,
@@ -63,6 +66,7 @@ export type Input =
   | { at: number; verb: 'give'; house: string; kile: number }
   | { at: number; verb: 'seize'; house: string }
   | { at: number; verb: 'ease'; house: string }
+  | { at: number; verb: 'reply'; house: string }
   | { at: number; verb: 'visit'; house: string; why?: Knock['what'] | 'call' }
   | { at: number; verb: 'turn-away'; knock: string }
   | { at: number; verb: 'borrow'; kile: number }
@@ -103,6 +107,8 @@ export function act(g: Game, input: Order): boolean {
 function apply(g: Game, i: Input): boolean {
   const s = g.valley;
   switch (i.verb) {
+    case 'reply':
+      return replyAtHearth(s, i.house);
     case 'broker':
       return brokerChoice(s, i.choice);
     case 'alliance':
@@ -577,7 +583,50 @@ function tidy(p: Person): Person {
   return p;
 }
 
+/** Reply-only state must never activate October mechanics under a reply receipt.
+ * Shared by file loads and bound recovery volumes; old states without reply are untouched.
+ */
+function validateReplyState(s: ValleyState): void {
+  if (s.reply === undefined) return;
+  const r = s.reply;
+  if (
+    !r ||
+    typeof r !== 'object' ||
+    Array.isArray(r) ||
+    r.id !== REPLY_EDITION ||
+    s.edition !== undefined ||
+    s.pass !== undefined ||
+    s.stewardCare !== undefined ||
+    s.introduction !== undefined ||
+    s.brokering !== undefined ||
+    !Array.isArray(r.visits) ||
+    Object.keys(r).some((key) => key !== 'id' && key !== 'visits') ||
+    !Number.isSafeInteger(s.minute) ||
+    s.minute < 0 ||
+    s.minute > (END_DAY + 1) * DAY ||
+    r.visits.length > Math.floor(s.minute / 130) + 1
+  )
+    throw new Error('Invalid Valley reply edition state.');
+  const keys = new Set<string>();
+  for (const key of r.visits) {
+    if (typeof key !== 'string') throw new Error('Invalid Valley reply visit.');
+    const match = /^([\p{L}\p{N}_-]{1,100}):(0|[1-9][0-9]*)$/u.exec(key);
+    const at = match ? Number(match[2]) : NaN;
+    if (
+      !match ||
+      !Number.isSafeInteger(at) ||
+      at < 0 ||
+      at > s.minute ||
+      !s.households.some((h) => h.id === match[1]) ||
+      keys.has(key)
+    )
+      throw new Error('Invalid Valley reply visit.');
+    keys.add(key);
+  }
+}
+
 export function restoreState(json: ValleyState): ValleyState {
+  validateReplyState(json);
   const { people, kahya, ...rest } = json;
   resetCaches();
   return {
@@ -630,7 +679,7 @@ export const volumeLabel = (s: ValleyState, n: number) =>
 export function save(g: Game, n = 0): SavedGame {
   return {
     ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
-    ...(g.valley.edition ? { rules: g.valley.edition.id } : {}),
+    ...(rulesOf(g.valley) ? { rules: rulesOf(g.valley) } : {}),
     game: 'valley',
     plainEnglish: g.plainEnglish ?? true,
     version: GAME_VERSION,
@@ -664,7 +713,7 @@ export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
     };
   return {
     ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
-    ...(g.valley.edition ? { rules: g.valley.edition.id } : {}),
+    ...(rulesOf(g.valley) ? { rules: rulesOf(g.valley) } : {}),
     game: 'valley',
     plainEnglish: g.plainEnglish ?? true,
     version: GAME_VERSION,
@@ -680,7 +729,7 @@ export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
 export function load(saved: SavedGame | CompactRun): Game {
   if (saved.rules !== undefined && !knownEdition(saved.rules))
     throw new Error('Unknown Valley rules edition.');
-  if ('state' in saved && saved.state.edition?.id !== saved.rules)
+  if ('state' in saved && rulesOf(saved.state) !== saved.rules)
     throw new Error('The saved rules do not match the run.');
   if (
     'state' in saved &&

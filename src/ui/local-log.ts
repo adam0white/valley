@@ -3,7 +3,7 @@
  */
 
 import { DAY } from '../sim/calendar.ts';
-import { ALLIANCE_EDITION, knownEdition, passEdition } from '../sim/edition.ts';
+import { ALLIANCE_EDITION, grainEdition, knownEdition, passEdition, REPLY_EDITION } from '../sim/edition.ts';
 import { END_DAY, GAME_VERSION, QUANTUM } from '../sim/game.ts';
 
 const object = (x: unknown): x is Record<string, unknown> =>
@@ -116,9 +116,12 @@ export function validLocalLog(value: unknown): boolean {
       case 'release-cast':
         if (!name(input.person)) return false;
         break;
+      case 'reply':
+        if (v.rules !== REPLY_EDITION || !name(input.house)) return false;
+        break;
       case 'topic':
         if (
-          !v.rules ||
+          !grainEdition(v.rules) ||
           !name(input.house) ||
           !['person', 'debt', 'grievance'].includes(input.topic as string)
         )
@@ -126,7 +129,7 @@ export function validLocalLog(value: unknown): boolean {
         break;
       case 'term-choice':
         if (
-          !v.rules ||
+          !grainEdition(v.rules) ||
           typeof input.id !== 'string' ||
           input.id.length > 120 ||
           typeof input.choice !== 'string' ||

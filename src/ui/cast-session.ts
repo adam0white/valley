@@ -20,7 +20,7 @@ import {
   watchPersonaCheckpoint,
 } from '@adam0white/lab-client';
 import { ALLOCATION, localRole } from '../sim/cast.ts';
-import { passEdition, type RulesEdition } from '../sim/edition.ts';
+import { localEdition, type RulesEdition, rulesOf } from '../sim/edition.ts';
 import { act, type Game, newGame, type SavedGame } from '../sim/game.ts';
 import { calendarPassport, checkpointReceipt, HOST_RULES, prepareCastStart } from '../sim/passport.ts';
 import { foundValley } from '../sim/people.ts';
@@ -70,7 +70,7 @@ export class CastSession {
     this.render();
   }
   async fresh(seed: number, localOnly = false, rules?: RulesEdition): Promise<Game> {
-    if (passEdition(rules)) localOnly = true; // No reviewed portable dialect for this edition.
+    if (localEdition(rules)) localOnly = true; // No reviewed portable dialect for this edition.
     this.invalidate();
     const generation = this.generation;
     await this.shelf.ready;
@@ -183,7 +183,7 @@ export class CastSession {
     this.failedCheckpoint = false;
     this.runId = runId;
     this.fileOrigin = fileOrigin;
-    this.localOnly = passEdition(g.valley.edition?.id) || (meta?.localOnly ?? false);
+    this.localOnly = localEdition(rulesOf(g.valley)) || (meta?.localOnly ?? false);
     this.heads = heads;
     this.archiveHeads = archiveHeads;
     this.sources = sources;
@@ -212,8 +212,8 @@ export class CastSession {
       castHeads: structuredClone({ ...this.archiveHeads, ...this.heads }),
     };
   }
-  private stamps(rules: RulesEdition | null = this.game?.valley.edition?.id ?? null) {
-    if (passEdition(rules))
+  private stamps(rules: RulesEdition | null = (this.game ? rulesOf(this.game.valley) : undefined) ?? null) {
+    if (localEdition(rules))
       throw new Error(
         'This local edition has no reviewed continuing-person mapping. Download its native ledger instead.',
       );
@@ -229,7 +229,7 @@ export class CastSession {
     this.render();
   }
   async checkpoint(manual = false): Promise<void> {
-    if (passEdition(this.game?.valley.edition?.id)) {
+    if (localEdition(this.game ? rulesOf(this.game.valley) : undefined)) {
       if (manual) {
         this.status =
           'This local edition has no reviewed continuing-person mapping. Download its native ledger instead.';
@@ -481,7 +481,7 @@ export class CastSession {
     if (!this.panel) return;
     const status = this.panel.querySelector('[data-cast-status]');
     if (status)
-      status.textContent = `${passEdition(this.game?.valley.edition?.id) ? 'People in this edition stay in its local ledger. No reviewed mapping permits publishing them to another chapter. ' : ''}${this.status} Recorded play links across games on this device when recording is on. Change recording in the menu.`;
+      status.textContent = `${localEdition(this.game ? rulesOf(this.game.valley) : undefined) ? 'People in this edition stay in its local ledger. No reviewed mapping permits publishing them to another chapter. ' : ''}${this.status} Recorded play links across games on this device when recording is on. Change recording in the menu.`;
     const box = this.panel.querySelector<HTMLInputElement>('[data-continuity]');
     if (box) box.checked = this.shelf.enabled;
   }

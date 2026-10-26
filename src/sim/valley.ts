@@ -75,6 +75,7 @@ import {
   type EditionState,
   millPay,
   passEdition,
+  REPLY_EDITION,
   type RulesEdition,
   resolveTermWork,
   termDay,
@@ -272,6 +273,8 @@ export interface ValleyState {
   brokering?: BrokeringState;
   introduction?: IntroductionState;
   edition?: EditionState;
+  /** Explicit reply-only edition. Original grain rules remain unmarked. */
+  reply?: { id: typeof REPLY_EDITION; visits: string[] };
   castFacts?: Record<string, ReturnType<typeof lifeFacts>>;
   castReleaseRequests?: string[];
   castReleased?: Record<string, Person>;
@@ -351,7 +354,8 @@ export function newValley(
   // Opt in after admission, before any simulation. Full-save restoration bypasses this path.
   for (const p of [...people, kahya]) p.lexicon = { ...p.lexicon, plainEnglish };
   const s: ValleyState = {
-    ...(rules ? { edition: { id: rules } } : {}),
+    ...(rules && rules !== REPLY_EDITION ? { edition: { id: rules } } : {}),
+    ...(rules === REPLY_EDITION ? { reply: { id: REPLY_EDITION, visits: [] } } : {}),
     ...(rules === ALLIANCE_EDITION ? { stewardCare: { grain: 0, eaten: 0 } } : {}),
     ...(passEdition(rules) ? { pass: { stock: 3, stone: 0, grainReceived: 0 } } : {}),
     v: 1,
@@ -3032,4 +3036,25 @@ function roleLabel(action: string): string {
       } as Record<string, string>
     )[action] ?? action
   );
+}
+
+/** One spoken answer while actually sitting at a house. No trust, work, grain or RNG change.
+ * The answer records the steward's words, not an agreement or a resident's private thoughts.
+ */
+export function replyAtHearth(s: ValleyState, hid: string): boolean {
+  const v = s.kahyaState.visit;
+  const h = houseOf(s, hid);
+  if (!s.reply || !h?.members.length || !v || v.house !== hid || s.minute < v.arrive || s.minute >= v.leave)
+    return false;
+  const key = `${hid}:${v.arrive}`;
+  if (s.reply.visits.includes(key)) return false;
+  s.reply.visits.push(key);
+  note(s, {
+    at: s.minute,
+    kind: 'story',
+    house: hid,
+    weight: 1,
+    text: `You say to ${householdLabel(h)}, “I came to listen. What you said matters to me.” You have not asked for work or promised grain.`,
+  });
+  return true;
 }

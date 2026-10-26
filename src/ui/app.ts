@@ -1,10 +1,13 @@
 import {
   ALLIANCE_EDITION,
   passEdition,
+  REPLY_EDITION,
   RULES_EDITION,
   type RulesEdition,
+  rulesOf,
   type TermDecision,
 } from '../sim/edition.ts';
+import { clockWords, grainReceipt, paceWords, travelWords } from './clarity.ts';
 import { validLocalLog } from './local-log.ts';
 import { musicEvent } from './music.ts';
 import { automaticRate, type Pace, READING_MS } from './pacing.ts';
@@ -171,7 +174,7 @@ function writeLog(): boolean {
   const log: Log = {
     ...(g.cast ? { cast: structuredClone(g.cast) } : {}),
     continuity: castSession.metadata(),
-    ...(g.valley.edition ? { rules: g.valley.edition.id } : {}),
+    ...(rulesOf(g.valley) ? { rules: rulesOf(g.valley) } : {}),
     game: 'valley',
     plainEnglish: g.plainEnglish ?? true,
     version: GAME_VERSION,
@@ -249,7 +252,7 @@ async function bindVolume(): Promise<boolean> {
       digest: [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(json)))]
         .map((n) => n.toString(16).padStart(2, '0'))
         .join(''),
-      ...(s.edition ? { rules: s.edition.id } : {}),
+      ...(rulesOf(s) ? { rules: rulesOf(s) } : {}),
       gz: await gzip(json),
     };
     if (!current()) return false;
@@ -404,7 +407,7 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
         digest !== bound.digest ||
         state.seed !== log.seed ||
         state.minute !== bound.minute ||
-        state.edition?.id !== log.rules
+        rulesOf(state) !== log.rules
       )
         throw new Error('Recovery volume differs from its receipt.');
       game = {
@@ -526,7 +529,7 @@ function title() {
     <section class="title-premise"><h1>The Valley</h1><p class="purpose">${esc(PURPOSE)}</p><p class="soft">People can refuse you, and they remember how you answer.</p></section>
     ${LAB_TOOLS ? '<button data-ways>Lab tools ▸</button>' : ''}
     <div class="vignette" aria-hidden="true"><svg viewBox="0 0 360 140"><path d="M0 95Q80 15 160 90T360 70M0 130Q90 50 180 120T360 95M250 0Q200 70 260 140" fill="none" stroke="currentColor"/><g fill="none" stroke="currentColor" stroke-width="2"><path d="M70 95v-18l12-12 12 12v18zM130 105V87l12-12 12 12v18zM190 90V72l12-12 12 12v18zM280 100V82l12-12 12 12v18z"/></g></svg></div>
-    <footer class="title-actions"><label class="edition-choice"><input type="checkbox" data-edition> Include grain wages, voluntary contributions, winter loans and inspections in this new term.</label><label class="edition-choice"><input type="checkbox" data-pass-edition> Also include pass journeys, family arrangements and a road agreement. This includes the grain rules. The steward eats from real provisions and rests between walks. Continuing people stay local in this edition.</label>${where ? `<p class="hand">${esc(where)}</p>` : ''}
+    <footer class="title-actions"><label class="edition-choice"><input type="checkbox" data-reply-edition> Include a spoken answer during visits. This uses the original grain rules and local people, instead of the other editions below.</label><label class="edition-choice"><input type="checkbox" data-edition> Include grain wages, voluntary contributions, winter loans and inspections in this new term.</label><label class="edition-choice"><input type="checkbox" data-pass-edition> Also include pass journeys, family arrangements and a road agreement. This includes the grain rules. The steward eats from real provisions and rests between walks. Continuing people stay local in this edition.</label>${where ? `<p class="hand">${esc(where)}</p>` : ''}
     ${hasSave ? `${log && log.version === GAME_VERSION ? '<button class="primary" data-go="open">Resume</button>' : ''}<button data-go="new" class="hold">New game<span class="fill"></span></button><p class="soft">This replaces your saved game.</p>` : '<button class="primary" data-go="new">New game</button>'}${mark()}</footer>
     ${LAB_TOOLS ? `<dialog class="ways-panel" aria-label="Other ways to start"><header><h2>Other ways to start</h2><button data-ways-close aria-label="Close other ways to start">×</button></header><label for="valley-name">A named valley</label><input id="valley-name" placeholder="Kuyulu" maxlength="80"><p>The same name gives the same valley.</p><button data-seed${log ? ' class="hold"' : ''}>Begin this valley${log ? '<span class="fill"></span>' : ''}</button>${log ? '<p class="soft">This replaces your saved game.</p>' : ''}<label for="load-run">Load a playtest run</label><input id="load-run" type="file" accept=".json,application/json"><p id="load-result" role="status"></p></dialog>` : ''}
   </div>`;
@@ -534,11 +537,13 @@ function title() {
     if (log && log.version === GAME_VERSION) openLedger(log);
   });
   const fresh = (seed: number) => {
-    const rules = app.querySelector<HTMLInputElement>('[data-pass-edition]')?.checked
-      ? ALLIANCE_EDITION
-      : app.querySelector<HTMLInputElement>('[data-edition]')?.checked
-        ? RULES_EDITION
-        : undefined;
+    const rules = app.querySelector<HTMLInputElement>('[data-reply-edition]')?.checked
+      ? REPLY_EDITION
+      : app.querySelector<HTMLInputElement>('[data-pass-edition]')?.checked
+        ? ALLIANCE_EDITION
+        : app.querySelector<HTMLInputElement>('[data-edition]')?.checked
+          ? RULES_EDITION
+          : undefined;
     void begin(seed, false, rules);
   };
   const nb = app.querySelector<HTMLButtonElement>('[data-go="new"]');
@@ -693,7 +698,7 @@ function enter() {
     <button class="grain-bar" aria-label="Open the landowner’s ledger"><span class="grain-track"><span class="grain-solid"></span><span class="grain-cut"></span><span class="grain-standing"></span><span class="grain-due"></span></span><span class="grain-label"></span></button>
     <div class="map lk-scene"><canvas id="map" aria-label="The valley map"></canvas><p id="now" class="moment"></p><span id="steward"></span></div>
     <nav id="houses" aria-label="Households"></nav>
-    <section class="lk-sheet" aria-label="Valley notebook"><header class="lk-sheet-head" id="sheet-head" hidden></header><div id="house-answer" hidden></div><div class="sheet lk-sheet-body" id="sheet"></div><footer class="thumbs lk-commit" id="thumbs"></footer></section>
+    <section class="lk-sheet" aria-label="Valley notebook"><p id="pace" class="pace-status"></p><header class="lk-sheet-head" id="sheet-head" hidden></header><div id="house-answer" hidden></div><div class="sheet lk-sheet-body" id="sheet"></div><footer class="thumbs lk-commit" id="thumbs"></footer></section>
   </div>`;
   app.querySelector('.grain-bar')?.addEventListener('click', () => openReading('ledger'));
   const root = app.querySelector<HTMLElement>('.lk-stage');
@@ -736,10 +741,8 @@ function enter() {
   requestWake();
 }
 
-function rateNow(t: number): number {
-  if (!g) return 0;
-  const s = g.valley;
-  return automaticRate({
+function pacingState(t: number, s: ValleyState) {
+  return {
     night: partOfDay(s.minute) === 'night',
     travelling: !!s.kahyaState.visit,
     reading: t < slowUntil || selected !== null || tab !== 'notes',
@@ -761,7 +764,11 @@ function rateNow(t: number): number {
     hurrying,
     working: !!currentJob(s),
     pace: speed,
-  });
+  };
+}
+
+function rateNow(t: number): number {
+  return g ? automaticRate(pacingState(t, g.valley)) : 0;
 }
 
 function frame(t: number) {
@@ -796,6 +803,7 @@ function frame(t: number) {
     bindVolume().finally(() => ending());
     return;
   }
+  if (moved) drawTop();
   drawMap();
   if (moved && t - lastSheet > 450) drawSheet();
   if (moved && (Object.keys(s.castReleased ?? {}).length || Object.keys(s.castDeaths ?? {}).length))
@@ -844,6 +852,8 @@ function drawTop() {
   const s = g.valley;
   const now = app.querySelector('#now');
   if (now) now.textContent = englishText(nowWords(s));
+  const pace = app.querySelector('#pace');
+  if (pace) pace.textContent = `${clockWords(s.minute)} · ${paceWords(pacingState(performance.now(), s))}`;
   const button = app.querySelector<HTMLButtonElement>('[data-until]');
   if (button) {
     button.disabled = hurrying;
@@ -893,7 +903,17 @@ function openReading(which: 'ledger' | 'reader' | 'orders') {
 
 function order(o: Order) {
   if (!g) return;
+  const grainBefore = g.valley.agha.granary;
   if (act(g, o)) {
+    if (o.verb === 'give') {
+      const h = houseOf(g.valley, o.house);
+      actionCaption = grainReceipt(
+        h ? householdLabel(h) : 'the household',
+        grainBefore,
+        g.valley.agha.granary,
+      );
+    }
+    if (o.verb === 'reply') actionCaption = 'You said: “I came to listen. What you said matters to me.”';
     if (o.verb === 'visit' || o.verb === 'give') {
       selected = o.house;
       houseDetails = false;
@@ -1233,7 +1253,9 @@ function caption(s: ValleyState, _wx: string): string {
           ? `you are at ${destinationName}`
           : 'you are walking back'
       : '';
-  return where ? `You: ${where.replace('you are ', '')}` : 'You: at the residence';
+  return where && v
+    ? `You: ${where.replace('you are ', '')}. ${travelWords(v, s.minute)}`
+    : 'You: at the residence';
 }
 
 function kahyaAt(s: ValleyState): [number, number] {
@@ -1409,7 +1431,11 @@ function drawSheet(force = false) {
           ? 'quarry'
           : 'return'
     : '';
-  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${s.asks.length}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}`;
+  const visit = s.kahyaState.visit;
+  const visitPhase = visit
+    ? `${visit.house}:${visit.arrive}:${s.minute < visit.arrive ? 'out' : s.minute < visit.leave ? 'here' : s.minute < visit.back ? 'return' : 'home'}:${s.reply?.visits.includes(`${visit.house}:${visit.arrive}`) ?? false}`
+    : '';
+  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${s.asks.length}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${visitPhase}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}`;
   if (!force && sheetKey === key) return;
   sheetKey = key;
   lastSheet = performance.now();
@@ -1874,7 +1900,7 @@ function giftHint(s: ValleyState): string {
 
 function visitHint(s: ValleyState): string {
   return busy(s) && s.kahyaState.visit
-    ? `You can visit again when you return to the residence on ${fullDateEnglish(dayOfMinute(s.kahyaState.visit.back))}.`
+    ? `You can visit again when you return. ${travelWords(s.kahyaState.visit, s.minute)}`
     : 'A visit takes time to walk and sit with the household.';
 }
 
@@ -1937,6 +1963,15 @@ function houseThumbs(s: ValleyState, hh: Household): string {
       'Ask only if their jars are full. They can refuse. This is extra grain, not their normal share.',
     );
   const visit = s.kahyaState.visit;
+  if (s.reply && visit?.house === hh.id && visit.arrive <= s.minute && visit.leave > s.minute)
+    add(
+      'Say: I came to listen',
+      () => order({ verb: 'reply', house: hh.id }),
+      s.reply.visits.includes(`${hh.id}:${visit.arrive}`)
+        ? 'You have already said this during this visit.'
+        : null,
+      'Answer the greeting. This does not ask for work or promise grain.',
+    );
   if (s.edition && visit?.house === hh.id && visit.arrive <= s.minute && visit.leave > s.minute)
     for (const topic of ['person', 'debt', 'grievance'] as const)
       add(

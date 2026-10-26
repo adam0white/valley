@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { type Browser, chromium, type Page } from 'playwright-core';
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import type { RulesEdition } from '../src/sim/edition.ts';
 import { compactRun, type Input, newGame, save } from '../src/sim/game.ts';
 import { startBrowserServer, visibleText } from './browser-server.ts';
 
@@ -16,18 +17,34 @@ afterAll(async () => {
   await browser?.close();
 }, 30000);
 
-async function open(page: Page, minute = 360, seed = 406153184, inputs: Input[] = [], plainEnglish = true) {
+async function open(
+  page: Page,
+  minute = 360,
+  seed = 406153184,
+  inputs: Input[] = [],
+  plainEnglish = true,
+  rules?: RulesEdition,
+) {
   page.setDefaultTimeout(4000);
   await page.clock.install();
   await page.goto(origin);
   await page.clock.pauseAt(Date.now() + 500);
   await page.evaluate(
-    ({ minute, seed, inputs, plainEnglish }) =>
+    ({ minute, seed, inputs, plainEnglish, rules }) =>
       localStorage.setItem(
         'valley-log-v1',
-        JSON.stringify({ game: 'valley', version: '0.3.0', seed, inputs, minute, volume: 0, plainEnglish }),
+        JSON.stringify({
+          game: 'valley',
+          version: '0.3.0',
+          seed,
+          inputs,
+          minute,
+          volume: 0,
+          plainEnglish,
+          ...(rules ? { rules } : {}),
+        }),
       ),
-    { minute, seed, inputs, plainEnglish },
+    { minute, seed, inputs, plainEnglish, rules },
   );
   await page.reload();
   await page.getByRole('button', { name: 'Resume', exact: true }).click();
@@ -747,6 +764,67 @@ it('keeps the rain deadline and complete immediate reply visible with About open
     expect(await visibleText(page.locator('.grain-label'))).toContain('Rain is due on 20 July.');
     expect(await page.locator('.grain-label').evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
     await fits(page);
+  } finally {
+    await page.close();
+  }
+});
+
+it.each([
+  [360, 690],
+  [1280, 800],
+])('keeps complete clock guidance clear of the travel caption at %ix%i', async (width, height) => {
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await page.route('**/api/**', (route) => route.abort());
+    await open(page, 420, 7, [], true, 'valley-replies-2026-10');
+    await page.getByRole('button', { name: 'the Kavak house', exact: true }).click();
+    await page.getByRole('button', { name: 'Visit', exact: true }).click();
+    await page.clock.runFor(16000);
+    await page.evaluate(() => document.fonts.ready);
+    const layout = await page.evaluate(() => {
+      const goal = document.querySelector<HTMLElement>('#now');
+      const pace = document.querySelector<HTMLElement>('#pace') ?? goal;
+      const travel = document.querySelector<HTMLElement>('#steward');
+      if (!goal || !pace || !travel) throw new Error('Missing guidance');
+      const a = goal.getBoundingClientRect(),
+        b = travel.getBoundingClientRect(),
+        c = pace.getBoundingClientRect();
+      const separate = (r: DOMRect, s: DOMRect) =>
+        r.bottom <= s.top || s.bottom <= r.top || r.right <= s.left || s.right <= r.left;
+      return {
+        clear: separate(a, b) && separate(c, b),
+        complete: pace.scrollWidth <= pace.clientWidth + 1 && pace.scrollHeight <= pace.clientHeight + 1,
+        visible: c.top >= 0 && c.bottom <= innerHeight,
+      };
+    });
+    expect(layout).toEqual({ clear: true, complete: true, visible: true });
+    expect(await visibleText(page.locator('#now'))).toContain('Your visit is underway');
+    await fits(page);
+  } finally {
+    await page.close();
+  }
+});
+
+it('offers the opt-in answer at first arrival without reopening the household', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await page.route('**/api/**', (route) => route.abort());
+    await open(page, 450, 7, [], true, 'valley-replies-2026-10');
+    await page.getByRole('button', { name: 'the Kavak house', exact: true }).click();
+    await page.getByRole('button', { name: 'Send grain', exact: true }).click();
+    await page.getByRole('button', { name: 'Visit', exact: true }).click();
+    expect(await page.getByRole('button', { name: 'Say: I came to listen', exact: true }).count()).toBe(0);
+    for (let i = 0; i < 30; i++) {
+      await page.clock.runFor(1000);
+      if ((await visibleText(page.locator('#steward'))).includes('at the Kavak house')) break;
+    }
+    expect(await visibleText(page.locator('#steward'))).toContain('at the Kavak house');
+    const answer = page.getByRole('button', { name: 'Say: I came to listen', exact: true });
+    expect(await answer.count()).toBe(1);
+    expect(await answer.isEnabled()).toBe(true);
+    await answer.click();
+    expect(await answer.isEnabled()).toBe(false);
+    expect(await visibleText(page.locator('.action-caption'))).toContain('You said:');
   } finally {
     await page.close();
   }

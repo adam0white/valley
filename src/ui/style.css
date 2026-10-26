@@ -1315,7 +1315,7 @@ dialog::backdrop {
     margin: 0 auto;
   }
   .title-premise {
-    padding-top: 28px;
+    padding-top: 16px;
   }
   .title-page > [data-ways] {
     border-left: 1px solid var(--ink);
@@ -2320,4 +2320,36 @@ body:has(.play[data-reflow="true"]) {
   font-size: 12px;
   line-height: 1.25;
   margin-top: 3px;
+}
+
+/* Clock guidance has its own space; it must not cover the map or travel caption. */
+.pace-status {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--paper-2);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.title-actions .edition-choice {
+  padding-block: 2px;
+}
+
+@media (max-width: 899px) {
+  .title-premise {
+    padding-top: 8px;
+    padding-bottom: 4px;
+  }
+  .title-premise h1 {
+    margin-bottom: 4px;
+  }
+  .title-premise p {
+    margin-bottom: 2px;
+  }
+  .title-actions .edition-choice {
+    font-size: 14px;
+    line-height: 1.35;
+    min-height: 44px;
+  }
 }

@@ -28,3 +28,20 @@ it('refuses malformed local logs before Resume or continuity admission', () => {
   ])
     expect(validLocalLog(bad)).toBe(false);
 });
+
+it('admits reply inputs only for reply rules and October inputs only for their grain rules', () => {
+  expect(
+    validLocalLog({
+      ...base,
+      rules: 'valley-replies-2026-10',
+      inputs: [{ at: 420, verb: 'reply', house: 'kavak' }],
+    }),
+  ).toBe(true);
+  for (const input of [
+    { at: 420, verb: 'topic', house: 'kavak', topic: 'person' },
+    { at: 420, verb: 'term-choice', id: 'winter', choice: 'grain' },
+  ]) {
+    expect(validLocalLog({ ...base, rules: 'valley-replies-2026-10', inputs: [input] })).toBe(false);
+    expect(validLocalLog({ ...base, rules: 'valley-2026-10', inputs: [input] })).toBe(true);
+  }
+});

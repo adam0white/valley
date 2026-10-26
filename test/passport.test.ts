@@ -371,3 +371,15 @@ it.each(['3.0.0', '2.22.0', '2.24.0', '99.0.0'])(
     expect(JSON.stringify(snapshot(opening))).toBe(before);
   },
 );
+
+it('keeps an imported reply edition local through attach and manual checkpoint without metadata', async () => {
+  const shelf = new FakeShelf();
+  const session = new CastSession(fakeLab(), shelf);
+  const game = newGame(7, undefined, false, true, 'valley-replies-2026-10');
+  await session.loaded(game, undefined, true);
+  expect(session.localOnly).toBe(true);
+  await session.checkpoint(true);
+  expect(session.status).toContain('no reviewed continuing-person mapping');
+  expect(shelf.writes).toBe(0);
+  expect(shelf.preparations).toBe(0);
+});
