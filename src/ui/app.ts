@@ -70,8 +70,11 @@ import {
   limitsWords,
   loanReturnWords,
   nextWords,
+  noteWords,
   nowWords,
   PURPOSE,
+  paidShareWords,
+  shareOwnerWords,
 } from './presentation.ts';
 import { closingGrain } from './tally.ts';
 
@@ -322,7 +325,7 @@ async function openVolumes() {
           target.innerHTML = state.notes
             .filter((n) => n.at <= bound.minute)
             .slice(-12)
-            .map((n) => `<p>${esc(n.text)}${n.words ? ` “${esc(n.words)}”` : ''}</p>`)
+            .map((n) => `<p>${esc(n.text)}${n.words ? ` “${esc(noteWords(n) ?? '')}”` : ''}</p>`)
             .join('');
           button.disabled = true;
         } catch {
@@ -1587,7 +1590,7 @@ function pendingReplies(s: ValleyState, house?: Household): string {
         continue;
       pressShown.add(id);
       rows.push(
-        `<div class="reply-row"><span><b>${esc(hh ? householdLabel(hh) : '')} · ${esc(cap(personLabel(personOf(s, id) ?? { name: 'someone' }, hh)))}</b><span class="reply-words">“${esc(reply.says)}”</span></span>${btn('Hold to insist', () => order({ verb: 'insist', ask: ask.id, pid: id }), { hold: true })}</div>`,
+        `<div class="reply-row"><span><b>${esc(cap(personLabel(personOf(s, id) ?? { name: 'someone' }, hh)))}</b><span class="reply-words">“${esc(reply.says)}”</span></span>${btn('Hold to insist', () => order({ verb: 'insist', ask: ask.id, pid: id }), { hold: true })}</div>`,
       );
     }
   }
@@ -1624,7 +1627,7 @@ function reader(s: ValleyState): string {
 }
 
 function noteLine(n: Note): string {
-  return `<div class="note${n.weight < 2 ? ' quiet' : ''}"><span class="t">${esc(partOfDay(n.at))}</span>${esc(n.text)}${n.words && !n.text.toLowerCase().includes(n.words.toLowerCase()) ? `<span class="w">“${esc(n.words)}”</span>` : ''}</div>`;
+  return `<div class="note${n.weight < 2 ? ' quiet' : ''}"><span class="t">${esc(partOfDay(n.at))}</span>${esc(n.text)}${n.words && !n.text.toLowerCase().includes(n.words.toLowerCase()) ? `<span class="w">“${esc(noteWords(n) ?? '')}”</span>` : ''}</div>`;
 }
 
 function datedReply(s: ValleyState, n: Note): string {
@@ -1635,7 +1638,9 @@ function datedReply(s: ValleyState, n: Note): string {
   const date = `${earlier}${speaker ? `${speaker} · ` : ''}${fullDateEnglish(dayOfMinute(n.at))}`;
   // The house header identifies the household; keep the person's complete words immediately below their name.
   const words =
-    speaker && n.words ? `<div class="note"><span class="w">“${esc(n.words)}”</span></div>` : noteLine(n);
+    speaker && n.words
+      ? `<div class="note"><span class="w">“${esc(noteWords(n) ?? '')}”</span></div>`
+      : noteLine(n);
   return `<div class="reply-date soft">${esc(date)}</div>${words}`;
 }
 
@@ -1734,8 +1739,16 @@ function houseCard(s: ValleyState, hh: Household): string {
   const unnamed = people.length - named.length;
   const names = [
     ...named.map((p) => cap(personLabel(p))),
-    ...(unnamed ? [`${unnamed} ${named.length ? 'other ' : ''}${unnamed === 1 ? 'person' : 'people'}`] : []),
-  ].join(', ');
+    ...(unnamed
+      ? [
+          named.length
+            ? `${unnamed} ${unnamed === 1 ? 'other person' : 'others'}`
+            : `${unnamed} ${unnamed === 1 ? 'person' : 'people'}`,
+        ]
+      : []),
+  ]
+    .join(', ')
+    .replace(/, ([^,]+)$/, ' and $1');
   const job = jobInSeason(s);
   const guess = s.kahyaState.guess?.[hh.id];
   const lines: string[] = [];
@@ -1791,7 +1804,7 @@ function houseCard(s: ValleyState, hh: Household): string {
     : '';
   const share =
     s.flags.verbs.includes('take') && underSeal(s, hh) && hh.members.length
-      ? `<p class="soft" >The landowner’s record: their grain payment is ${hh.eased ? 'reduced' : 'unchanged'}. ${hh.paid >= shareOwed(hh) - 0.5 ? 'They have paid it' : hh.paid > 0 ? 'They have paid part of it' : 'They have not paid it yet'}.</p>`
+      ? `<p class="soft" >The landowner’s record: ${esc(shareOwnerWords(s, hh))} is ${hh.eased ? 'reduced' : 'unchanged'}. ${hh.paid >= shareOwed(hh) - 0.5 ? 'The payment is complete' : hh.paid > 0 ? 'The payment is partly complete' : 'The payment has not arrived yet'}.</p>`
       : '';
   const response = recent.find((n) => n.words && (n.kind === 'voice' || n.ask));
   const refusal = selectedRefusal(s, hh);
@@ -1929,13 +1942,14 @@ function houseThumbs(s: ValleyState, hh: Household): string {
     : !underSeal(s, hh)
       ? 'This hamlet joins on 10 June, year two.'
       : hh.paid >= shareOwed(hh) - 0.5
-        ? `Their share is paid. ${cropReturnWords(s)}`
+        ? `${paidShareWords(s, hh)} ${cropReturnWords(s)}`
         : null;
   if (s.flags.verbs.includes('ease'))
     add(
       'Reduce grain payment',
       () => order({ verb: 'ease', house: hh.id }),
-      blocked ?? (hh.eased ? `You have already reduced their payment. ${cropReturnWords(s)}` : null),
+      blocked ??
+        (hh.eased ? `${shareOwnerWords(s, hh)} has already been reduced. ${cropReturnWords(s)}` : null),
       'Leave half of this year’s grain payment in their jars. The neighbours will notice.',
     );
   if (s.flags.verbs.includes('seize'))

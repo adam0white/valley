@@ -32,6 +32,19 @@ const TERM =
 
 /** Translate calendar and office terms; gloss unfamiliar words without changing saved copy. */
 export function englishText(text: string): string {
+  text = text
+    .replace(/ (?:His|Their) duties will remain in (?:his|their) home records\./g, '')
+    .replace(' The game does not show his journey home.', '')
+    .replace(' Nobody has promised paid survey work.', '')
+    .replace(' These guests come from different families.', '')
+    .replace(
+      / agrees to leave after the current work\. (?:He|She) must still meet any duties and follow any health limits\. The visit has not ended yet\./g,
+      ' will leave when the current work ends.',
+    )
+    .replace('a wooden token', 'a small piece of wood')
+    .replace(/Someone from (the .+? house) had a (boy|girl)\./g, 'A woman of $1 had a $2.')
+    .replace(/Someone from (the .+? house)(?= married )/g, 'A woman of $1')
+    .replace(/ married someone from (the .+? house)\./g, ' married a man of $1.');
   text = text.replaceAll('Hajja Maryam', 'Maryam');
   return text.replace(TERM, (word: string, _term: string, offset: number) => {
     if (word === 'Yayla') return word; // A household name, not the pasture term.
@@ -254,8 +267,9 @@ export function limitsWords(s: ValleyState, house?: Household): string {
     out.push(
       `The current call is still open; another call for this work opens when it expires on ${fullDateEnglish(dayOfMinute(ask.until))}.`,
     );
-  if (house?.eased) out.push(`Their share has already been reduced. ${cropReturnWords(s)}`);
-  if (house && house.paid >= shareOwed(house) - 0.5) out.push(`Their share is paid. ${cropReturnWords(s)}`);
+  if (house?.eased) out.push(`${shareOwnerWords(s, house)} has already been reduced.`);
+  if (house && house.paid >= shareOwed(house) - 0.5) out.push(paidShareWords(s, house));
+  if (house && (house.eased || house.paid >= shareOwed(house) - 0.5)) out.push(cropReturnWords(s));
   if (s.agha.granary < 2)
     out.push(
       'The granary is empty or too low to send grain; gifts open again when threshing, shares, or a loan bring grain in.',
@@ -263,4 +277,26 @@ export function limitsWords(s: ValleyState, house?: Household): string {
   const loan = loanReturnWords(s);
   if (loan) out.push(loan);
   return out.join(' ');
+}
+
+/** Describe the grain account without implying a voluntary payment. */
+export function shareOwnerWords(s: ValleyState, house: Household): string {
+  const p = house.members.length === 1 ? s.people.find((p) => p.id === house.members[0]) : undefined;
+  return p && !['a household member', 'a child'].includes(p.name)
+    ? `${p.name}’s share`
+    : 'This household’s share';
+}
+export function paidShareWords(s: ValleyState, house: Household): string {
+  return `${shareOwnerWords(s, house)} is paid.`;
+}
+
+/** Keep one complete greeting sentence; raw visit dialogue remains replay state. */
+export function visitLine(words: string): string {
+  return words.match(/^.*?[.!?](?:[”’](?=\s|$))?(?=\s|$)/)?.[0] ?? words;
+}
+
+export function noteWords(n: { kind: string; text: string; words?: string }): string | undefined {
+  return n.kind === 'voice' && / speaks (?:by the fire|at the wedding):$/.test(n.text) && n.words
+    ? visitLine(n.words)
+    : n.words;
 }
