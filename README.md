@@ -28,7 +28,9 @@ to the households.
 
 Use the named buttons by pointer, touch or keyboard. Escape closes a household view when
 no dialog or popover is open. The menu offers Feedback, Full screen, New game, All games,
-Recording and Music. Feedback choices do not submit a note; **Submit** sends it.
+Recording and Music. In Feedback, **I'm stopping** and **I'm confused** put those words
+in your note and send nothing. Changing or clearing a choice keeps your edited text.
+**Submit** sends the note and any optional verdict.
 
 ## Rules editions
 
@@ -72,8 +74,8 @@ grain accounts, household shares, tax dates, travel, orders, interface and endin
 The host does not replace a refusal with a guaranteed voluntary gift.
 
 Current source uses Valley **0.3.0**, HF package **3.0.0**, Person engine **2.23.0**,
-immutable lab-client **0.4.10** and lab-kit **0.5.11**. Package and engine versions are
-separate values. Published client 0.4.11 / kit 0.5.12 are not adopted here.
+immutable lab-client **0.4.11** and lab-kit **0.5.12**. Package and engine versions are
+separate values.
 
 ## Development and delivery
 

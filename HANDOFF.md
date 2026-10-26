@@ -2,14 +2,37 @@
 
 ## Current source — 2026-10-25
 
-Remaining: plain4's reserved copy pass; GDI065/066 marriage and neighbouring-valley
-engineering; SDK adoption; an ordinary positive voluntary-contribution control;
+Remaining: GDI065/066 marriage and neighbouring-valley
+engineering; an ordinary positive voluntary-contribution control;
 physical-phone and player evidence; Adam's feel and readiness acceptance.
 
 This summary describes signed source `beaa1c8c3c58162597cb3f22694e1eea66f6cf51`.
-The package is Valley 0.3.0 with HF 3.0.0, Person engine 2.23.0, client 0.4.10
-and kit 0.5.11. TypeScript is 7.0.2; Node 24 or later is required.
-Published client 0.4.11 and kit 0.5.12 have not been adopted here.
+The gameplay summary and completed delivery receipt below describe that source.
+The plain4 copy pass shipped in signed source `33cb29159aa423c8b04a31c7d3ebe3c05e2ad20d`.
+Signed source `a0096a1786c902322c1226ff24f943370eab740b` adopts immutable client 0.4.11
+and kit 0.5.12. Valley 0.3.0, HF 3.0.0 and Person engine 2.23.0 are unchanged.
+TypeScript is 7.0.2; Node 24 or later is required. This Feedback adoption is technically
+delivered: signature G with the Codex trailer, normal lane 153 passed and one skipped,
+and [exact CI 40255296917](https://github.com/adam0white/valley/actions/runs/40255296917)
+succeeded. Its clean deployment is `ec64fd88-3af3-48d9-8475-acbadb77ca7a`;
+release.json reports app 0.3.0, framework 3.0.0, that exact a009 commit and `dirty:false`.
+This source-only documentation update does not deploy the app.
+
+The release checks used controlled disposable WebKit and existing signed-in Chrome
+static production observation plus an exact-live mirror with network requests blocked,
+at 360×690 and 1280×800. Quiet choices, edited text, reachable Submit and overflow
+checks passed. Mirror fonts were unavailable. These desktop checks do not establish
+physical-phone behavior, persistence, identity, recording-on or checked-sharing
+production transport. No production Submit, owner storage access or player round ran.
+The source and release worktrees were cleaned. Final receipts are in
+`~/code/.lab-scratch/v3/valley-feedback/delivery-receipt.json` and `report.md`.
+
+The custom ordinary Feedback form uses the SDK’s **I'm stopping** and **I'm confused**
+labels to prefill the note. Selecting, changing or clearing one sends nothing. It removes
+only an unchanged prior label or that label followed by a blank line; edited text stays.
+Submit sends the optional verdict and current note. Recording-off unchecked sharing
+remains note-only. Mocked transport checks are not a production receipt and do not prove
+actual recording-on or checked-sharing transport.
 See [README](README.md) for controls, storage and the framework/host boundary.
 
 The unchecked new-term option pins `valley-2026-10`. It adds completed mill wages,
@@ -46,13 +69,13 @@ and limits; they do not close current retest or acceptance gates.
 
 ## Next work and acceptance
 
-- Plain4 owns its named gameplay copy routes. The docsweb pass changes only README,
-  this handoff and factual AGENTS text. Information and household About are gameplay
+- Plain4 completed its five named gameplay copy routes. This docsweb follow-up changes
+  only README and this handoff. Information and household About are gameplay
   context, not general credits; no new About surface is required.
-- Games-deferred owns GDI065/066: the next optional marriage/neighbour slice follows
-  plain4, targeted 2026-10-29. It is open engineering, with no new owner-permission
-  gate. The next reviewed batch also owns SDK adoption and the ordinary positive
-  contribution control. See its `valley-next-batch.md`.
+- Games-deferred owns GDI065/066: the next optional marriage/neighbour slice is
+  targeted 2026-10-29. It is open engineering, with no new owner-permission
+  gate. The next reviewed batch also owns the ordinary positive contribution control.
+  See its `valley-next-batch.md`.
 - Adam/device review owns physical-phone keyboard, enlarged text and performance
   checks, due 2026-11-03. Desktop geometry and throttling do not meet that gate.
 - New-player cold comprehension remains unproved; route through the playtest director
