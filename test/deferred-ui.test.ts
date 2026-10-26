@@ -40,6 +40,38 @@ async function open(page: Page, rules?: string) {
   await page.getByRole('button', { name: 'Resume', exact: true }).click();
   for (let i = 0; i < 100 && !(await page.locator('#map').count()); i++) await page.clock.runFor(50);
 }
+it('shows the opt-in route and local introduction at both required sizes', async () => {
+  for (const viewport of [
+    { width: 360, height: 690 },
+    { width: 1280, height: 800 },
+  ]) {
+    const page = await browser.newPage({ viewport });
+    try {
+      await open(page, 'valley-pass-2026-10');
+      expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual(viewport);
+      await page.getByRole('button', { name: 'Other orders ▸', exact: true }).click();
+      expect(
+        await page
+          .getByRole('img', { name: 'Residence, northern pass, Çam quarry in the adjacent valley' })
+          .isVisible(),
+      ).toBe(true);
+      const travel = page.getByRole('button', { name: /^Walk to Çam quarry/ });
+      expect(await travel.isEnabled()).toBe(true);
+      expect(
+        await page.getByRole('button', { name: 'Exchange a sack for stone', exact: true }).isEnabled(),
+      ).toBe(false);
+      expect(await page.getByRole('button', { name: /^Arrange an introduction at Kuyucu/ }).isEnabled()).toBe(
+        true,
+      );
+      await travel.click();
+      await page.getByRole('button', { name: 'Other orders ▸', exact: true }).click();
+      expect(await page.getByRole('button', { name: /^Walk to Çam quarry/ }).isEnabled()).toBe(false);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    } finally {
+      await page.close();
+    }
+  }
+});
 it('retains a household control focus through a timed sheet redraw', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
@@ -309,8 +341,8 @@ it.each([false, true])(
       expect(geometry.editionBottom).toBeLessThanOrEqual(geometry.startTop);
       expect(geometry.startBottom).toBeLessThanOrEqual(690);
       expect(geometry.overflow).toBe(false);
-      await page.locator('.edition-choice').evaluate((e) => {
-        (e as HTMLElement).style.fontSize = '34px';
+      await page.locator('.edition-choice').evaluateAll((labels) => {
+        for (const label of labels) (label as HTMLElement).style.fontSize = '34px';
       });
       const startButton = page.getByRole('button', { name: 'New game', exact: true });
       await startButton.scrollIntoViewIfNeeded();
@@ -322,3 +354,54 @@ it.each([false, true])(
     }
   },
 );
+
+it('offers the explicit alliance configuration and costed hosting at both required sizes', async () => {
+  for (const viewport of [
+    { width: 360, height: 690 },
+    { width: 1280, height: 800 },
+  ]) {
+    const page = await browser.newPage({ viewport });
+    try {
+      await page.route('**/*', (route) =>
+        new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort(),
+      );
+      await open(page, 'valley-alliance-2026-10');
+      expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual(viewport);
+      await page.getByRole('button', { name: 'Other orders ▸', exact: true }).click();
+      const route = page.getByRole('region', { name: 'The pass route', exact: true });
+      expect(await route.textContent()).toContain('Six carried grain reserves one load.');
+      expect(await route.textContent()).toContain('twelve useful repair hours over six trips');
+      await page.getByRole('button', { name: /^Walk to Çam quarry/ }).click();
+      await page.evaluate(`import('/src/ui/app.ts').then(({_debug})=>_debug.skipTo(1920/1440))`);
+      await page.getByRole('button', { name: 'Other orders ▸', exact: true }).click();
+      expect(await page.getByRole('button', { name: /^Accept Çam’s road terms/ }).isEnabled()).toBe(true);
+      expect(await page.getByRole('button', { name: /^Exchange a sack for stone/ }).isEnabled()).toBe(false);
+      expect(await route.textContent()).toContain('A sack alone cannot buy a load.');
+      await open(page, 'valley-alliance-2026-10');
+      await page.getByRole('button', { name: 'Other orders ▸', exact: true }).click();
+      const host = page.getByRole('button', { name: /^Host another supervised meeting/ });
+      expect(await host.isEnabled()).toBe(true);
+      expect(
+        await host.evaluate((button) => {
+          const hint = button.querySelector('.h');
+          const label = button.firstChild;
+          if (!hint || !label) throw Error('Missing action label or explanation');
+          const range = document.createRange();
+          range.selectNodeContents(label);
+          return hint.getBoundingClientRect().top >= range.getBoundingClientRect().bottom;
+        }),
+      ).toBe(true);
+      expect(await page.getByRole('button', { name: /^Host a proposal discussion/ }).isEnabled()).toBe(false);
+      expect(await page.getByRole('button', { name: /^Accept Çam’s road terms/ }).isEnabled()).toBe(false);
+      await host.click();
+      await page.getByRole('button', { name: 'Other orders ▸', exact: true }).click();
+      expect(await page.getByRole('button', { name: /^Host another supervised meeting/ }).isEnabled()).toBe(
+        false,
+      );
+      expect(await page.getByRole('button', { name: /^Walk to Çam quarry/ }).isEnabled()).toBe(false);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    } finally {
+      await page.close();
+    }
+  }
+});

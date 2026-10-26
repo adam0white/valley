@@ -3,7 +3,7 @@
  */
 
 import { DAY } from '../sim/calendar.ts';
-import { RULES_EDITION } from '../sim/edition.ts';
+import { ALLIANCE_EDITION, knownEdition, passEdition } from '../sim/edition.ts';
 import { END_DAY, GAME_VERSION, QUANTUM } from '../sim/game.ts';
 
 const object = (x: unknown): x is Record<string, unknown> =>
@@ -21,7 +21,7 @@ export function validLocalLog(value: unknown): boolean {
     !integer(v.minute, (END_DAY + 1) * DAY) ||
     !integer(v.volume, 100000) ||
     typeof v.plainEnglish !== 'boolean' ||
-    (v.rules !== undefined && v.rules !== RULES_EDITION) ||
+    (v.rules !== undefined && !knownEdition(v.rules)) ||
     !Array.isArray(v.inputs) ||
     v.inputs.length > 20000
   )
@@ -44,6 +44,27 @@ export function validLocalLog(value: unknown): boolean {
       return false;
     prior = input.at as number;
     switch (input.verb) {
+      case 'broker':
+        if (
+          v.rules !== ALLIANCE_EDITION ||
+          !['meeting', 'proposal', 'ceremony'].includes(input.choice as string)
+        )
+          return false;
+        break;
+      case 'alliance':
+        if (
+          v.rules !== ALLIANCE_EDITION ||
+          !['accept', 'decline', 'collect', 'withdraw'].includes(input.choice as string)
+        )
+          return false;
+        break;
+      case 'pass':
+        if (!passEdition(v.rules) || !['depart', 'buy', 'deliver'].includes(input.choice as string))
+          return false;
+        break;
+      case 'introduce':
+        if (!passEdition(v.rules)) return false;
+        break;
       case 'call':
         if (
           !['reap-agha', 'build-mill', 'bring-share'].includes(input.job as string) ||

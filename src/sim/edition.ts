@@ -27,7 +27,12 @@ import {
   type ValleyState,
 } from './valley.ts';
 export const RULES_EDITION = 'valley-2026-10';
-export type RulesEdition = typeof RULES_EDITION;
+export const PASS_EDITION = 'valley-pass-2026-10';
+export const ALLIANCE_EDITION = 'valley-alliance-2026-10';
+export const passEdition = (rules: unknown): boolean => rules === PASS_EDITION || rules === ALLIANCE_EDITION;
+export type RulesEdition = typeof RULES_EDITION | typeof PASS_EDITION | typeof ALLIANCE_EDITION;
+export const knownEdition = (rules: unknown): rules is RulesEdition =>
+  rules === RULES_EDITION || passEdition(rules);
 export type HearthTopic = 'person' | 'debt' | 'grievance';
 interface Request {
   id: string;

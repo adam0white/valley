@@ -20,7 +20,7 @@ import {
   watchPersonaCheckpoint,
 } from '@adam0white/lab-client';
 import { ALLOCATION, localRole } from '../sim/cast.ts';
-import type { RulesEdition } from '../sim/edition.ts';
+import { passEdition, type RulesEdition } from '../sim/edition.ts';
 import { act, type Game, newGame, type SavedGame } from '../sim/game.ts';
 import { calendarPassport, checkpointReceipt, HOST_RULES, prepareCastStart } from '../sim/passport.ts';
 import { foundValley } from '../sim/people.ts';
@@ -70,6 +70,7 @@ export class CastSession {
     this.render();
   }
   async fresh(seed: number, localOnly = false, rules?: RulesEdition): Promise<Game> {
+    if (passEdition(rules)) localOnly = true; // No reviewed portable dialect for this edition.
     this.invalidate();
     const generation = this.generation;
     await this.shelf.ready;
@@ -81,7 +82,7 @@ export class CastSession {
       const chapter = await claimCastChapterBatch(
         this.shelf,
         ALLOCATION.map((p) => p.castId),
-        this.stamps(),
+        this.stamps(rules ?? null),
         async (inputs) => {
           const initial = prepareCastStart(opening, inputs);
           newGame(seed, initial, true, true, rules); // Construct and tick the complete opening before any CAS.
@@ -182,7 +183,7 @@ export class CastSession {
     this.failedCheckpoint = false;
     this.runId = runId;
     this.fileOrigin = fileOrigin;
-    this.localOnly = meta?.localOnly ?? false;
+    this.localOnly = passEdition(g.valley.edition?.id) || (meta?.localOnly ?? false);
     this.heads = heads;
     this.archiveHeads = archiveHeads;
     this.sources = sources;
@@ -211,7 +212,11 @@ export class CastSession {
       castHeads: structuredClone({ ...this.archiveHeads, ...this.heads }),
     };
   }
-  private stamps() {
+  private stamps(rules: RulesEdition | null = this.game?.valley.edition?.id ?? null) {
+    if (passEdition(rules))
+      throw new Error(
+        'This local edition has no reviewed continuing-person mapping. Download its native ledger instead.',
+      );
     return {
       game: 'valley',
       build: this.lab.build().c ?? 'development',
@@ -224,6 +229,14 @@ export class CastSession {
     this.render();
   }
   async checkpoint(manual = false): Promise<void> {
+    if (passEdition(this.game?.valley.edition?.id)) {
+      if (manual) {
+        this.status =
+          'This local edition has no reviewed continuing-person mapping. Download its native ledger instead.';
+        this.render();
+      }
+      return;
+    }
     if ((this.failedCheckpoint && !manual) || this.busy || !this.game || !this.shelf.enabled) return;
     this.busy = true;
     const generation = this.generation;
@@ -468,7 +481,7 @@ export class CastSession {
     if (!this.panel) return;
     const status = this.panel.querySelector('[data-cast-status]');
     if (status)
-      status.textContent = `${this.status} Recorded play links across games on this device when recording is on. Change recording in the menu.`;
+      status.textContent = `${passEdition(this.game?.valley.edition?.id) ? 'People in this edition stay in its local ledger. No reviewed mapping permits publishing them to another chapter. ' : ''}${this.status} Recorded play links across games on this device when recording is on. Change recording in the menu.`;
     const box = this.panel.querySelector<HTMLInputElement>('[data-continuity]');
     if (box) box.checked = this.shelf.enabled;
   }

@@ -53,6 +53,8 @@ import {
   successChance,
   type World,
 } from '@adam0white/human-framework';
+import { allianceOffers, allianceSuggestion, allianceTick, resolveAlliance } from './alliance.ts';
+import { type BrokeringState, brokerOffers, brokerTick, brokerVoices, resolveBroker } from './brokering.ts';
 import {
   DAY,
   dateEnglish,
@@ -68,18 +70,30 @@ import {
 import { ALLOCATION, CAST_IDS, DISCLOSURES, localRole } from './cast.ts';
 import { tellValleyDeath } from './death.ts';
 import {
+  ALLIANCE_EDITION,
   captureTermReply,
   type EditionState,
   millPay,
+  passEdition,
   type RulesEdition,
   resolveTermWork,
   termDay,
   termOffers,
   termSuggestion,
 } from './edition.ts';
+import {
+  captureIntroduction,
+  type IntroductionState,
+  introductionOffers,
+  introductionSuggestion,
+  introductionTick,
+  resolveIntroduction,
+} from './introductions.ts';
+import { type PassState, passTick } from './pass.ts';
 import { type CastStart, calendarPassport, lifeFacts, validateCastStart } from './passport.ts';
 import { foundValley, type Household, householdLabel, KAHYA, makeKahya, personLabel } from './people.ts';
 import { DRAW, hashUnit, mixSeed, strHash } from './rng.ts';
+import { type StewardCare, stewardTo } from './steward.ts';
 import {
   ASSENT,
   easeLaneWords,
@@ -253,6 +267,10 @@ export interface Flags {
 }
 
 export interface ValleyState {
+  stewardCare?: StewardCare;
+  pass?: PassState;
+  brokering?: BrokeringState;
+  introduction?: IntroductionState;
   edition?: EditionState;
   castFacts?: Record<string, ReturnType<typeof lifeFacts>>;
   castReleaseRequests?: string[];
@@ -334,6 +352,8 @@ export function newValley(
   for (const p of [...people, kahya]) p.lexicon = { ...p.lexicon, plainEnglish };
   const s: ValleyState = {
     ...(rules ? { edition: { id: rules } } : {}),
+    ...(rules === ALLIANCE_EDITION ? { stewardCare: { grain: 0, eaten: 0 } } : {}),
+    ...(passEdition(rules) ? { pass: { stock: 3, stone: 0, grainReceived: 0 } } : {}),
     v: 1,
     seed,
     minute: 0,
@@ -476,14 +496,23 @@ export function note(s: ValleyState, n: Omit<Note, 'id'>) {
 
 // ---------- the asks ----------
 
+export function hasOfficeCard(s: ValleyState): boolean {
+  return (
+    s.knocks.some((k) => !k.answered && k.at <= s.minute && k.until > s.minute) ||
+    !!s.edition?.decisions?.some((d) => !d.answered && d.from <= s.minute && d.until > s.minute)
+  );
+}
+
 export function openAsksFor(s: ValleyState, pid: string, at: number): Ask[] {
   return s.asks.filter((a) => !a.closed && a.from <= at && a.until > at && a.personIds.includes(pid));
 }
 
 function suggestionFor(s: ValleyState, p: Person, at: number): Suggestion | undefined {
+  const intro = introductionSuggestion(s, p, at);
   const asks = openAsksFor(s, p.id, at);
   const a = asks[asks.length - 1];
   const term = termSuggestion(s, p, at);
+  if (intro && (intro.since ?? -1) >= Math.max(a?.from ?? -1, term?.since ?? -1)) return intro;
   if (!a || (term && (term.since ?? -1) >= a.from)) return term;
   if (a.job === 'bring-share') {
     const h = houseOfPerson(s, p.id);
@@ -521,6 +550,9 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
   // Bed is for the dark, or for someone who can no longer keep their eyes open; a tired day-worker rests instead.
   const sleepy = !light || p.body.sleepPressure > 0.65 || p.body.sleepDebt > 0.5 || p.body.health < 0.5;
   const out: Affordance[] = [
+    ...introductionOffers(s, p, at),
+    ...brokerOffers(s, p, at),
+    ...allianceOffers(s, p, at),
     ...termOffers(s, p, at),
     ...(sleepy
       ? [
@@ -914,7 +946,8 @@ export function makeWorld(s: ValleyState): World {
       return h ? scarcityOf(s, h) : 0;
     },
     beginOptions: (p, offer, record) => {
-      if (!captureTermReply(s, p, offer, record)) captureReply(s, p, offer, record);
+      if (!captureIntroduction(s, p, offer, record) && !captureTermReply(s, p, offer, record))
+        captureReply(s, p, offer, record);
       return undefined;
     },
     resolve: (p, act, reason) => resolveActivity(s, p, act, reason),
@@ -1262,6 +1295,12 @@ function replyWords(s: ValleyState, p: Person, ask: Ask, r: Reply): string {
 }
 
 function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ended' | 'interrupted'): Outcome {
+  const broker = resolveBroker(s, p, act, reason);
+  if (broker) return broker;
+  const road = resolveAlliance(s, p, act, reason);
+  if (road) return road;
+  const intro = resolveIntroduction(s, p, act, reason);
+  if (intro) return intro;
   const term = resolveTermWork(s, p, act, reason);
   if (term) return term;
   const now = p.now;
@@ -1518,7 +1557,12 @@ function chooseModes(s: ValleyState, day: number) {
       return due !== undefined && due < at + 5 * DAY;
     });
     const hasCast = h.members.some((id) => !!CAST_IDS[id]);
-    const lived = hasCast || (busy && underSeal(s, h)) || asked || visited || hungry || birthNear;
+    const introduced =
+      (s.introduction?.status === 'invited' ||
+        (s.brokering && ['guardian', 'proposal', 'answer', 'ceremony'].includes(s.brokering.phase))) &&
+      h.members.some((id) => ['ali', 'esma', 'omer'].includes(id));
+    const lived =
+      introduced || hasCast || (busy && underSeal(s, h)) || asked || visited || hungry || birthNear;
     if (!lived) continue;
     for (const m of h.members) {
       const p = personOf(s, m);
@@ -1546,10 +1590,14 @@ export function advanceTo(s: ValleyState, to: number): SimEvent[] {
     const midnight = (day + 1) * DAY;
     const stepTo = Math.min(to, midnight);
     const c = communityOf(s);
-    const suggestions: Record<string, Suggestion> = {};
+    const suggestions: Record<string, Suggestion | readonly Suggestion[]> = {};
     for (const p of c.people) {
       const sg = suggestionFor(s, p, stepTo);
-      if (sg) suggestions[p.id] = sg;
+      const voices = brokerVoices(s, p, stepTo);
+      const road = allianceSuggestion(s, p);
+      if (road) voices.push(road);
+      if (voices.length) suggestions[p.id] = [...(sg ? [sg] : []), ...voices];
+      else if (sg) suggestions[p.id] = sg;
     }
     const ev = stepCommunity(c, worldOf(s), stepTo, {
       suggestions,
@@ -1561,6 +1609,10 @@ export function advanceTo(s: ValleyState, to: number): SimEvent[] {
     kahyaTo(s, stepTo);
     s.minute = stepTo;
     afterStep(s, ev);
+    passTick(s);
+    introductionTick(s);
+    brokerTick(s);
+    allianceTick(s);
     if (stepTo === midnight) endOfDay(s, day);
   }
   return events;
@@ -1568,6 +1620,10 @@ export function advanceTo(s: ValleyState, to: number): SimEvent[] {
 
 /** The kahya lives only his walks: time passes, and a walk is a real HF activity so his legs tire. */
 function kahyaTo(s: ValleyState, to: number) {
+  if (s.stewardCare) {
+    stewardTo(s, to);
+    return;
+  }
   const k = s.kahya;
   const v = s.kahyaState.visit;
   const act = k.activity;
@@ -2208,6 +2264,8 @@ function born(s: ValleyState, mother: Person, father: Person, h: Household, at: 
 }
 
 function weddings(s: ValleyState, day: number) {
+  // This edition offers introductions; it never converts automatic matching into consent.
+  if (passEdition(s.edition?.id)) return;
   const at = day * DAY + 10 * 60;
   const single = (p: Person, sex: 'male' | 'female', lo: number, hi: number) =>
     p.body.alive && p.life.sex === sex && ageYears(p) >= lo && ageYears(p) <= hi && spousesOf(p).length === 0;

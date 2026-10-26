@@ -82,7 +82,17 @@ it('refuses a public profile or an unregistered source role before admission', a
 
 import { acceptPersonaBatch, type PersonaRequest, type PersonaShelfState } from '@adam0white/lab-client';
 import { ALLOCATION } from '../src/sim/cast.ts';
-import { act, compactRun, fingerprint, load, replay, save, step } from '../src/sim/game.ts';
+import {
+  act,
+  compactRun,
+  fingerprint,
+  load,
+  newGame,
+  replay,
+  save,
+  stateJson,
+  step,
+} from '../src/sim/game.ts';
 import { CastSession, type Shelf } from '../src/ui/cast-session.ts';
 
 class FakeShelf implements Shelf {
@@ -126,6 +136,26 @@ class FakeShelf implements Shelf {
     throw new Error(`unexpected ${q.action}`);
   }
 }
+
+it('keeps the new pass edition local and refuses an unreviewed portable dialect', async () => {
+  const shelf = new FakeShelf();
+  const session = new CastSession(fakeLab(), shelf);
+  const g = await session.fresh(7, false, 'valley-pass-2026-10');
+  expect(shelf.preparations).toBe(0);
+  expect(shelf.writes).toBe(0);
+  step(g, 31 * 1440);
+  await session.checkpoint(true);
+  await session.alternative('hf.cast.danyal.well');
+  expect(shelf.writes).toBe(0);
+  expect(session.status).toContain('no reviewed continuing-person mapping');
+  const restored = load(compactRun(g));
+  await session.loaded(restored, session.metadata());
+  await session.checkpoint(true);
+  expect(shelf.writes).toBe(0);
+  // A new original-edition term can still use the existing native contract.
+  await session.fresh(7);
+  expect(shelf.preparations).toBeGreaterThan(0);
+});
 function fakeLab() {
   let allowed = false;
   return {
@@ -159,6 +189,11 @@ it('claims all applicable heads together, pins all actors, and keeps loaded/file
   expect(fingerprint(replay(42, g.inputs, g.valley.minute, g.cast).valley)).toBe(fp);
   for (const actor of [...g.valley.people, g.valley.kahya]) expect(actor.lexicon?.plainEnglish).toBe(true);
   expect(fingerprint(load(compactRun(g)).valley)).toBe(fingerprint(g.valley));
+  const pass = newGame(42, g.cast, false, true, 'valley-pass-2026-10');
+  act(pass, { verb: 'pass', choice: 'depart' });
+  step(pass, 900);
+  expect(stateJson(load(save(pass)).valley)).toEqual(stateJson(pass.valley));
+  expect(stateJson(load(compactRun(pass)).valley)).toEqual(stateJson(pass.valley));
   const metadata = session.metadata();
   const saved = save(g);
   await session.loaded(load(saved), metadata);

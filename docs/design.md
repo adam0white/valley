@@ -169,12 +169,10 @@ a clean deployment and live verification; external delivery receipts are in
   controlled lab receipt specified in the 2026-10-20 follow-up. Routed to the shared lab
   owner for 2026-11-03. Private owner saves must not be sent. An intercepted receipt is
   not production acceptance.
-- Marriage brokering and a neighbouring valley remain open engineering (GDI065/066).
-  Director ruling, 2026-10-25: Adam already played on October 20; an old
-  after-first-play sequence is not an owner permission gate. The next reviewed host
-  slice is targeted for 2026-10-29: one optional pass visit and introductions that
-  create opportunities for mutual HF choice, without forced marriage or changing
-  the canonical cast. It follows this reviewed release and plain4's reserved copy pass.
+- GDI065/066 have a new, unreviewed source slice described below. Technical review,
+  normal lane, signed delivery and live verification remain engineering gates.
+  The 2026-10-26 batch explicitly allows a bounded meeting with a pending outcome;
+  this slice does not complete marriages. No missing-guardian rule is invented.
 - Adam accepts game feel, difficulty and readiness on 2026-11-03. The existing
   first-goal/short-notebook fixes and new mechanics do not claim that acceptance.
   F-491 retest and F-492/F-465 acceptance stay real gates. Friends and Show HN stay paused.
@@ -212,3 +210,64 @@ Owner: “All good decisions, proceed.” and “Good direction, proceed please,
 This supersedes the phone house list, action selectors and main-screen speed controls described above. The phone shows the drawn valley, one sideways house row, current replies and a bottom action bar. House verbs are direct buttons. The ledger and complete notebook are reading sheets. One top-bar i explains the current context, and the menu holds time. Automatic pacing is the default (120 minutes per second during seasonal work, 240 otherwise); Slow, Steady and Fast remain in the menu. The guarded action is labelled “Skip ⏩”. Presentation pacing does not change replay inputs or simulation quanta.
 
 The title shelf loads full saves and compact playtest exports with a fingerprint check. Send word includes an optional remembered tester name, separate linked and consented unlinked paths, and the full run download. The simulation, HF 2.8.0 dependency, historical saves and owner replay fixture are unchanged. Delivery evidence is in the coordinator report `~/code/.lab-scratch/codex/build-valley.md`; Adam accepts the feel after the live rebuild.
+
+## Optional pass and introduction source slice (2026-10-26, not yet delivered)
+
+`valley-pass-2026-10` is a separate, explicitly unchecked new-term option. It includes
+October's grain rules. Neither the default term nor `valley-2026-10` upgrades in place.
+Full/compact exports and local logs retain the new edition. Native exports preserve
+all actors and world facts. The new edition has no reviewed portable source mapping:
+it starts local, refuses persona publication and never calls itself `valley-cast-3`.
+The SDK pins, recording switch and Feedback semantics stay unchanged.
+
+Çam is an authored adjacent pre-industrial valley over the northern pass. Its public
+quarry is a finite world inventory, not a new foreground person or household food
+source. The route map shows the residence, pass and quarry. At departure the steward
+packs provisions and a barter sack from the actual granary. Arrival occurs after eight
+hours of ordinary simulation. Only arrival discloses quarry stock. One carried sack
+buys one stone load; bought grain stays in the quarry account. The steward returns
+after two days, including eight hours walking home. Unspent barter grain returns to
+the granary. Stone stays cargo until return, then can supply a little unfinished mill
+work when work is open. No crop, levy, inspection, eating, debt or rider date waits.
+
+Authored engineering costs, not historical measurements: one grain measure of
+provisions, six carried for barter, three quarry loads in this term, one load per trip,
+and twelve effective mill hours per dressed stone. The mill still needs six hundred
+hours in total. The trip is no free supply or skip of HF/world time.
+
+The family introduction uses existing incidental adults: Ali (opening age22) from
+Kavak, Esma19 from Kuyucu, and her actual father Omer48 from Kuyucu. Their raw IDs,
+names, traits, norms, ages, roles and existing bonds stay unchanged. The six allocated
+canonical people receive no invented partner or guardian. Yusuf remains married to
+Zehra; her pregnancy remains real. Samira's absent spouse stays a spouse. Meryem's
+grandfather relationship is not silently assigned guardian authority. No forty-first
+foreground person or sustained incidental personal arc is added.
+
+Each participant can choose an HF invitation offer among ordinary work, food and rest.
+A four-hour attendance includes arrival/preparation, two hours in the courtyard, and
+return. People wait separately if the father is absent. Only at least ninety minutes
+of overlapping completed attendance by both adults and her father creates one released
+HF `court` meeting. Interrupted work, refusal or non-overlap creates no meeting.
+A message reports the public outcome; private attraction and compatibility stay hidden.
+The single bounded introduction ends met/pending or missed. It never creates an
+engagement, guardian consent, a proposal acceptance or a marriage. This edition does
+not run the older automatic wedding matcher. Existing marriages, pregnancy, births
+and deaths remain. Repeated courtship and a completed ceremony are outside this
+bounded meeting; a future completed marriage must obtain both adults' actual proposal
+choices and the known guardian's actual choice before public `canMarry`/`marry`.
+
+Eligibility uses released `canMarry` with a complete local lookup and an explicit copy
+of `MUSLIM_CUSTOM`, plus existing spouse-role references. Sourced provenance is the
+released partnering scope and HF `research/marriage-sources.md` §§1–6/10. The age18
+and one-spouse thresholds are authored world conventions, not claims about historical
+law or a new religious ruling. Existing held conscience understandings are unchanged.
+Q33 concerns explicit guardian absence; this slice neither resolves nor bypasses it.
+Faith remains quiet.
+
+### Remaining evidence
+
+Technical source controls do not establish felt generosity or game feel. Adam's
+acceptance, physical-phone behavior, cold comprehension and the authorized production
+notebook receipt remain input gates for2026-11-03. Existing first-goal, short-notebook,
+plain4 projections, focus, slowdown and SDK11/12 fixes remain implemented; this slice
+adds no duplicate fix or new model/network service. Friends and Show HN remain paused.

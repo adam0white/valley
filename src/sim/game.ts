@@ -3,15 +3,21 @@
  * the term (who brings what, when), the ending at the elders' gathering, saves and the playtest export.
  */
 import { FRAMEWORK_VERSION, type Person, recall, restore, snapshot } from '@adam0white/human-framework';
+import { type AllianceChoice, allianceChoice } from './alliance.ts';
+import { type BrokerChoice, brokerChoice } from './brokering.ts';
 import { DAY, dateEnglish, dayOfMinute, doyOf, HOUR, yearOf } from './calendar.ts';
 import {
+  ALLIANCE_EDITION,
   chooseTerm,
   type HearthTopic,
-  RULES_EDITION,
+  knownEdition,
+  passEdition,
   type RulesEdition,
   requestContribution,
   talkAtHearth,
 } from './edition.ts';
+import { introduce } from './introductions.ts';
+import { passChoice } from './pass.ts';
 import type { CastStart } from './passport.ts';
 import { householdLabel, KAHYA, personLabel } from './people.ts';
 import { mixSeed, strHash } from './rng.ts';
@@ -45,6 +51,10 @@ import {
 export const GAME_VERSION = '0.3.0';
 
 export type Input =
+  | { at: number; verb: 'alliance'; choice: AllianceChoice }
+  | { at: number; verb: 'broker'; choice: BrokerChoice }
+  | { at: number; verb: 'pass'; choice: 'depart' | 'buy' | 'deliver' }
+  | { at: number; verb: 'introduce' }
   | { at: number; verb: 'term-choice'; id: string; choice: string }
   | { at: number; verb: 'contribute'; house: string }
   | { at: number; verb: 'topic'; house: string; topic: HearthTopic }
@@ -72,7 +82,7 @@ export function newGame(
   plainEnglish = true,
   rules?: RulesEdition,
 ): Game {
-  if (rules !== undefined && rules !== RULES_EDITION) throw new Error('Unknown Valley rules edition.');
+  if (rules !== undefined && !knownEdition(rules)) throw new Error('Unknown Valley rules edition.');
   const valley = newValley(seed, cast, preflight, plainEnglish, rules);
   const g: Game = { valley, inputs: [], plainEnglish, ...(cast ? { cast: structuredClone(cast) } : {}) };
   beats(g);
@@ -93,6 +103,14 @@ export function act(g: Game, input: Order): boolean {
 function apply(g: Game, i: Input): boolean {
   const s = g.valley;
   switch (i.verb) {
+    case 'broker':
+      return brokerChoice(s, i.choice);
+    case 'alliance':
+      return allianceChoice(s, i.choice);
+    case 'pass':
+      return passChoice(s, i.choice);
+    case 'introduce':
+      return introduce(s);
     case 'term-choice':
       return chooseTerm(s, i.id, i.choice);
     case 'contribute':
@@ -660,10 +678,23 @@ export function compactRun(g: Game | SavedGame, n = 0): CompactRun {
 }
 
 export function load(saved: SavedGame | CompactRun): Game {
-  if (saved.rules !== undefined && saved.rules !== RULES_EDITION)
+  if (saved.rules !== undefined && !knownEdition(saved.rules))
     throw new Error('Unknown Valley rules edition.');
   if ('state' in saved && saved.state.edition?.id !== saved.rules)
     throw new Error('The saved rules do not match the run.');
+  if (
+    'state' in saved &&
+    (passEdition(saved.rules) !== !!saved.state.pass ||
+      ((saved.state.introduction || saved.state.brokering) && !passEdition(saved.rules)))
+  )
+    throw new Error('The saved pass world does not match its edition.');
+  if (
+    'state' in saved &&
+    ((saved.rules === ALLIANCE_EDITION) !== !!saved.state.stewardCare ||
+      (saved.state.brokering && saved.rules !== ALLIANCE_EDITION) ||
+      (saved.state.pass?.alliance && saved.rules !== ALLIANCE_EDITION))
+  )
+    throw new Error('The saved alliance world does not match its edition.');
   if (saved.version !== GAME_VERSION || saved.framework !== FRAMEWORK_VERSION)
     throw new Error('This run uses an older Valley edition. Export it for safekeeping and start fresh.');
   if (saved.cast) newGame(saved.seed, saved.cast);

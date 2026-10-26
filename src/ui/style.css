@@ -2311,3 +2311,13 @@ body:has(.play[data-reflow="true"]) {
 .play[data-reflow="true"] .grain-label {
   line-height: 1.4;
 }
+
+/* The opt-in agreement controls keep their explanation on a separate line. */
+.alliance-orders button .h {
+  color: var(--ink-soft);
+  display: block;
+  font-family: var(--text);
+  font-size: 12px;
+  line-height: 1.25;
+  margin-top: 3px;
+}

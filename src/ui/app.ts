@@ -1,4 +1,10 @@
-import { RULES_EDITION, type RulesEdition, type TermDecision } from '../sim/edition.ts';
+import {
+  ALLIANCE_EDITION,
+  passEdition,
+  RULES_EDITION,
+  type RulesEdition,
+  type TermDecision,
+} from '../sim/edition.ts';
 import { validLocalLog } from './local-log.ts';
 import { musicEvent } from './music.ts';
 import { automaticRate, type Pace, READING_MS } from './pacing.ts';
@@ -10,6 +16,7 @@ import { automaticRate, type Pace, READING_MS } from './pacing.ts';
  */
 
 import { type PhoneStage, phoneStage, telemetryNotice } from '@adam0white/lab-kit';
+import { brokerUnavailable } from '../sim/brokering.ts';
 import {
   DAY,
   daylight,
@@ -41,8 +48,10 @@ import {
   stateJson,
   step,
 } from '../sim/game.ts';
+import { introductionEligible } from '../sim/introductions.ts';
 import type { CastStart } from '../sim/passport.ts';
 import { type Household, householdLabel, personLabel } from '../sim/people.ts';
+import { stewardBusy } from '../sim/steward.ts';
 import {
   type Hunch,
   houseOf,
@@ -517,7 +526,7 @@ function title() {
     <section class="title-premise"><h1>The Valley</h1><p class="purpose">${esc(PURPOSE)}</p><p class="soft">People can refuse you, and they remember how you answer.</p></section>
     ${LAB_TOOLS ? '<button data-ways>Lab tools ▸</button>' : ''}
     <div class="vignette" aria-hidden="true"><svg viewBox="0 0 360 140"><path d="M0 95Q80 15 160 90T360 70M0 130Q90 50 180 120T360 95M250 0Q200 70 260 140" fill="none" stroke="currentColor"/><g fill="none" stroke="currentColor" stroke-width="2"><path d="M70 95v-18l12-12 12 12v18zM130 105V87l12-12 12 12v18zM190 90V72l12-12 12 12v18zM280 100V82l12-12 12 12v18z"/></g></svg></div>
-    <footer class="title-actions"><label class="edition-choice"><input type="checkbox" data-edition> Include grain wages, voluntary contributions, winter loans and inspections in this new term.</label>${where ? `<p class="hand">${esc(where)}</p>` : ''}
+    <footer class="title-actions"><label class="edition-choice"><input type="checkbox" data-edition> Include grain wages, voluntary contributions, winter loans and inspections in this new term.</label><label class="edition-choice"><input type="checkbox" data-pass-edition> Also include pass journeys, family arrangements and a road agreement. This includes the grain rules. The steward eats from real provisions and rests between walks. Continuing people stay local in this edition.</label>${where ? `<p class="hand">${esc(where)}</p>` : ''}
     ${hasSave ? `${log && log.version === GAME_VERSION ? '<button class="primary" data-go="open">Resume</button>' : ''}<button data-go="new" class="hold">New game<span class="fill"></span></button><p class="soft">This replaces your saved game.</p>` : '<button class="primary" data-go="new">New game</button>'}${mark()}</footer>
     ${LAB_TOOLS ? `<dialog class="ways-panel" aria-label="Other ways to start"><header><h2>Other ways to start</h2><button data-ways-close aria-label="Close other ways to start">×</button></header><label for="valley-name">A named valley</label><input id="valley-name" placeholder="Kuyulu" maxlength="80"><p>The same name gives the same valley.</p><button data-seed${log ? ' class="hold"' : ''}>Begin this valley${log ? '<span class="fill"></span>' : ''}</button>${log ? '<p class="soft">This replaces your saved game.</p>' : ''}<label for="load-run">Load a playtest run</label><input id="load-run" type="file" accept=".json,application/json"><p id="load-result" role="status"></p></dialog>` : ''}
   </div>`;
@@ -525,7 +534,11 @@ function title() {
     if (log && log.version === GAME_VERSION) openLedger(log);
   });
   const fresh = (seed: number) => {
-    const rules = app.querySelector<HTMLInputElement>('[data-edition]')?.checked ? RULES_EDITION : undefined;
+    const rules = app.querySelector<HTMLInputElement>('[data-pass-edition]')?.checked
+      ? ALLIANCE_EDITION
+      : app.querySelector<HTMLInputElement>('[data-edition]')?.checked
+        ? RULES_EDITION
+        : undefined;
     void begin(seed, false, rules);
   };
   const nb = app.querySelector<HTMLButtonElement>('[data-go="new"]');
@@ -733,6 +746,12 @@ function rateNow(t: number): number {
     waiting:
       s.knocks.some((k) => !k.answered && k.at <= s.minute && k.until > s.minute) ||
       !!pendingTerm(s) ||
+      !!(
+        s.pass?.journey?.seen &&
+        !s.pass.journey.returned &&
+        !s.pass.journey.cargo &&
+        s.minute < s.pass.journey.leave
+      ) ||
       s.asks.some(
         (a) =>
           !a.closed &&
@@ -1198,6 +1217,12 @@ const growing = (season: string) => season === 'spring' || season === 'summer';
 
 function caption(s: ValleyState, _wx: string): string {
   const v = s.kahyaState.visit;
+  if (s.pass?.journey && !s.pass.journey.returned)
+    return s.minute < s.pass.journey.arrive
+      ? 'You are walking over the northern pass.'
+      : s.minute < s.pass.journey.leave
+        ? 'You are at Çam quarry in the neighbouring valley.'
+        : 'You are carrying your goods home over the pass.';
   const destination = v ? houseOf(s, v.house) : undefined;
   const destinationName = destination ? householdLabel(destination) : 'the house';
   const where =
@@ -1214,6 +1239,7 @@ function caption(s: ValleyState, _wx: string): string {
 function kahyaAt(s: ValleyState): [number, number] {
   const v = s.kahyaState.visit;
   const home: [number, number] = [600, 545];
+  if (s.pass?.journey && !s.pass.journey.returned) return [520, 350];
   if (!v || v.back <= s.minute) return home;
   const hh = houseOf(s, v.house);
   if (!hh) return home;
@@ -1373,7 +1399,17 @@ function drawSheet(force = false) {
   if (!g || (!force && app.querySelector('button.holding'))) return;
   const s = g.valley;
   // Count newly due scheduled notes, and retain IDs when the capped log replaces an old note.
-  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${s.asks.length}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}`;
+  const journey = s.pass?.journey;
+  const routePhase = journey
+    ? journey.returned
+      ? 'home'
+      : s.minute < journey.arrive
+        ? 'out'
+        : s.minute < journey.leave
+          ? 'quarry'
+          : 'return'
+    : '';
+  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${s.asks.length}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}`;
   if (!force && sheetKey === key) return;
   sheetKey = key;
   lastSheet = performance.now();
@@ -2051,6 +2087,61 @@ function otherOrders(s: ValleyState): string {
       ),
     );
   }
+  if (passEdition(s.edition?.id) && s.pass) {
+    const roadTerms = s.edition?.id === ALLIANCE_EDITION;
+    const j = s.pass.journey;
+    const away = !!j && !j.returned;
+    const there = !!j?.seen && s.minute < j.leave && !j.returned;
+    const position = !away ? 50 : there ? 290 : s.minute < (j?.arrive ?? 0) ? 140 : 200;
+    out.push(
+      `<section aria-label="The pass route"><h3>Over the pass</h3><svg viewBox="0 0 340 90" role="img" aria-label="Residence, northern pass, Çam quarry in the adjacent valley" style="width:100%;max-width:480px"><path d="M50 50 L170 15 L290 50" fill="none" stroke="currentColor"/><circle cx="${position}" cy="45" r="6" fill="currentColor"/><text x="8" y="80" fill="currentColor">Residence</text><text x="145" y="12" fill="currentColor">Pass</text><text x="245" y="80" fill="currentColor">Çam quarry</text></svg><p>${away ? (there ? (roadTerms ? 'You are at the quarry. Stone is available only through the public road agreement below. A sack alone cannot buy a load. You can decline without paying.' : 'You are at the quarry. A sack can buy one stone load while you are here. Your return walk is still ahead.') : 'You are on the pass journey. The valley keeps working and eating. You cannot make another visit until you return.') : roadTerms ? 'Çam offers finite mill stone only through its public road agreement. Six carried grain reserves one load. Yusuf Usta must choose to complete twelve useful repair hours over six trips. Then you must travel back to collect within fourteen days. Each quarry journey takes two days and one provision. Failure releases the stone without refunding grain or time. You can do without the stone.' : 'Walk into the adjacent valley for dressed mill stone. Take provisions and a barter sack from the granary. A sack buys one load at the quarry if stock remains. You will be away for two days.'}</p>${btn('Walk to Çam quarry', () => send({ verb: 'pass', choice: 'depart' }), { disabled: away || !!(s.kahyaState.visit && s.kahyaState.visit.back > s.minute) || stewardBusy(s) || (s.stewardCare && !s.kahya.body.alive) || s.agha.granary < 7, hint: 'Pack provisions and a barter sack. That grain leaves the granary until you return or trade it.' })}${btn('Exchange a sack for stone', () => send({ verb: 'pass', choice: 'buy' }), { disabled: roadTerms || !there || !!j?.cargo || (j?.grain ?? 0) < 6 || s.pass.stock < 1, ...(roadTerms ? { hint: 'A sack alone cannot buy stone. Read the public road terms below before spending grain.' } : {}) })}${btn('Deliver the stone to the mill', () => send({ verb: 'pass', choice: 'deliver' }), { disabled: away || s.pass.stone < 1 || !s.agha.millOpen || s.agha.mill >= V.millHours, hint: 'Only stone carried home can supply a little of the mill work. The payment dates stay the same.' })}</section>`,
+    );
+    out.push(
+      `<section><h3>A family introduction</h3><p>${s.introduction?.status === 'met' ? 'The adults met with her father present. Nobody has agreed to marry.' : s.introduction?.status === 'missed' ? 'No supervised meeting took place. Nobody was promised in marriage.' : s.introduction ? 'Each adult and her father has been invited. Their work and rest may come first.' : 'Ask an unmarried adult from Kavak and an unmarried adult from Kuyucu to meet at Kuyucu with her father present. They choose whether to attend. Meeting is not a marriage agreement.'}</p>${btn('Arrange an introduction at Kuyucu', () => send({ verb: 'introduce' }), { disabled: !!s.introduction || !introductionEligible(s), hint: 'Only these existing eligible adults are invited. No visitor is assigned a spouse or guardian.' })}</section>`,
+    );
+    if (s.edition?.id === ALLIANCE_EDITION) {
+      const b = s.brokering;
+      const family =
+        b?.phase === 'married'
+          ? 'The marriage is recorded. The sponsored bridal gift belongs to the woman.'
+          : b?.phase === 'engaged'
+            ? 'Both adults accepted the proposal after her father’s approval. They have not married. A family ceremony still needs their separate confirmation.'
+            : b?.phase === 'refused'
+              ? 'The discussion ended with a refusal. No marriage was recorded.'
+              : b?.phase === 'expired'
+                ? 'The invitation ended without all the required answers. No marriage was recorded.'
+                : b && ['guardian', 'proposal', 'answer', 'ceremony'].includes(b.phase)
+                  ? 'The family discussion is open. Each person may choose their own work or rest. Attendance supplies no consent.'
+                  : 'Further supervised meetings take provisions and two days of the steward’s presence. The adults may get to know each other over time. A proposal still requires separate answers.';
+      out.push(
+        `<section><h3>Family arrangements</h3><p>${family}</p>${(['meeting', 'proposal', 'ceremony'] as const)
+          .map((choice) => {
+            const reason = brokerUnavailable(s, choice);
+            return btn(
+              choice === 'meeting'
+                ? 'Host another supervised meeting'
+                : choice === 'proposal'
+                  ? 'Host a proposal discussion'
+                  : 'Host the family ceremony',
+              () => send({ verb: 'broker', choice }),
+              {
+                disabled: !!reason,
+                hint:
+                  reason ??
+                  (choice === 'ceremony'
+                    ? 'Reserve provisions, a sponsored bridal gift and two days at Kuyucu. Either adult may still decline.'
+                    : 'Bring provisions and stay at Kuyucu for two days. Work in the valley continues.'),
+              },
+            );
+          })
+          .join('')}</section>`,
+      );
+      const a = s.pass.alliance;
+      out.push(
+        `<section><h3>A road agreement with Çam</h3><p>${!a ? 'Çam’s public terms offer a stone reservation for a carried sack and repairs on this side of the pass within about a fortnight. These are the neighbouring valley’s standing terms. You commit the office to arranging the work. Yusuf Usta can still choose whether to help. Read and accept or decline them at the quarry.' : a.status === 'active' ? (a.hours >= 12 ? 'The local repairs are complete. Collect the reserved stone at Çam before the agreement ends. The return journey still takes time.' : 'The sack has paid Çam’s crew, and one stone is reserved. Local repairs remain. Yusuf Usta chooses his own work; your other calls may interrupt the repairs. Failure ends the reservation without refunding grain or time.') : a.status === 'completed' ? 'The agreement is complete. The stone was collected; it must still come home before the mill can use it.' : a.status === 'refused' ? 'The road agreement was declined or no stone was available to reserve. No obligations began.' : 'The road agreement ended without collection. The reservation was released. Grain and repair time already spent remain spent.'}</p>${btn('Accept Çam’s road terms', () => send({ verb: 'alliance', choice: 'accept' }), { disabled: !there || !!a || (j?.grain ?? 0) < 6, hint: 'Spend the carried sack. Arrange about two working days of voluntary repair, then travel back to collect the reserved stone within a fortnight.' })}${btn('Decline the road terms', () => send({ verb: 'alliance', choice: 'decline' }), { disabled: !there || !!a })}${btn('Collect the reserved stone', () => send({ verb: 'alliance', choice: 'collect' }), { disabled: !there || a?.status !== 'active' || a.hours < 12 || !!j?.cargo })}${btn('Withdraw from the road agreement', () => send({ verb: 'alliance', choice: 'withdraw' }), { disabled: a?.status !== 'active', hint: 'This breaks the agreement. The reservation ends; the spent sack and repair time do not return.' })}</section>`,
+      );
+    }
+  }
   const blocked =
     !s.flags.verbs.includes('borrow') || !!(s.agha.loan && s.minute - s.agha.loan.asked < 300 * DAY);
   out.push(
@@ -2063,7 +2154,7 @@ function otherOrders(s: ValleyState): string {
           : 'A cart arrives in twelve days. Repay a quarter more when a later rider comes.'),
     }),
   );
-  return `<div class="other-orders">${out.join('')}</div>`;
+  return `<div class="other-orders${s.edition?.id === ALLIANCE_EDITION ? ' alliance-orders' : ''}">${out.join('')}</div>`;
 }
 
 /** The rider's date, with the year when it is not this one. */
