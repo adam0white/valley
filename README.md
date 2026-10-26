@@ -11,8 +11,8 @@ to the households.
 ## How to play
 
 1. Choose **New game**, or **Resume** to continue this browser's saved term. Replacing an
-   existing save requires confirmation. The new-term checkbox starts unchecked; it opts
-   that term into the October rules described below.
+   existing save requires confirmation. The two rules checkboxes start unchecked. Choose
+   the edition before starting the term, as described below.
 2. Read the current task, date and seasonal forecast. Select a house on the map or with
    its named house button. Read the household's reply and available actions.
 3. Call people for seasonal work, collect their share, visit, give grain or reduce a share
@@ -34,12 +34,58 @@ in your note and send nothing. Changing or clearing a choice keeps your edited t
 
 ## Rules editions
 
-The explicit new-term option selects `valley-2026-10`: completed mill wages, voluntary
-extra sacks, winter grain loans through real neighbour ties, topics during attended visits,
-a third-year labour levy and a separate grain store with inspection. Households can refuse
-voluntary requests. Grain transfers conserve actual stores. These paths do not guarantee
-gratitude or forgiveness. Unmarked runs keep their original rules. The edition persists
-through exports, local saves and recovery continuations.
+On the title screen, select the checkbox beginning **Also include pass journeys, family
+arrangements and a road agreement.** Then choose **New game**. This selects
+`valley-alliance-2026-10` and includes the October grain rules. The steward eats real
+provisions and rests between walks. Continuing people stay local in this edition.
+
+The first checkbox, **Include grain wages, voluntary contributions, winter loans and
+inspections in this new term.**, selects `valley-2026-10` when the second is unchecked.
+It adds completed mill wages, voluntary extra sacks, winter grain loans through real
+neighbour ties, topics during attended visits, a third-year labour levy and a separate
+grain store with inspection. People can refuse voluntary requests. Transfers use actual
+grain stores and do not guarantee gratitude or forgiveness.
+
+With both unchecked, a new term keeps the original rules. Existing terms do not upgrade
+in place. Saves, exports and recovery continuations retain their edition. The older
+`valley-pass-2026-10` edition retains its single introduction and ordinary stone barter.
+The new marriage and road paths belong only to the alliance edition.
+
+### Family arrangements
+
+**Arrange an introduction at Kuyucu** invites Ali from Kavak, Esma from Kuyucu and her
+father Omer. Each chooses whether to attend. **Host another supervised meeting** lets
+them meet again. Once both adults are ready, **Host a proposal discussion** seeks the
+father's completed approval, Ali's proposal and Esma's separate answer. Attendance alone
+supplies no consent. An accepted proposal creates an engagement, not a marriage.
+
+**Host the family ceremony** requires fresh confirmation from both adults, the father's
+witness attendance and the steward's presence. Either adult can decline. Each hosted
+meeting or proposal discussion takes one grain measure for provisions and two days of
+the steward's time. A ceremony takes two days and seven measures: one for provisions
+and six reserved as a bridal gift. A completed marriage transfers the gift to Esma.
+An unused gift returns to the granary; provisions and time remain spent. These are
+authored game costs, not historical law or religious rulings.
+
+### The road agreement
+
+**Walk to Çam quarry** takes two days, with eight hours walking each way. Departure
+removes seven grain measures from the granary: one for provisions and six carried in a
+sack. The quarry starts with three stone loads. At the quarry, choose **Accept Çam’s
+road terms** or **Decline the road terms**. Acceptance spends the six carried measures
+and reserves one existing load. Yusuf Usta must choose to complete twelve useful repair
+hours over six four-hour trips. Other work can interrupt him.
+
+Within fourteen days of acceptance, make another quarry journey and choose **Collect
+the reserved stone**. Each journey needs provisions and a carried sack; unspent sack
+grain returns home. The collected stone must also come home before **Deliver the stone
+to the mill** can add twelve hours toward the mill's six hundred hours of work.
+Withdrawal or failure releases the reservation once. Spent grain and repair time do
+not return. Fields, household meals and payment dates keep advancing throughout.
+
+**Exchange a sack for stone** is disabled in the alliance edition, and the simulation
+also refuses that input. The older pass edition keeps ordinary barter. The road terms
+are Çam's fixed public offer; this is not a general diplomacy system.
 
 ## Saves, recording and continuation
 
@@ -71,7 +117,11 @@ Human Framework supplies the people's persisted state, routines, needs, impressi
 relationships and responses to suggestions. Valley's adapter asks those people to act and
 uses their actual replies and completed work. Valley owns the calendar, weather, fields,
 grain accounts, household shares, tax dates, travel, orders, interface and endings.
-The host does not replace a refusal with a guaranteed voluntary gift.
+The host does not replace a refusal with a guaranteed voluntary gift. HF also supplies
+courtship readiness, individual proposal choices and the marriage contract. Valley owns
+invitations, completed attendance records, the ceremony schedule and gift transfer.
+Valley writes Çam's public terms, reserves finite stone and counts completed repair work;
+HF decides whether Yusuf Usta chooses that work. Çam is not an autonomous HF negotiator.
 
 Current source uses Valley **0.3.0**, HF package **3.0.0**, Person engine **2.23.0**,
 immutable lab-client **0.4.11** and lab-kit **0.5.12**. Package and engine versions are

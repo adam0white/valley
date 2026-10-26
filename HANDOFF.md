@@ -1,12 +1,51 @@
 # Valley handoff
 
-## Current source — 2026-10-25
+## Current source — 2026-10-26
 
-Remaining: GDI065/066 marriage and neighbouring-valley
-engineering; an ordinary positive voluntary-contribution control;
-physical-phone and player evidence; Adam's feel and readiness acceptance.
+Remaining: physical-phone and cold-player evidence; the separately authorized production
+compact-notebook receipt; Adam's feel and readiness acceptance, due 2026-11-03.
+The ordinary positive voluntary-contribution control remains unproved by the earlier
+ordinary term. Marriage and road controls do not establish that separate path.
 
-This summary describes signed source `beaa1c8c3c58162597cb3f22694e1eea66f6cf51`.
+Current source is signed `dab2d1eceb56df07e6b636237ce4d9fda68fd3ee` on origin/main.
+It adds the explicitly selected `valley-alliance-2026-10` edition. The title checkbox
+begins **Also include pass journeys, family arrangements and a road agreement.**
+It includes October's grain rules; both checkboxes start unchecked. Default, October
+and older pass terms keep their own rules and complete histories.
+
+Repeated supervised meetings can lead to the known father's completed approval,
+separate adult proposal and answer, then fresh ceremony confirmations with witnesses.
+The six-measure bridal gift belongs to the woman after marriage. Meetings and proposal
+discussions each cost one provision measure and two days; the ceremony reserves seven
+measures, including the gift. No attendance substitutes for consent.
+
+Çam's public road terms are the alliance edition's sole stone route. Six carried grain
+reserves one of the original three loads. Yusuf Usta must voluntarily complete twelve
+useful hours over six four-hour trips. Collection requires a later two-day quarry
+journey within fourteen days, followed by return home. Each journey packs one provision
+measure and six carried grain; unspent sack grain returns. Failure releases the stone
+once without refunding spent grain or time. Ordinary barter stays in the older pass
+edition. HF owns individual choices and courtship readiness; Valley owns these public
+terms, travel, attendance, accounts and finite inventory. See [README](README.md).
+
+The delivery record reports signature G with the Codex trailer, normal lane 164 passed
+and one existing skip, and [exact CI 40277549475](https://github.com/adam0white/valley/actions/runs/40277549475)
+succeeded. Clean deployment `a966c302-2498-492d-9712-57ccd9204cee` reports that exact
+commit and `dirty:false`. Valley 0.3.0, HF package 3.0.0, Person engine 2.23.0,
+client 0.4.11 and kit 0.5.12 remain unchanged. These are existing delivery receipts,
+not checks repeated by this documentation worker.
+
+That record covers desktop Chrome static live observation and an exact-live mirror at
+360×690 and 1280×800, imports and native JSON continuation. Mirror fonts were unavailable.
+It establishes no physical-phone, player, production-notebook or service-ownership result.
+Receipts: `~/code/.lab-scratch/games-deferred/valley-alliance-delivery-manifest-20261026T061753Z.json`
+and `valley-alliance-report.md`. The original 74/75-at-review manifest stays historical.
+GD owns reconciliation of the design and Deferred list with the shipped extension.
+This source-only documentation update requires no app deployment.
+
+## Earlier technical receipts — 2026-10-25
+
+The earlier summary described signed source `beaa1c8c3c58162597cb3f22694e1eea66f6cf51`.
 The gameplay summary and completed delivery receipt below describe that source.
 The plain4 copy pass shipped in signed source `33cb29159aa423c8b04a31c7d3ebe3c05e2ad20d`.
 Signed source `a0096a1786c902322c1226ff24f943370eab740b` adopts immutable client 0.4.11
@@ -69,13 +108,9 @@ and limits; they do not close current retest or acceptance gates.
 
 ## Next work and acceptance
 
-- Plain4 completed its five named gameplay copy routes. This docsweb follow-up changes
-  only README and this handoff. Information and household About are gameplay
-  context, not general credits; no new About surface is required.
-- Games-deferred owns GDI065/066: the next optional marriage/neighbour slice is
-  targeted 2026-10-29. It is open engineering, with no new owner-permission
-  gate. The next reviewed batch also owns the ordinary positive contribution control.
-  See its `valley-next-batch.md`.
+- GDI065/066 marriage and road engineering shipped in the explicit alliance edition.
+  GD owns design and Deferred reconciliation. The ordinary positive contribution control
+  remains a Games-deferred follow-up, targeted 2026-10-29; earlier controls do not establish it.
 - Adam/device review owns physical-phone keyboard, enlarged text and performance
   checks, due 2026-11-03. Desktop geometry and throttling do not meet that gate.
 - New-player cold comprehension remains unproved; route through the playtest director
