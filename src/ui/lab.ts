@@ -1,4 +1,4 @@
-import { createLab } from '@adam0white/lab-client';
+import { createLab, FEEDBACK_LABELS } from '@adam0white/lab-client';
 import { feedbackPersonaControl, feedbackSharePlay } from '@adam0white/lab-kit';
 import type { SavedGame } from '../sim/game.ts';
 import { toggleMusic } from './music.ts';
@@ -63,6 +63,12 @@ export function mountLab(options: RunControls): void {
     <header class="feedback-head"><button type="button" data-feedback-back aria-label="Back to menu">←</button><h2 id="valley-feedback-title">Feedback</h2><button type="button" data-close-feedback aria-label="Close Feedback">×</button></header>
     <form class="feedback-form"><div class="feedback-body"><p data-feedback-lead>Send a note about this game. You can choose whether to share your play.</p>
     <div class="feedback-verdicts" role="group" aria-label="Would you keep playing?"><button type="button" data-verdict="keep" aria-pressed="false">I'd keep playing</button><button type="button" data-verdict="mixed" aria-pressed="false">Not sure</button><button type="button" data-verdict="quit" aria-pressed="false">I'd stop here</button></div>
+    <div class="feedback-verdicts" role="group" aria-label="Feedback topic">${Object.entries(FEEDBACK_LABELS)
+      .map(
+        ([key, label]) =>
+          `<button type="button" data-feedback-label="${key}" aria-pressed="false">${label}</button>`,
+      )
+      .join('')}</div>
     <label for="valley-feedback-note">Tell us what happened in the valley, what you wanted and what got in the way.</label><textarea id="valley-feedback-note" rows="4" maxlength="12000"></textarea>
     <label for="valley-feedback-name">Your name or tester ID <small>(optional)</small></label><input id="valley-feedback-name" type="text" maxlength="60" autocomplete="nickname"><p class="soft">A name labels your player ID and the past and future play linked to it on this device. Leave this empty to use only your player ID.</p>
     <details><summary>What is sent</summary><p data-send-preview>We send your note, your optional answer and name, and your current linked game, saves and log.</p><p>For long games, we send the starting seed and every action so the game can be replayed. We leave out the full game state.</p><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a></details>
@@ -102,6 +108,7 @@ export function mountLab(options: RunControls): void {
   let personaChoice = feedbackPersonaControl(lab);
   if (personaChoice) feedback.querySelector('textarea')?.after(personaChoice);
 
+  let feedbackLabel = '';
   let verdict = '';
   let sent = false;
   let busy = false;
@@ -143,6 +150,9 @@ export function mountLab(options: RunControls): void {
   showFeedback = () => {
     menu.close();
     if (!feedback.open) {
+      feedbackLabel = '';
+      for (const button of controls.querySelectorAll('[data-feedback-label]'))
+        button.setAttribute('aria-pressed', 'false');
       verdict = '';
       sent = false;
       busy = false;
@@ -206,6 +216,19 @@ export function mountLab(options: RunControls): void {
       verdict = verdict === button.dataset.verdict ? '' : (button.dataset.verdict ?? '');
       for (const chip of controls.querySelectorAll<HTMLButtonElement>('[data-verdict]'))
         chip.setAttribute('aria-pressed', String(chip.dataset.verdict === verdict));
+    });
+  for (const button of controls.querySelectorAll<HTMLButtonElement>('[data-feedback-label]'))
+    button.addEventListener('click', () => {
+      const previous = feedbackLabel;
+      feedbackLabel = previous === button.dataset.feedbackLabel ? '' : (button.dataset.feedbackLabel ?? '');
+      const oldLabel = FEEDBACK_LABELS[previous as keyof typeof FEEDBACK_LABELS];
+      let text = note.value;
+      if (oldLabel && text === oldLabel) text = '';
+      else if (oldLabel && text.startsWith(`${oldLabel}\n\n`)) text = text.slice(oldLabel.length + 2);
+      const label = FEEDBACK_LABELS[feedbackLabel as keyof typeof FEEDBACK_LABELS];
+      note.value = [label, text].filter(Boolean).join('\n\n');
+      for (const chip of controls.querySelectorAll<HTMLButtonElement>('[data-feedback-label]'))
+        chip.setAttribute('aria-pressed', String(chip.dataset.feedbackLabel === feedbackLabel));
     });
   controls.querySelector('[data-download]')?.addEventListener('click', options.download);
   find<HTMLInputElement>('[data-events]').addEventListener('change', (event) => {

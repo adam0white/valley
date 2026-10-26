@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
+import { gunzipSync } from 'node:zlib';
 import { type Browser, chromium, type Page } from 'playwright-core';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { startBrowserServer, visibleText } from './browser-server.ts';
@@ -15,7 +16,10 @@ afterAll(async () => {
   await browser?.close();
 }, 30000);
 
-async function fixture(page: Page, mode: 'linked' | 'off' | 'dnt' | 'title' | 'unverified' = 'linked') {
+async function fixture(
+  page: Page,
+  mode: 'linked' | 'off' | 'dnt' | 'title' | 'unverified' | 'actual-off' = 'linked',
+) {
   page.setDefaultTimeout(4000);
   await page.route('https://human.adamwhite.work/**', (route) => route.fulfill({ status: 204, body: '' }));
   if (mode === 'dnt')
@@ -29,11 +33,11 @@ async function fixture(page: Page, mode: 'linked' | 'off' | 'dnt' | 'title' | 'u
       body: "import '/src/ui/style.css'; import '/node_modules/@adam0white/lab-kit/stage.css';",
     }),
   );
-  await page.goto(`${origin}/?lab=1`);
+  await page.goto(`${origin}/${mode === 'actual-off' ? '' : '?lab=1'}`);
   await page.evaluate(`(async (mode) => {
     const { save, newGame, load, fingerprint } = await import('/src/sim/game.ts');
     const { mountLab, lab, labScreen } = await import('/src/ui/lab.ts');
-    lab.setTelemetryOff(mode === 'off');
+    lab.setTelemetryOff(mode === 'off' || mode === 'actual-off');
     lab.setPersonaRecording(mode === 'unverified' ? 'unverified-fixture' : null); // Synthetic genuinely fresh component fixture.
     const run = save(newGame(7));
     document.body.innerHTML = '<header class="topbar"><button type="button" data-menu>Menu</button></header>';
@@ -41,8 +45,8 @@ async function fixture(page: Page, mode: 'linked' | 'off' | 'dnt' | 'title' | 'u
     target.feedbackCalls = []; target.runCalls = []; target.downloadCount = 0; target.recordingChoices = [];
     target.titleCount = 0; target.notebookCount = 0; target.bindCount = 0;
     target.replayFingerprint = (value) => fingerprint(load(value).valley);
-    lab.sendFeedback = async (...args) => { target.feedbackCalls.push(args); return 'feedback-test'; };
-    lab.sendRun = async (...args) => { target.runCalls.push(args); return 'run-test'; };
+    if (mode !== 'actual-off') lab.sendFeedback = async (...args) => { target.feedbackCalls.push(args); return 'feedback-test'; };
+    if (mode !== 'actual-off') lab.sendRun = async (...args) => { target.runCalls.push(args); return 'run-test'; };
     mountLab({ chooseRecording: async allow => { target.recordingChoices.push(allow); await new Promise(() => {}); }, getRun: () => mode === 'title' ? undefined : run, hasRun: () => mode !== 'title',
       download: () => { target.downloadCount++; target.downloadedRun = run; },
       bindVolume: async () => { target.bindCount++; },
@@ -229,6 +233,60 @@ it('does not cancel a pending valley when recording identity acknowledges', asyn
       return true;
     })()`);
     expect(result).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps quiet Feedback choices local and submits the literal note through the installed SDK', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const payloads: Record<string, unknown>[] = [];
+  try {
+    await fixture(page, 'actual-off');
+    await page.route('https://human.adamwhite.work/**', async (route) => {
+      const body = route.request().postDataBuffer();
+      if (body) payloads.push(JSON.parse(gunzipSync(body).toString()));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 'mock-note-only-receipt' }),
+      });
+    });
+    await sendWord(page);
+    const panel = feedback(page);
+    const stopping = panel.getByRole('button', { name: "I'm stopping", exact: true });
+    const confused = panel.getByRole('button', { name: "I'm confused", exact: true });
+    expect(await stopping.isVisible()).toBe(true);
+    expect(await confused.isVisible()).toBe(true);
+    const note = panel.locator('textarea').first();
+    await stopping.click();
+    expect(await note.inputValue()).toBe("I'm stopping");
+    await note.fill("I'm stopping because the grain account is unclear.\n\nKeep this detail.");
+    const edited = await note.inputValue();
+    await confused.click();
+    expect(await note.inputValue()).toBe(`I'm confused\n\n${edited}`);
+    await confused.click();
+    expect(await note.inputValue()).toBe(edited);
+    await stopping.click();
+    await confused.click();
+    expect(await note.inputValue()).toBe(`I'm confused\n\n${edited}`);
+    expect(payloads).toEqual([]);
+    const sharing = panel.getByRole('checkbox', {
+      name: 'Share this run and my play with the lab',
+      exact: true,
+    });
+    expect(await sharing.isChecked()).toBe(false);
+    await panel.getByRole('button', { name: 'Not sure', exact: true }).click();
+    await panel.getByRole('button', { name: 'Submit', exact: true }).click();
+    await expect.poll(() => visibleText(panel)).toContain('Sent. Your note is stored.');
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0]).toMatchObject({
+      note: `Verdict: mixed.\n\nI'm confused\n\n${edited}`,
+      run: { feedbackOnly: true },
+    });
+    expect(payloads[0]?.run).toEqual({ feedbackOnly: true });
+    expect(JSON.stringify(payloads)).not.toContain('state');
+    expect(await visibleText(panel)).toContain('mock-note-only-receipt');
   } finally {
     await page.close();
   }
