@@ -1,7 +1,12 @@
 import type { ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import { type Browser, chromium, type Page } from 'playwright-core';
+import { type Browser, type BrowserContext, chromium, type Page } from 'playwright-core';
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import { load, newGame, replay, save, stateJson } from '../src/sim/game.ts';
 import { startBrowserServer, visibleText } from './browser-server.ts';
 
 let server: ChildProcess;
@@ -333,3 +338,298 @@ it('offers ordinary file download and close without exposing New game', async ()
     await page.close();
   }
 });
+
+// Direct persistent ownership: no fixture or automatic context teardown may discard pending data.
+it('preserves SDK state before real file startup and reports recording refusal honestly', async () => {
+  const proof = mkdtempSync(join(process.env.VALLEY_SDK_PROOF_ROOT ?? tmpdir(), 'valley-sdk-'));
+  const profile = join(proof, 'profile');
+  let context: BrowserContext | undefined;
+  let page: Page;
+  let componentClosedEmpty = false;
+  preserveFileBrowser = true;
+  const observations: unknown[] = [];
+  const requests: string[] = [];
+  const snapshot = () =>
+    page.evaluate(async () => {
+      const encode = async (value: unknown): Promise<unknown> => {
+        if (value === undefined) return { undefined: true };
+        if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return value;
+        if (value instanceof Blob || value instanceof ArrayBuffer) {
+          const bytes = new Uint8Array(value instanceof Blob ? await value.arrayBuffer() : value);
+          let text = '';
+          for (const byte of bytes) text += String.fromCharCode(byte);
+          return {
+            binary: btoa(text),
+            bytes: bytes.length,
+            type: value instanceof Blob ? 'Blob' : 'ArrayBuffer',
+            mime: value instanceof Blob ? value.type : null,
+          };
+        }
+        if (Array.isArray(value)) return Promise.all(value.map(encode));
+        if (typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype)
+          throw Error('Unsupported backup value; preserve this profile.');
+        return Object.fromEntries(
+          await Promise.all(Object.entries(value).map(async ([key, item]) => [key, await encode(item)])),
+        );
+      };
+      const databases = [];
+      for (const info of await indexedDB.databases()) {
+        if (!info.name) throw Error('Unnamed database; preserve this profile.');
+        const request = indexedDB.open(info.name);
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        try {
+          const stores = [];
+          for (const name of db.objectStoreNames) {
+            const tx = db.transaction(name);
+            const store = tx.objectStore(name);
+            const keysRequest = store.getAllKeys();
+            const valuesRequest = store.getAll();
+            const [keys, values] = await Promise.all(
+              [keysRequest, valuesRequest].map(
+                (r) =>
+                  new Promise<unknown[]>((resolve, reject) => {
+                    r.onsuccess = () => resolve(r.result);
+                    r.onerror = () => reject(r.error);
+                  }),
+              ),
+            );
+            const indexes = [...store.indexNames].map((n) => {
+              const index = store.index(n);
+              return { name: n, keyPath: index.keyPath, unique: index.unique, multiEntry: index.multiEntry };
+            });
+            stores.push({
+              name,
+              keyPath: store.keyPath,
+              autoIncrement: store.autoIncrement,
+              indexes,
+              keys: await encode(keys),
+              values: await encode(values),
+            });
+          }
+          databases.push({ name: db.name, version: db.version, stores });
+        } finally {
+          db.close();
+        }
+      }
+      return {
+        origin: location.origin,
+        localStorage: { ...localStorage },
+        sessionStorage: { ...sessionStorage },
+        databases,
+      };
+    });
+  const retain = (name: string, value: unknown) => {
+    const bytes = Buffer.from(JSON.stringify(value, null, 2) + '\n');
+    const path = join(proof, name);
+    writeFileSync(path, bytes, { flag: 'wx', mode: 0o600 });
+    expect(readFileSync(path).equals(bytes)).toBe(true);
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(value);
+    return createHash('sha256').update(bytes).digest('hex');
+  };
+  const bounded = async <T>(operation: Promise<T>): Promise<T> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        operation,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(Error('Final preservation read timed out; HOLD profile.')), 5000);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  const hold = async (error: unknown): Promise<never> => {
+    console.error('HOLD: no automatic cleanup; retain browser/profile', profile, error);
+    return new Promise<never>(() => {
+      setInterval(() => {}, 1000);
+    });
+  };
+  try {
+    const componentContexts = browser.contexts();
+    retain('component-browser-empty.json', {
+      contexts: componentContexts.length,
+      pages: componentContexts.map((c) => c.pages().map((p) => p.url())),
+    });
+    if (componentContexts.length !== 0) await hold('Unexpected component context; queue unobserved.');
+    await browser.close();
+    componentClosedEmpty = true;
+    context = await chromium.launchPersistentContext(profile, { handleSIGTERM: false });
+    page = context.pages()[0] ?? (await context.newPage());
+    page.on('request', (request) => {
+      if (request.url().startsWith('https://human.adamwhite.work/'))
+        requests.push(request.method() + ' ' + request.url());
+    });
+    page.setDefaultTimeout(5000);
+    await page.goto(origin + '/icon.svg');
+    const pristine = await snapshot();
+    expect(pristine.databases).toEqual([]);
+    expect(pristine.localStorage).toEqual({});
+    expect(pristine.sessionStorage).toEqual({});
+    retain('initial-pristine.json', pristine);
+    await page.goto(origin + '/?file=1&labRunSource=agent');
+    await page.getByLabel('Open a Valley file').waitFor();
+    await expect
+      .poll(() => page.locator('[data-recording-status]').textContent())
+      .toContain('no compatible recording identity');
+    expect(await page.locator('.notice-footer .lk-telemetry-notice').count()).toBe(0);
+    expect(await page.evaluate(() => localStorage.getItem('hf-lab-player'))).toBeNull();
+    expect(page.url()).not.toContain('labRunSource');
+    observations.push({ phase: 'missing-identity', state: await snapshot() });
+    // Synthetic occupied origin only after the read-only pristine inventory above.
+    await page.goto(origin + '/icon.svg');
+    await page.evaluate(async () => {
+      localStorage.setItem('hf-lab-player', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+      localStorage.setItem('hf-lab-recording-off', '1');
+      localStorage.setItem('hf-lab-events-off:valley', '1');
+      localStorage.setItem('valley-log-v1', 'occupied-owner-sentinel');
+      localStorage.setItem('hf-lab:once:telemetry-notice-v1', '1');
+      sessionStorage.setItem('hf-lab-session:valley', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:' + Date.now());
+      sessionStorage.setItem('hf-lab-run:valley', 'cccccccccccccccccccccccccccccccc');
+      const request = indexedDB.open('valley', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('volumes');
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const tx = db.transaction('volumes', 'readwrite');
+      tx.objectStore('volumes').put(
+        { blob: new Blob(['owner-current'], { type: 'application/gzip' }), at: 1 },
+        'current',
+      );
+      tx.objectStore('volumes').put(
+        { blob: new Blob(['owner-history'], { type: 'application/gzip' }), at: 2 },
+        'history',
+      );
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    });
+    const occupied = await snapshot();
+    retain('occupied-before.json', occupied);
+    await page.clock.install();
+    await page.goto(origin + '/?file=1&labRunSource=agent');
+    await page.clock.pauseAt(Date.now() + 50);
+    await page.getByLabel('Open a Valley file').waitFor();
+    await expect
+      .poll(() => page.locator('[data-recording-status]').textContent())
+      .toContain('Recording is inactive');
+    expect(await page.locator('.notice-footer .lk-telemetry-notice').count()).toBe(0);
+    const fileBytes = process.env.VALLEY_SELECTED_FILE
+      ? readFileSync(process.env.VALLEY_SELECTED_FILE)
+      : Buffer.from(JSON.stringify(save(newGame(7), 0)));
+    const selected = JSON.parse(fileBytes.toString('utf8'));
+    const importFile = async (bytes: Buffer) => {
+      await page
+        .getByLabel('Open a Valley file')
+        .setInputFiles({ name: 'valley.json', mimeType: 'application/json', buffer: bytes });
+      await expect.poll(() => page.locator('#map').count()).toBe(1);
+    };
+    const downloadFile = async (name: string) => {
+      const pending = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Download this Valley file', exact: true }).click();
+      const stream = await (await pending).createReadStream();
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+      const bytes = Buffer.concat(chunks);
+      writeFileSync(join(proof, name), bytes, { flag: 'wx', mode: 0o600 });
+      expect(readFileSync(join(proof, name)).equals(bytes)).toBe(true);
+      return JSON.parse(bytes.toString('utf8'));
+    };
+    await importFile(fileBytes);
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    const exported = await downloadFile('actual-initial-export.json');
+    const body = (value: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(value).filter(([key]) => !['savedAt', 'label'].includes(key)));
+    expect(body(exported)).toEqual(body(selected));
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    const action = page.locator('#thumbs button.primary');
+    const actionText = await action.textContent();
+    await action.click();
+    await page.clock.runFor(1000);
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    const advanced = await downloadFile('actual-after-action-export.json');
+    expect(advanced.inputs.length).toBeGreaterThan(exported.inputs.length);
+    expect(advanced.state.people).toHaveLength(selected.state.people.length);
+    expect(advanced.state.kahya).toBeDefined();
+    expect(stateJson(load(advanced).valley)).toEqual(advanced.state);
+    const replayed = stateJson(
+      replay(
+        advanced.seed,
+        advanced.inputs,
+        advanced.minute,
+        advanced.cast,
+        advanced.plainEnglish,
+        advanced.rules,
+      ).valley,
+    );
+    expect(JSON.parse(JSON.stringify(replayed))).toEqual(advanced.state);
+    await page.getByRole('button', { name: 'Open another Valley file', exact: true }).click();
+    await importFile(Buffer.from(JSON.stringify(advanced)));
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    const reimported = await downloadFile('actual-reimport-export.json');
+    expect(body(reimported)).toEqual(body(advanced));
+    await page.getByRole('button', { name: 'Close file session', exact: true }).click();
+    await page.getByLabel('Open a Valley file').waitFor();
+    expect(await snapshot()).toEqual(occupied);
+    observations.push({
+      phase: 'full-selected-off-preference',
+      people: selected.state.people.length,
+      actionText,
+      selectedSha256: createHash('sha256').update(fileBytes).digest('hex'),
+      replayEquality: 'full JSON wire equality; signed zero is not distinguishable in JSON',
+      state: await snapshot(),
+    });
+    await page.goto(origin + '/icon.svg');
+    await page.evaluate(() => sessionStorage.setItem('hf-lab-session:valley', 'invalid-existing-session'));
+    const incompatible = await snapshot();
+    await page.goto(origin + '/?file=1');
+    await page.getByLabel('Open a Valley file').waitFor();
+    await expect
+      .poll(() => page.locator('[data-recording-status]').textContent())
+      .toContain('cannot be reused');
+    expect(await page.locator('.notice-footer .lk-telemetry-notice').count()).toBe(0);
+    expect(await snapshot()).toEqual(incompatible);
+    expect(requests).toEqual([]);
+    observations.push({ phase: 'incompatible-session', state: await snapshot() });
+  } finally {
+    // A verified private backup is always retained; only an actual zero queue permits closing.
+    // With timeout0 this loop keeps the direct context/profile alive even when a backup write fails.
+    if (context)
+      for (;;) {
+        try {
+          const [state, cookies] = await bounded(Promise.all([snapshot(), context.cookies()]));
+          const backup = {
+            state,
+            cookies,
+            observations,
+            requests,
+            profile,
+            restoration:
+              'Restore all listed origin keys and exact DB schemas/keys/values; binary base64 decodes to Blob(mime) or ArrayBuffer. Captured session keys remain private; do not transplant into an owner profile.',
+          };
+          const pending = state.databases.find((db) => db.name === 'hf-lab-pending');
+          const pieces = pending?.stores.find((store) => store.name === 'pieces');
+          if (pending && !pieces) await hold('Pending schema unknown; HOLD profile.');
+          if (pieces && (!Array.isArray(pieces.values) || pieces.values.length !== 0)) {
+            retain('nonzero-pending-private-backup.json', backup);
+            await hold('Pending nonzero; HOLD profile even after backup.');
+          }
+          const digest = retain('complete-final-private-backup.json', { ...backup, pendingCount: 0 });
+          console.log('VALLEY_SDK_COMPLETE_BACKUP=' + proof + ' SHA256=' + digest);
+          await context.close();
+          preserveFileBrowser = false;
+          break;
+        } catch (error) {
+          await hold(error);
+        }
+      }
+    else if (componentClosedEmpty) preserveFileBrowser = false;
+    else await hold('Component context preservation was not established.');
+  }
+}, 0);

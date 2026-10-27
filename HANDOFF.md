@@ -315,3 +315,25 @@ Close clears the active game, in-memory log and recovery volumes. Imported CastS
 source/archive objects and some UI closures may remain referenced. This does not establish
 release of all file memory. No owner-storage write or continued export follows from this
 retention. Review this limit on 2026-10-27.
+
+## File-session SDK preservation, 2026-10-27
+
+File mode selects published lab-client0.4.14/lab-kit0.5.16 preservation before the
+first SDK initialization. It does not create a recording identity, change existing
+privacy preferences or repair an incompatible session. The footer uses the real
+preservation notice only when the SDK reports recording active; otherwise it gives
+an honest inactive/refusal message. Recording off remains available. Native startup
+and the person Shelf boundary remain unchanged. The public URL source marker applies
+to new SDK records only; retained records are not relabelled.
+
+Controlled localhost source coverage imports the retained complete56-resident plus
+steward/six-starter file, performs an ordinary action, downloads/reimports the full
+public file and checks full JSON-wire same-input replay. JSON cannot distinguish
+signed zero. Synthetic occupied native Blob/history and privacy/session sentinels
+remain unchanged. Missing identity and incompatible session refuse recording
+without blocking file play. Localhost recording is stopped by SDK policy; these
+controls do not prove production transport, existing-Chrome preservation, service
+worker source freshness or player admission. Every direct test context retains a
+complete private inventory and closes only after an actual zero pending count;
+unknown/nonzero or backup failure holds the context indefinitely. Original failures
+and source-only limits remain in the private candidate receipt.

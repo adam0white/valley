@@ -5,7 +5,10 @@ import { toggleMusic } from './music.ts';
 
 export const FOREIGN_FILE = new URLSearchParams(location.search).get('file') === '1';
 export const LAB_TOOLS = new URLSearchParams(location.search).get('lab') === '1';
-export const lab = createLab({ game: 'valley' });
+export const lab = createLab({
+  game: 'valley',
+  ...(FOREIGN_FILE ? { preservation: 'preserve' as const } : {}),
+});
 lab.setPersonaRecording(`valley-startup-${crypto.randomUUID()}`);
 export type GameSpeed = 'automatic' | 'slow' | 'steady' | 'fast';
 type RunControls = {
@@ -17,6 +20,7 @@ type RunControls = {
   notebook: () => void;
   toTitle: () => void;
   closeFile?: () => void;
+  recordingChanged?: () => void;
   newGame?: () => void;
   getSpeed: () => GameSpeed;
   setSpeed: (speed: GameSpeed) => void;
@@ -124,6 +128,7 @@ export function mountLab(options: RunControls): void {
     menuOpener?.focus();
   };
   const sync = () => {
+    options.recordingChanged?.();
     find<HTMLInputElement>('[data-events]').checked = lab.telemetryOn;
     find('[data-feedback-lead]').textContent =
       'Send a note about this game. You can choose whether to share your play.';

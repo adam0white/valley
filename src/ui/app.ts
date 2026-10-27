@@ -113,7 +113,7 @@ interface Log {
   savedAt: string;
 }
 
-const notice = telemetryNotice();
+const notice = telemetryNotice(undefined, FOREIGN_FILE ? { preservation: 'preserve' } : {});
 // Use portable notice metrics without shrinking text or changing body typography.
 if (notice) {
   notice.style.paddingInline = '2px';
@@ -123,7 +123,30 @@ if (notice) {
 }
 const noticeFooter = document.createElement('footer');
 noticeFooter.className = 'notice-footer';
-if (notice) noticeFooter.append(notice);
+const recordingStatus = document.createElement('p');
+recordingStatus.dataset.recordingStatus = '';
+recordingStatus.setAttribute('role', 'status');
+function refreshRecordingNotice() {
+  if (!FOREIGN_FILE) return;
+  const status = lab.preservationStatus;
+  if (status === 'existing-local' && lab.telemetryOn) {
+    recordingStatus.remove();
+    if (notice && notice.parentNode !== noticeFooter) noticeFooter.append(notice);
+    return;
+  }
+  notice?.remove();
+  recordingStatus.textContent =
+    status === 'missing-identity'
+      ? 'Recording is unavailable because this browser has no compatible recording identity. You can still play and download this file.'
+      : status === 'incompatible-session'
+        ? 'Recording is unavailable because this tab’s recording session cannot be reused. You can still play and download this file.'
+        : status === 'identity-mismatch'
+          ? 'Recording is unavailable because this browser has conflicting recording identities. You can still play and download this file.'
+          : 'Recording is inactive in this file session. You can still play and download this file.';
+  if (recordingStatus.parentNode !== noticeFooter) noticeFooter.append(recordingStatus);
+}
+if (FOREIGN_FILE) refreshRecordingNotice();
+else if (notice) noticeFooter.append(notice);
 document.body.append(noticeFooter);
 const app = document.getElementById('app') as HTMLElement;
 let g: Game | null = null;
@@ -496,6 +519,7 @@ export function start() {
     toTitle: pauseToCover,
     newGame: FOREIGN_FILE ? undefined : () => void begin(Math.floor(Math.random() * 1e9)),
     closeFile: closeFileSession,
+    recordingChanged: refreshRecordingNotice,
     getSpeed: () => speed,
     setSpeed: (value) => {
       speed = value;
@@ -553,6 +577,7 @@ function closeFileSession() {
 }
 
 function fileTitle() {
+  refreshRecordingNotice();
   cancelAnimationFrame(raf);
   stage?.destroy();
   stage = null;
@@ -913,6 +938,7 @@ function rateNow(t: number): number {
 }
 
 function frame(t: number) {
+  refreshRecordingNotice();
   if (!g) return;
   const s = g.valley;
   const elapsed = Math.max(0, t - last);
