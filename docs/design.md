@@ -336,3 +336,35 @@ matching release with browser verification. Actual existing-Chrome local verific
 is a gap in this batch. Adam accepts feel separately; owner/device and cold-player
 input remain due 2026-11-03 where previously assigned. These are separate gates, not a
 blanket owner block on remaining engineering.
+
+## Deferred after the second same-tester retest (2026-10-27)
+
+Round retests-1027b played live `efdb940` (0.3.1) with the same 14 testers ([playtest](playtests/2026-10-27-retest2.md)). Verdict: **finished** under the two-iteration rule (3 keep, 11 mixed, 0 quit). Every remaining ask is deferred here.
+
+- F-1575 (retests-1027b, would have blocked): without the spoken-answers tick a visit has no Say and nothing says so; menu New game skips the title page (Nia only). Target 2026-11-03.
+- F-1576 (retests-1027b, would have blocked): Zehra never speaks to the player in either version; show which gate is closed on her card. Target 2026-11-03.
+- F-1591 (retests-1027b, would have blocked): name one household and a reason after the barley is cut. Target 2026-11-10.
+- F-1294 (with F-1118, F-1172, F-1286; retests-1027b): the phone notebook shows two to four lines after the call; replies, results and buttons sit below the fold. Target 2026-11-03.
+- F-1288 (with F-1309, F-1312; retests-1027b): one fixed saying when the call is not open; show gated sayings greyed with the reason and add a line that fits the visit. Target 2026-11-10.
+- F-1162 (retests-1027b): the ledger and header keep "Rain is expected on 20 July" on the storm day and show no storm loss. Target 2026-11-03.
+- F-1316 (with F-1121, F-1134, F-1136; retests-1027b): walks and visits are idle waits; let Skip finish them. Target 2026-11-10.
+- F-1115 (retests-1027b): the same delay line repeats. Target 2026-11-10.
+- F-1139 (retests-1027b): replies come from "Someone from the … house" with no name. Target 2026-11-10.
+- F-1292 (retests-1027b): name the people who came to cut. Target 2026-11-10.
+- F-1123 (retests-1027b): show key facts, such as a new mother, before pressing. Target 2026-11-10.
+- F-1124 (retests-1027b): exact numbers in the ledger. Target 2026-11-10.
+- F-1319 (retests-1027b): the grain confirmation does not show what will remain. Target 2026-11-10.
+- F-1577 (retests-1027b): explain "your guess" on the rain-guess line; it looks like a control. Target 2026-11-10.
+- F-1578 (retests-1027b): group buttons change names and order as replies arrive. Target 2026-11-10.
+- F-1579 (retests-1027b): the came/delayed count changes without a reason. Target 2026-11-10.
+- F-1580 (retests-1027b): add "Let them finish first" to the household page. Target 2026-11-10.
+- F-1581 (retests-1027b): phone Cancel on the grain confirmation sits under the footer. Target 2026-11-10.
+- F-1582 (retests-1027b): desktop map labels overlap near the residence; the house row is cut off. Target 2026-11-10.
+- F-1583 (retests-1027b): record Yusuf's promise to repay the grain. Target 2026-11-10.
+- F-1584 (retests-1027b): give the reason at Visit and Call when they are grey during a visit. Target 2026-11-10.
+- F-1585 (retests-1027b): say why the call stays open to 24 July when rain is due on 20 July. Target 2026-11-10.
+- F-1586 (retests-1027b): explain the other title-page options. Target 2026-11-10.
+- F-1587 (retests-1027b): show Say from the notebook during a visit and mark a pending answer. Target 2026-11-10.
+- F-1588 (retests-1027b): the clock line gives the wrong reason in some views. Target 2026-11-10.
+- F-1589 (retests-1027b): give each "Let them finish first" button its group in the label. Target 2026-11-10.
+- F-1590 (retests-1027b): say plainly that the saved place is kept. Target 2026-11-10.
