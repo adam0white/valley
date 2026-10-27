@@ -3,6 +3,7 @@ import { feedbackPersonaControl, feedbackSharePlay } from '@adam0white/lab-kit';
 import type { SavedGame } from '../sim/game.ts';
 import { toggleMusic } from './music.ts';
 
+export const FOREIGN_FILE = new URLSearchParams(location.search).get('file') === '1';
 export const LAB_TOOLS = new URLSearchParams(location.search).get('lab') === '1';
 export const lab = createLab({ game: 'valley' });
 lab.setPersonaRecording(`valley-startup-${crypto.randomUUID()}`);
@@ -15,6 +16,7 @@ type RunControls = {
   bindVolume: () => Promise<void>;
   notebook: () => void;
   toTitle: () => void;
+  closeFile?: () => void;
   newGame?: () => void;
   getSpeed: () => GameSpeed;
   setSpeed: (speed: GameSpeed) => void;
@@ -46,7 +48,7 @@ export function mountLab(options: RunControls): void {
   controls.id = 'lab-controls';
   controls.innerHTML = `<dialog class="game-menu-panel" aria-labelledby="valley-menu-title">
     <header class="menu-head"><h2 id="valley-menu-title">Game menu <small data-menu-date></small></h2><button type="button" data-close-menu aria-label="Close menu">×</button></header>
-    <div class="menu-body"><button type="button" data-music aria-pressed="false">Music: off</button><p data-save-status role="status"></p><p>Time stops while this menu is open. The game saves your progress as you play.</p>
+    <div class="menu-body"><button type="button" data-music aria-pressed="false">Music: off</button><p data-save-status role="status"></p><p>Time stops while this menu is open. ${FOREIGN_FILE ? 'This file stays in this tab. Download it to keep your progress.' : 'The game saves your progress as you play.'}</p>
     ${
       LAB_TOOLS
         ? `<button type="button" data-notebook>The notebook <span aria-hidden="true">▸</span></button>
@@ -55,7 +57,7 @@ export function mountLab(options: RunControls): void {
         : ''
     }<button type="button" data-feedback>Feedback <span aria-hidden="true">▸</span></button>
     <button type="button" data-fullscreen>Full screen</button>
-    <button type="button" data-new>New game</button><span data-new-confirm hidden>Replace your saved game? <button type="button" data-confirm-new>Start new game</button><button type="button" data-cancel-new>Cancel</button></span>
+    <button type="button" data-new${FOREIGN_FILE ? ' hidden disabled' : ''}>New game</button>${FOREIGN_FILE ? '<button type="button" data-file-download>Download this Valley file</button><button type="button" data-file-open>Open another Valley file</button><button type="button" data-file-close>Close file session</button>' : ''}<span data-new-confirm hidden>Replace your saved game? <button type="button" data-confirm-new>Start new game</button><button type="button" data-cancel-new>Cancel</button></span>
     <a href="https://human.adamwhite.work/games/" target="_top">All games</a></div>
     <footer class="menu-footer"><label><input type="checkbox" data-events> Recording</label><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a><button type="button" class="primary" data-resume>Resume</button></footer>
   </dialog>
@@ -185,7 +187,7 @@ export function mountLab(options: RunControls): void {
     options.notebook();
   });
   find('[data-new]').addEventListener('click', () => {
-    find('[data-new-confirm]').hidden = false;
+    if (!FOREIGN_FILE) find('[data-new-confirm]').hidden = false;
   });
   find('[data-cancel-new]').addEventListener('click', () => {
     find('[data-new-confirm]').hidden = true;
@@ -193,7 +195,7 @@ export function mountLab(options: RunControls): void {
   find('[data-confirm-new]').addEventListener('click', () => {
     find('[data-new-confirm]').hidden = true;
     menu.close();
-    options.newGame?.();
+    if (!FOREIGN_FILE) options.newGame?.();
   });
   find('[data-fullscreen]').addEventListener('click', async () => {
     try {
@@ -231,6 +233,15 @@ export function mountLab(options: RunControls): void {
         chip.setAttribute('aria-pressed', String(chip.dataset.feedbackLabel === feedbackLabel));
     });
   controls.querySelector('[data-download]')?.addEventListener('click', options.download);
+  controls.querySelector('[data-file-download]')?.addEventListener('click', options.download);
+  controls.querySelector('[data-file-open]')?.addEventListener('click', () => {
+    menu.close();
+    options.toTitle();
+  });
+  controls.querySelector('[data-file-close]')?.addEventListener('click', () => {
+    menu.close();
+    options.closeFile?.();
+  });
   find<HTMLInputElement>('[data-events]').addEventListener('change', (event) => {
     const on = (event.target as HTMLInputElement).checked;
     lab.setTelemetryOff(!on);

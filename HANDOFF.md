@@ -301,3 +301,17 @@ Miniflare release. Do not force an incompatible transitive major.
 Remaining technical receipts and per-ask decisions are in
 ~/code/.lab-scratch/v3/valley/report.md. Adam's November3 reading/feel, F-492/F-465
 acceptance and F-491 retest remain separate. Friends' playtests and Show HN stay paused.
+
+## Preserving external-file source candidate, 2026-10-26
+
+Remaining: independent review, exact source gates/delivery, then separately authorized existing-Chrome/source-and-service-worker proof and admission. Source-only `?file=1` opens a full public Valley file before reading the owner ledger or constructing the person Shelf. Its log/recovery volumes remain in memory; Download preserves complete public state, six starter people/receipts/source archives and all native residents/steward. Menu, daily/end/hidden-page/close paths do not write the owner's log/volume database. Foreign mode neither registers nor unregisters service workers; an existing cached worker may still serve old code and needs separate runtime proof. Loaded receipts remain archive provenance, not shared ownership; no Shelf claims, consent changes, checkpoint publication or alternative histories are enabled. Normal native persistence and simulation editions stay unchanged.
+
+The selected full file derives through the actual public restoreState/save/load APIs from retained f711 replies native state and input log; exportRun's captured empty archive projection is explicitly recorded separately from real UI export execution. Later controlled localhost UI downloads preserve all56residents plus steward, six starter snapshots, rules and complete inputs. Full restore and JSON-wire replay match; strict replay still differs in signed negative zero. Original raw files/failures are retained. No claim of exact old local-Resume ownership, fresh SDK identity, owner-profile safety, recording ingestion or player acceptance. Normal SDK privacy/recording and natural pending/journal lifecycle remain separate qualified effects. Localhost targeted final queue count must be read before browser cleanup; failed early attempts lacking that count remain disclosed. Collection/report disposition remains director-owned. This source candidate does not authorize deployment or admission; the later clean1f15 release window is separate. Exact private source/proof receipts: `~/code/.lab-scratch/playtest-b/valley-preserving-foreign-file-candidate-v1/`.
+
+
+### File-session memory retention limit (review 2026-10-27)
+
+Close clears the active game, in-memory log and recovery volumes. Imported CastSession
+source/archive objects and some UI closures may remain referenced. This does not establish
+release of all file memory. No owner-storage write or continued export follows from this
+retention. Review this limit on 2026-10-27.

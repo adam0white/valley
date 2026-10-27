@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { type Browser, chromium, type Page } from 'playwright-core';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { RulesEdition } from '../src/sim/edition.ts';
@@ -8,13 +9,16 @@ import { startBrowserServer, visibleText } from './browser-server.ts';
 let server: ChildProcess;
 let browser: Browser;
 let origin: string;
+let preserveForeignBrowser = false;
 beforeAll(async () => {
   ({ server, origin } = await startBrowserServer('ui-test'));
   browser = await chromium.launch();
 }, 30000);
 afterAll(async () => {
-  server?.kill('SIGTERM');
-  await browser?.close();
+  if (!preserveForeignBrowser) {
+    server?.kill('SIGTERM');
+    await browser?.close();
+  }
 }, 30000);
 
 async function open(
@@ -1388,6 +1392,232 @@ it.each<{ name: string; minute: number; inputs: Input[] }>([
       );
     }
   } finally {
+    await page.close();
+  }
+});
+
+it('opens a foreign file without reading or replacing occupied native storage or constructing the Shelf', async () => {
+  const page = await browser.newPage();
+  try {
+    await page.route('**/src/main.ts', (route) =>
+      route.fulfill({ status: 200, contentType: 'text/javascript', body: '' }),
+    );
+    await page.goto(origin);
+    await page.evaluate(async () => {
+      localStorage.setItem('valley-log-v1', 'occupied-owner-log');
+      localStorage.setItem('hf-persona-opt-in', '0');
+      await new Promise<void>((resolve) => {
+        const request = indexedDB.open('valley', 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('volumes');
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction('volumes', 'readwrite');
+          tx.objectStore('volumes').put({ owner: true, gz: new Blob(['owner-current']) }, 'current');
+          tx.objectStore('volumes').put({ owner: true, gz: new Blob(['owner-history']) }, 'history:owner');
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+        };
+      });
+    });
+    await page.addInitScript(() => {
+      const target = window as unknown as {
+        nativeReads: number;
+        nativeWrites: number;
+        swRegistrations: number;
+      };
+      target.nativeReads = 0;
+      target.nativeWrites = 0;
+      target.swRegistrations = 0;
+      const get = Storage.prototype.getItem;
+      Storage.prototype.getItem = function (key) {
+        if (key === 'valley-log-v1') target.nativeReads++;
+        return get.call(this, key);
+      };
+      const set = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key === 'valley-log-v1') target.nativeWrites++;
+        return set.call(this, key, value);
+      };
+      const open = indexedDB.open.bind(indexedDB);
+      indexedDB.open = (name, version) => {
+        if (name === 'valley') target.nativeReads++;
+        return open(name, version);
+      };
+      navigator.serviceWorker.register = async () => {
+        target.swRegistrations++;
+        throw new Error('unexpected registration');
+      };
+    });
+    await page.unroute('**/src/main.ts');
+    await page.clock.install();
+    await page.goto(`${origin}/?file=1`);
+    await page.clock.pauseAt(Date.now() + 50);
+    await expect.poll(() => page.getByLabel('Open a Valley file').count()).toBe(1);
+    // Compare the exact uploaded JSON wire file, not the pre-serialization native -0 values.
+    const fileBytes = process.env.VALLEY_SELECTED_FILE
+      ? readFileSync(process.env.VALLEY_SELECTED_FILE)
+      : Buffer.from(JSON.stringify(save(newGame(7), 0)));
+    const file = JSON.parse(fileBytes.toString('utf8'));
+    await page.getByLabel('Open a Valley file').setInputFiles({
+      name: 'valley.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(file)),
+    });
+    await expect.poll(() => page.locator('#map').count()).toBe(1);
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    const pendingDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download this Valley file', exact: true }).click();
+    const download = await pendingDownload;
+    const stream = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+    const exported = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    expect(exported.state).toEqual(file.state);
+    expect(exported.cast).toEqual(file.cast);
+    expect(exported.inputs).toEqual(file.inputs);
+    expect(exported.castHeads).toEqual(file.castHeads ?? {});
+    expect(exported.castSources).toEqual(file.castSources ?? {});
+    expect(exported.rules).toBe(file.rules);
+    console.log(`FOREIGN_PUBLIC_EXPORT_PEOPLE=${exported.state.people.length}`);
+    if (process.env.VALLEY_PUBLIC_PROOF_DIR)
+      writeFileSync(
+        `${process.env.VALLEY_PUBLIC_PROOF_DIR}/actual-public-export.json`,
+        JSON.stringify(exported),
+      );
+    await page.getByRole('button', { name: 'Open another Valley file', exact: true }).click();
+    await expect.poll(() => page.getByLabel('Open a Valley file').count()).toBe(1);
+    await page
+      .getByLabel('Open a Valley file')
+      .setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
+    await expect.poll(() => page.locator('#foreign-result').textContent()).toContain('full Valley file');
+    await page.getByLabel('Open a Valley file').setInputFiles({
+      name: 'unknown.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify({ ...file, unknownNativeField: true })),
+    });
+    await expect.poll(() => page.locator('#foreign-result').textContent()).toContain('unsupported fields');
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('button', { name: 'Open another Valley file', exact: true }).click();
+    await expect.poll(() => page.getByLabel('Open a Valley file').count()).toBe(1);
+    await page.getByLabel('Open a Valley file').setInputFiles({
+      name: 'reimport.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(exported)),
+    });
+    await expect.poll(() => page.locator('#map').count()).toBe(1);
+    const primary = page.locator('#thumbs button.primary');
+    console.log(`FOREIGN_ORDINARY_CONTROL=${await primary.textContent()}`);
+    await primary.click();
+    await page.clock.runFor(1000);
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    const afterDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download this Valley file', exact: true }).click();
+    const afterStream = await (await afterDownload).createReadStream();
+    const afterChunks: Buffer[] = [];
+    for await (const chunk of afterStream) afterChunks.push(Buffer.from(chunk));
+    const afterInput = JSON.parse(Buffer.concat(afterChunks).toString('utf8'));
+    expect(afterInput.inputs.length).toBeGreaterThan(exported.inputs.length);
+    expect(afterInput.state.people).toHaveLength(exported.state.people.length);
+    expect(afterInput.state.kahya).toBeDefined();
+    if (process.env.VALLEY_PUBLIC_PROOF_DIR)
+      writeFileSync(
+        `${process.env.VALLEY_PUBLIC_PROOF_DIR}/actual-after-input-export.json`,
+        JSON.stringify(afterInput),
+      );
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('button', { name: 'Close file session', exact: true }).click();
+    expect(await page.getByLabel('Open a Valley file').count()).toBe(1);
+    expect(
+      await page.evaluate(() => {
+        const t = window as unknown as { nativeReads: number; nativeWrites: number; swRegistrations: number };
+        return {
+          reads: t.nativeReads,
+          writes: t.nativeWrites,
+          registrations: t.swRegistrations,
+          consent: localStorage.getItem('hf-persona-opt-in'),
+          shelfFrames: [...document.querySelectorAll('iframe')].filter(
+            (f) => f.title === 'Fictional person shelf',
+          ).length,
+        };
+      }),
+    ).toEqual({ reads: 0, writes: 0, registrations: 0, consent: '0', shelfFrames: 0 });
+    const owner = await page.evaluate(async () => {
+      const log = localStorage.getItem('valley-log-v1');
+      const rows = await new Promise<{ key: string; owner: boolean; text: string }[]>((resolve, reject) => {
+        const request = indexedDB.open('valley');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction('volumes');
+          const values = tx.objectStore('volumes').getAll();
+          const keys = tx.objectStore('volumes').getAllKeys();
+          tx.oncomplete = async () => {
+            const result = await Promise.all(
+              values.result.map(async (row, index) => ({
+                key: String(keys.result[index]),
+                owner: row.owner,
+                text: await row.gz.text(),
+              })),
+            );
+            db.close();
+            resolve(result);
+          };
+        };
+      });
+      return { log, rows };
+    });
+    expect(owner).toEqual({
+      log: 'occupied-owner-log',
+      rows: [
+        { key: 'current', owner: true, text: 'owner-current' },
+        { key: 'history:owner', owner: true, text: 'owner-history' },
+      ],
+    });
+    if (process.env.VALLEY_PUBLIC_PROOF_DIR)
+      writeFileSync(
+        `${process.env.VALLEY_PUBLIC_PROOF_DIR}/owner-native-sentinel-readback.json`,
+        JSON.stringify(owner),
+      );
+  } finally {
+    preserveForeignBrowser = true;
+    const pending = await page.evaluate(async () => {
+      const names = await indexedDB.databases();
+      if (!names.some((db) => db.name === 'hf-lab-pending')) return 0;
+      return new Promise<number>((resolve, reject) => {
+        const request = indexedDB.open('hf-lab-pending');
+        request.onsuccess = () => {
+          const db = request.result;
+          const count = db.transaction('pieces').objectStore('pieces').count();
+          count.onsuccess = () => {
+            db.close();
+            resolve(count.result);
+          };
+          count.onerror = () => reject(count.error);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    });
+    expect(pending, 'Localhost SDK pending pieces must be zero before cleanup').toBe(0);
+    console.log(`FOREIGN_SOURCE_PENDING_AT_CLOSE=${pending}`);
+    if (process.env.VALLEY_PUBLIC_PROOF_DIR)
+      writeFileSync(
+        `${process.env.VALLEY_PUBLIC_PROOF_DIR}/pending-at-close.json`,
+        JSON.stringify({
+          observed: pending,
+          observedAt: new Date().toISOString(),
+          localhost: true,
+          APIinterception: false,
+        }),
+      );
+    preserveForeignBrowser = false;
     await page.close();
   }
 });

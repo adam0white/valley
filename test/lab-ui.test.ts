@@ -7,13 +7,16 @@ import { startBrowserServer, visibleText } from './browser-server.ts';
 let server: ChildProcess;
 let browser: Browser;
 let origin: string;
+let preserveFileBrowser = false;
 beforeAll(async () => {
   ({ server, origin } = await startBrowserServer('lab-ui-test'));
   browser = await chromium.launch();
 }, 30000);
 afterAll(async () => {
-  server?.kill('SIGTERM');
-  await browser?.close();
+  if (!preserveFileBrowser) {
+    server?.kill('SIGTERM');
+    await browser?.close();
+  }
 }, 30000);
 
 async function fixture(
@@ -288,6 +291,45 @@ it('keeps quiet Feedback choices local and submits the literal note through the 
     expect(JSON.stringify(payloads)).not.toContain('state');
     expect(await visibleText(panel)).toContain('mock-note-only-receipt');
   } finally {
+    await page.close();
+  }
+});
+
+it('offers ordinary file download and close without exposing New game', async () => {
+  const page = await browser.newPage();
+  try {
+    await page.route('**/src/main.ts', (route) =>
+      route.fulfill({ status: 200, contentType: 'text/javascript', body: '' }),
+    );
+    await page.goto(`${origin}/?file=1`);
+    await page.evaluate(`(async () => {
+      const { mountLab, openMenu } = await import('/src/ui/lab.ts');
+      mountLab({ getRun:()=>undefined, hasRun:()=>false, chooseRecording:async()=>{}, download:()=>{document.body.dataset.download='requested'}, bindVolume:async()=>{}, notebook:()=>{}, toTitle:()=>{document.body.dataset.fileOpen='requested'}, closeFile:()=>{document.body.dataset.fileClose='requested'}, getSpeed:()=>'automatic', setSpeed:()=>{}, date:()=>'' });
+      openMenu();
+    })()`);
+    expect(await page.getByRole('button', { name: 'New game', exact: true }).count()).toBe(0);
+    await page.getByRole('button', { name: 'Close file session', exact: true }).click();
+    expect(await page.locator('body').getAttribute('data-file-close')).toBe('requested');
+  } finally {
+    preserveFileBrowser = true;
+    const pending = await page.evaluate(async () => {
+      if (!(await indexedDB.databases()).some((d) => d.name === 'hf-lab-pending')) return 0;
+      return new Promise<number>((resolve, reject) => {
+        const request = indexedDB.open('hf-lab-pending');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const count = db.transaction('pieces').objectStore('pieces').count();
+          count.onsuccess = () => {
+            db.close();
+            resolve(count.result);
+          };
+          count.onerror = () => reject(count.error);
+        };
+      });
+    });
+    expect(pending).toBe(0);
+    preserveFileBrowser = false;
     await page.close();
   }
 });

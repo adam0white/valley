@@ -113,3 +113,26 @@ it('blocks disclosure during a levy but permits it after that levy expires', () 
   act(g, { verb: 'visit', house: 'coban' });
   expect(g.valley.flags.beats).toContain('cast-disclosed:yusuf');
 });
+
+it('keeps a foreign file session without a Shelf, ownership publication or new game', async () => {
+  const { CastSession } = await import('../src/ui/cast-session.ts');
+  const session = new CastSession(
+    {
+      setPersonaRecording() {},
+      allowPersonaRecording() {},
+      personaRecordingAllowed: true,
+      build: () => ({}),
+    },
+    null,
+  );
+  const game = newGame(7);
+  await session.loaded(game, undefined, true, { castHeads: {}, castSources: {} });
+  expect(session.fileOrigin).toBe(true);
+  expect(session.heads).toEqual({});
+  await expect(session.fresh(7)).rejects.toThrow('file session');
+  await session.checkpoint(true);
+  await session.alternative('hf.cast.yusuf.well');
+  expect(session.heads).toEqual({});
+  expect(session.exportRun(save(game)).state).toEqual(save(game).state);
+  expect(session.exportRun(save(game)).castSources).toEqual({});
+});

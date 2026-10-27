@@ -58,7 +58,7 @@ export class CastSession {
       Lab,
       'setPersonaRecording' | 'allowPersonaRecording' | 'personaRecordingAllowed' | 'build'
     >,
-    readonly shelf: Shelf = personaChannel(),
+    readonly shelf: Shelf | null = personaChannel(),
   ) {
     this.invalidate(); // Must happen before any run/log/save/upload hook is attached.
   }
@@ -70,6 +70,7 @@ export class CastSession {
     this.render();
   }
   async fresh(seed: number, localOnly = false, rules?: RulesEdition): Promise<Game> {
+    if (!this.shelf) throw new Error('Open a Valley file in this file session.');
     if (localEdition(rules)) localOnly = true; // No reviewed portable dialect for this edition.
     this.invalidate();
     const generation = this.generation;
@@ -229,6 +230,7 @@ export class CastSession {
     this.render();
   }
   async checkpoint(manual = false): Promise<void> {
+    if (!this.shelf) return;
     if (localEdition(this.game ? rulesOf(this.game.valley) : undefined)) {
       if (manual) {
         this.status =
@@ -332,6 +334,7 @@ export class CastSession {
   }
   /** Explicit new root from this played source, never adoption of embedded ownership. */
   async alternative(castId: string): Promise<void> {
+    if (!this.shelf) return;
     if (this.busy) return;
     const g = this.game;
     const generation = this.generation;
@@ -404,9 +407,10 @@ export class CastSession {
   }
   connect(saveLocal: () => void) {
     this.saveLocal = saveLocal;
-    watchPersonaCheckpoint(() => this.checkpoint());
+    if (this.shelf) watchPersonaCheckpoint(() => this.checkpoint());
   }
   mount(host: HTMLElement, saveLocal: () => void) {
+    if (!this.shelf) return;
     this.saveLocal = saveLocal;
     this.panel = document.createElement('section');
     this.panel.className = 'cast-controls';
@@ -416,7 +420,7 @@ export class CastSession {
     box?.addEventListener('change', () => {
       const enabled = box.checked;
       this.invalidate();
-      this.shelf.setEnabled(enabled);
+      this.shelf?.setEnabled(enabled);
       this.status = enabled
         ? 'People can now continue between games in this browser. New games check all matching people before starting.'
         : 'People will not continue between games in this browser. You can still play here and download a copy.';
@@ -483,6 +487,6 @@ export class CastSession {
     if (status)
       status.textContent = `${localEdition(this.game ? rulesOf(this.game.valley) : undefined) ? 'People in this edition stay in its local ledger. No reviewed mapping permits publishing them to another chapter. ' : ''}${this.status} Recorded play links across games on this device when recording is on. Change recording in the menu.`;
     const box = this.panel.querySelector<HTMLInputElement>('[data-continuity]');
-    if (box) box.checked = this.shelf.enabled;
+    if (box) box.checked = this.shelf?.enabled ?? false;
   }
 }

@@ -73,7 +73,7 @@ import {
   type ValleyState,
 } from '../sim/valley.ts';
 import { CastSession, type LocalCastReceipt } from './cast-session.ts';
-import { LAB_TOOLS, lab, labScreen, mountLab, openFeedback } from './lab.ts';
+import { FOREIGN_FILE, LAB_TOOLS, lab, labScreen, mountLab, openFeedback } from './lab.ts';
 import {
   callUnavailable,
   cropReturnWords,
@@ -92,8 +92,10 @@ import {
 } from './presentation.ts';
 import { closingGrain } from './tally.ts';
 
-const castSession = new CastSession(lab);
+const castSession = new CastSession(lab, FOREIGN_FILE ? null : undefined);
 const LOG = 'valley-log-v1';
+let fileLog: Log | null = null;
+const fileVolumes = new Map<string, Bound>();
 let speed: Pace = 'automatic';
 const HUB = 'https://human.adamwhite.work';
 
@@ -190,6 +192,11 @@ function writeLog(): boolean {
   };
   try {
     const text = JSON.stringify(log);
+    if (FOREIGN_FILE) {
+      fileLog = log;
+      lab.captureSave(JSON.parse(text));
+      return true;
+    }
     localStorage.setItem(LOG, text);
     lab.captureSave(JSON.parse(text));
     return localStorage.getItem(LOG) === text;
@@ -199,6 +206,7 @@ function writeLog(): boolean {
 }
 
 function readLog(): Log | null {
+  if (FOREIGN_FILE) return fileLog;
   storedLogProblem = false;
   try {
     const raw = localStorage.getItem(LOG);
@@ -216,6 +224,7 @@ function readLog(): Log | null {
 }
 
 function db(): Promise<IDBDatabase> {
+  if (FOREIGN_FILE) return Promise.reject(new Error('Native storage is unavailable in a file session.'));
   return new Promise((res, rej) => {
     const r = indexedDB.open('valley', 1);
     r.onupgradeneeded = () => r.result.createObjectStore('volumes');
@@ -260,6 +269,13 @@ async function bindVolume(): Promise<boolean> {
       gz: await gzip(json),
     };
     if (!current()) return false;
+    if (FOREIGN_FILE) {
+      fileVolumes.set(`history:${castSession.runId}:${bound.digest}`, bound);
+      fileVolumes.set('current', bound);
+      volume++;
+      lab.captureSave({ seed: bound.seed, k: bound.k, minute: bound.minute, state: JSON.parse(json) });
+      return writeLog();
+    }
     const d = await db();
     if (!current()) return false;
     await new Promise<void>((res, rej) => {
@@ -281,6 +297,7 @@ async function bindVolume(): Promise<boolean> {
 }
 
 async function readVolume(): Promise<Bound | null> {
+  if (FOREIGN_FILE) return fileVolumes.get('current') ?? null;
   try {
     const d = await db();
     return await new Promise((res) => {
@@ -297,27 +314,30 @@ async function openVolumes() {
   const dialog = document.createElement('dialog');
   dialog.className = 'volumes-panel';
   dialog.setAttribute('aria-label', 'Prior ledger volumes');
-  dialog.innerHTML =
-    '<button data-close>Close</button><h2>Prior volumes</h2><p>These are real recovery volumes saved in this browser. Reading them does not rewind the game or give an older person ownership of a new history.</p><div data-pages role="status">Reading volumes…</div>';
+  dialog.innerHTML = `<button data-close>Close</button><h2>Prior volumes</h2><p>${FOREIGN_FILE ? 'These recovery volumes stay in this file session. Download the full game file to keep your progress.' : 'These are real recovery volumes saved in this browser. Reading them does not rewind the game or give an older person ownership of a new history.'}</p><div data-pages role="status">Reading volumes…</div>`;
   document.body.append(dialog);
   dialog.querySelector('[data-close]')?.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => dialog.remove());
   dialog.showModal();
   try {
-    const d = await db();
-    const entries = await new Promise<Bound[]>((resolve, reject) => {
-      const tx = d.transaction('volumes');
-      const rows: Bound[] = [];
-      const r = tx.objectStore('volumes').openCursor(IDBKeyRange.bound('history:', 'history;'));
-      r.onsuccess = () => {
-        const cursor = r.result;
-        if (!cursor) return;
-        rows.push(cursor.value as Bound);
-        cursor.continue();
-      };
-      tx.oncomplete = () => resolve(rows);
-      tx.onerror = () => reject(tx.error);
-    });
+    const entries = FOREIGN_FILE
+      ? [...fileVolumes.entries()].filter(([key]) => key.startsWith('history:')).map(([, bound]) => bound)
+      : await (async () => {
+          const d = await db();
+          return await new Promise<Bound[]>((resolve, reject) => {
+            const tx = d.transaction('volumes');
+            const rows: Bound[] = [];
+            const r = tx.objectStore('volumes').openCursor(IDBKeyRange.bound('history:', 'history;'));
+            r.onsuccess = () => {
+              const cursor = r.result;
+              if (!cursor) return;
+              rows.push(cursor.value as Bound);
+              cursor.continue();
+            };
+            tx.oncomplete = () => resolve(rows);
+            tx.onerror = () => reject(tx.error);
+          });
+        })();
     const pages = dialog.querySelector('[data-pages]');
     if (!pages || !dialog.isConnected) return;
     pages.innerHTML = entries.length
@@ -355,6 +375,7 @@ async function openVolumes() {
 }
 
 async function clearSaves() {
+  if (FOREIGN_FILE) return;
   try {
     localStorage.removeItem(LOG);
     const d = await db();
@@ -473,7 +494,8 @@ export function start() {
     download,
     notebook: openNotebook,
     toTitle: pauseToCover,
-    newGame: () => void begin(Math.floor(Math.random() * 1e9)),
+    newGame: FOREIGN_FILE ? undefined : () => void begin(Math.floor(Math.random() * 1e9)),
+    closeFile: closeFileSession,
     getSpeed: () => speed,
     setSpeed: (value) => {
       speed = value;
@@ -488,13 +510,15 @@ export function start() {
       const status = document.querySelector('[data-save-status]');
       if (status)
         status.textContent = ok
-          ? 'Your input log and recovery volume were saved in this browser.'
+          ? FOREIGN_FILE
+            ? 'This file is kept in this tab. Download it to keep your progress.'
+            : 'Your input log and recovery volume were saved in this browser.'
           : 'The browser could not confirm a complete save. Keep this page open and download the run from Lab tools.';
     },
   });
   const castHost = document.querySelector<HTMLElement>('.game-menu-panel .menu-body');
   if (castHost && LAB_TOOLS) castSession.mount(castHost, writeLog);
-  if ('serviceWorker' in navigator && location.hostname !== 'localhost')
+  if (!FOREIGN_FILE && 'serviceWorker' in navigator && location.hostname !== 'localhost')
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   title();
 }
@@ -514,7 +538,92 @@ function infoWords(): string {
   return `<h2>Your work</h2><p>${esc(nextWords(s))}</p><p>The village announcer carries your requests. People consider their own field work and can refuse. Hold the button beside a refusal to insist. They will come, and they will remember.</p><p>A visit takes time to walk there and back. Reduce a household’s grain payment to leave more in its jars. The neighbours will notice.</p><p>The grain bar shows the harvest. The filled part is grain in the granary. The striped part is cut grain waiting to be separated from its stalks. The outline shows uncut grain. The mark shows what the landowner is owed.</p><p>Time slows for replies and knocks at your door. Opening the menu or this information panel stops time. ${esc(limitsWords(s))}</p>${seasonOf(doyOf(dayOfMinute(s.minute))) === 'winter' ? (s.edition ? '<p>Paid mill calls use grain from the granary for completed carrying. Ordinary calls offer no pay.</p>' : '<p>People receive no grain pay for mill work. You can write for grain when the estimate shows that you will have too little.</p>') : ''}<p>You are the steward. You manage the landowner’s grain, which is counted in grain measures.</p>`;
 }
 
+function closeFileSession() {
+  if (!FOREIGN_FILE) return;
+  ++runTransition;
+  cancelAnimationFrame(raf);
+  releaseWake();
+  g = null;
+  castSession.game = null;
+  castSession.invalidate();
+  fileLog = null;
+  fileVolumes.clear();
+  volume = 0;
+  fileTitle();
+}
+
+function fileTitle() {
+  cancelAnimationFrame(raf);
+  stage?.destroy();
+  stage = null;
+  textSizeObserver?.disconnect();
+  textSizeObserver = null;
+  app.innerHTML = `<div class="page title-page">${topbar('The Valley')}<h1>Open a Valley file</h1><p>This file stays in this tab. Download it before closing to keep your progress. Your browser ledger and people stay separate.</p><label for="foreign-run">Open a Valley file</label><input id="foreign-run" type="file" accept=".json,application/json"><p id="foreign-result" role="status"></p>${g ? '<button data-file-resume>Resume</button>' : ''}</div>`;
+  app.querySelector('[data-file-resume]')?.addEventListener('click', enter);
+  app.querySelector<HTMLInputElement>('#foreign-run')?.addEventListener('change', async (event) => {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    const result = app.querySelector('#foreign-result');
+    if (!file || !result) return;
+    const transition = ++runTransition;
+    const previous = g;
+    const previousMeta = castSession.metadata();
+    let restoring = false;
+    const previousFile = previous ? castSession.exportRun(save(previous, volume)) : null;
+    try {
+      const saved = JSON.parse(await file.text()) as SavedGame | CompactRun;
+      const allowed = new Set([
+        'rules',
+        'plainEnglish',
+        'castHeads',
+        'castSources',
+        'cast',
+        'game',
+        'version',
+        'framework',
+        'seed',
+        'minute',
+        'inputs',
+        'state',
+        'fingerprint',
+        'savedAt',
+        'label',
+      ]);
+      if (Object.keys(saved).some((key) => !allowed.has(key)))
+        throw new Error('This file has unsupported fields.');
+      if (saved.game !== 'valley') throw new Error('Open a full Valley file.');
+      if (!('state' in saved)) throw new Error('Open the full Valley file, not a compact notebook.');
+      restoring = true;
+      const restored = load(saved);
+      if (fingerprint(restored.valley) !== saved.fingerprint) throw new Error('The saved game differs.');
+      if (transition !== runTransition) return;
+      await castSession.loaded(restored, undefined, true, saved);
+      if (transition !== runTransition) return;
+      g = restored;
+      volume = 0;
+      fileVolumes.clear();
+      importStatus = 'This file has been loaded. Download it to keep your progress.';
+      writeLog();
+      await bindVolume();
+      if (transition === runTransition) enter();
+    } catch (error) {
+      if (transition !== runTransition) return;
+      if (restoring && previousFile) {
+        g = load(previousFile);
+        await castSession.loaded(g, previousMeta, true, previousFile);
+      } else if (!previous) {
+        g = null;
+        castSession.game = null;
+      }
+      result.textContent = error instanceof Error ? error.message : 'This file could not be loaded.';
+    }
+  });
+}
+
 function title() {
+  if (FOREIGN_FILE) {
+    fileTitle();
+    return;
+  }
   pendingGrain = null;
   labScreen('title');
   cancelAnimationFrame(raf);
