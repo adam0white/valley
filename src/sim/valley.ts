@@ -106,11 +106,14 @@ import { DRAW, hashUnit, mixSeed, strHash } from './rng.ts';
 import { type StewardCare, stewardTo } from './steward.ts';
 import {
   ASSENT,
+  type CallStand,
   easeLaneWords,
   easeWords,
   giftWords,
   registerOf,
   rememberedLine,
+  type Saying,
+  sayingWords,
   seizeWords,
   speakerOf,
   type VoiceContext,
@@ -3059,12 +3062,15 @@ function roleLabel(action: string): string {
 /** One spoken answer while actually sitting at a house. No trust, work, grain or RNG change.
  * The answer records the steward's words, not an agreement or a resident's private thoughts.
  */
-export function replyAtHearth(s: ValleyState, hid: string): boolean {
+/** The steward speaks at the hearth (reply edition). One person of the house answers in their own voice. The words
+ * never change a reply to a call; they only show how the house stands. Each saying once per visit. */
+export function replyAtHearth(s: ValleyState, hid: string, saying: Saying = 'listen'): boolean {
   const v = s.kahyaState.visit;
   const h = houseOf(s, hid);
   if (!s.reply || !h?.members.length || !v || v.house !== hid || s.minute < v.arrive || s.minute >= v.leave)
     return false;
-  const key = `${hid}:${v.arrive}`;
+  if (!sayingsAt(s, h).includes(saying)) return false;
+  const key = replyKey(hid, v.arrive, saying);
   if (s.reply.visits.includes(key)) return false;
   s.reply.visits.push(key);
   note(s, {
@@ -3072,7 +3078,63 @@ export function replyAtHearth(s: ValleyState, hid: string): boolean {
     kind: 'story',
     house: hid,
     weight: 1,
-    text: `You say to ${householdLabel(h)}, “I came to listen. What you said matters to me.” You have not asked for work or promised grain.`,
+    text: `You say to ${householdLabel(h)}, “${SAYING_WORDS[saying]}” You have not asked for work or promised grain.`,
   });
+  const stand = callStand(s, h);
+  houseSpeaks(s, h, s.minute + 1, (ctx, p) => sayingWords(ctx, p, saying, stand), 'in answer');
+  if (!s.notes.some((n) => n.kind === 'voice' && n.house === hid && n.at === s.minute + 1))
+    note(s, {
+      at: s.minute + 1,
+      kind: 'story',
+      house: hid,
+      weight: 1,
+      text: `People at ${householdLabel(h)} nod and go back to their work.`,
+    });
   return true;
+}
+
+export const SAYING_WORDS: Record<Saying, string> = {
+  listen: 'I came to listen. What you said matters to me.',
+  finish: 'Finish your own barley first. Then come to the landowner’s field.',
+  rain: `Rain is due on ${dateEnglish(2)}. The landowner’s barley must be cut before then.`,
+};
+export const replyKey = (hid: string, arrive: number, saying: Saying) =>
+  saying === 'listen' ? `${hid}:${arrive}` : `${hid}:${arrive}:${saying}`;
+
+/** Whether this house answered the open barley call by putting it off, by coming, or was not asked. */
+function callStand(s: ValleyState, h: Household): CallStand {
+  const ask = s.asks.findLast(
+    (a) =>
+      a.job === 'reap-agha' &&
+      !a.closed &&
+      a.from <= s.minute &&
+      a.until > s.minute &&
+      a.houses.includes(h.id),
+  );
+  if (!ask) return 'none';
+  // Someone you insisted with is answering again; they no longer count as putting the call off.
+  const replies = h.members
+    .filter((id) => !ask.insisted.includes(id))
+    .map((id) => ask.replies[id])
+    .filter((r) => !!r);
+  if (replies.some((r) => ['deferred', 'refused', 'modified'].includes(r.verdict))) return 'put-off';
+  return replies.length ? 'coming' : 'none';
+}
+
+/** The sayings on offer at this house now: listening always; letting them finish while they put the call off;
+ * the rain only before the one dated public forecast runs out (the opening two-day warning; never simulate ahead). */
+export function sayingsAt(s: ValleyState, h: Household): Saying[] {
+  const stand = callStand(s, h);
+  const out: Saying[] = ['listen'];
+  if (stand === 'put-off') out.push('finish');
+  if (
+    stand !== 'none' &&
+    s.minute < 2 * DAY &&
+    s.notes.some(
+      (n) =>
+        n.kind === 'weather' && n.at <= s.minute && n.text.startsWith('Clouds are building over the ridge.'),
+    )
+  )
+    out.push('rain');
+  return out;
 }

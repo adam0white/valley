@@ -47,7 +47,7 @@ describe('notebook run exports', () => {
     expect(run).toMatchObject({
       game: 'valley',
       seed: 406153184,
-      version: '0.3.0',
+      version: '0.3.1',
       framework: '3.0.0',
       minute: 17550,
       inputs: ownerInputs,

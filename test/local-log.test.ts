@@ -3,7 +3,7 @@ import { validLocalLog } from '../src/ui/local-log.ts';
 
 const base = {
   game: 'valley',
-  version: '0.3.0',
+  version: '0.3.1',
   seed: 7,
   minute: 600,
   inputs: [],

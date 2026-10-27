@@ -197,7 +197,7 @@ describe('owner-facing presentation', () => {
     const before = fingerprint(s);
     expect(nowWords(s)).toMatch(/replies/);
     expect(limitsWords(s, h)).toContain(dateEnglish(Math.floor(ask.until / DAY)));
-    expect(limitsWords(s, h)).toMatch(/expires/);
+    expect(limitsWords(s, h)).toMatch(/still open.*when it ends/);
     expect(fingerprint(s)).toBe(before);
     ask.closed = true;
     expect(limitsWords(s, h)).not.toMatch(/expires/);
@@ -285,7 +285,7 @@ it('explains completed work and open calls with full return dates', () => {
   s.flags.verbs.push('take');
   const h = required(s.households[0]);
   required(call(s, 'bring-share', [h.id]));
-  expect(callUnavailable(s, 'bring-share', h)).toMatch(/expires on.*year one/);
+  expect(callUnavailable(s, 'bring-share', h)).toMatch(/call again on.*year one/);
   h.paid = shareOwed(h);
   expect(callUnavailable(s, 'bring-share', h)).toMatch(/25 June, year two/);
   expect(limitsWords(s, h)).toMatch(/25 June, year two/);

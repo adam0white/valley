@@ -25,7 +25,7 @@ async function open(page: Page, rules?: string) {
         'valley-log-v1',
         JSON.stringify({
           game: 'valley',
-          version: '0.3.0',
+          version: '0.3.1',
           seed: 7,
           minute: rules ? 1440 : 420,
           inputs: [],
@@ -270,7 +270,7 @@ it.each([undefined, 'valley-2026-10'] as const)(
     const expected = fingerprint(game.valley);
     const log = {
       game: 'valley',
-      version: '0.3.0',
+      version: '0.3.1',
       plainEnglish: true,
       seed: 7,
       minute: game.valley.minute,

@@ -1,5 +1,28 @@
 # Valley handoff
 
+## Retest fix cycle (Valley 0.3.1) — 2026-10-27
+
+Remaining: none for this cycle once the deploy receipt below is recorded in the lab
+report (`~/code/.lab-scratch/claude-builds/valley-r2.md`). It answers the 2026-10-27
+same-tester retest (`docs/playtests/2026-10-27-retest.md`) and ships 705cce0 (client
+0.4.14 / kit 0.5.16).
+
+- Schema 0.3.1: a reply input may carry `saying` (`listen`, `finish`, `rain`). The reply
+  edition offers "Finish your own barley first" only at a house that put off the open call,
+  and the rain reminder only before the rain date after the clouds note. Each saying gets
+  a household answer through `houseSpeaks`; the reply to the call never changes. 0.3.0
+  saves are refused with the start-fresh message.
+- Presentation only: identical delayed replies group into one row with "Hold to insist
+  with all N" and "Let them finish first" (kept in the local log as `accepted`). Open
+  delayed replies slow time to 30 game minutes a second instead of holding it at 1, so
+  Skip works; Skip shows its reason when blocked. A Zehra question nearly stops time
+  (0.25) until answered or "Not now". Hold buttons also fire on a second tap or key press.
+  A call to a house last seen short of food asks for a second press. The notebook shows a
+  before-rain pace guess after an hour of daylight. Phone house actions scroll within a
+  third of the screen.
+- Default-rules headless runs (plain and idle, seeds 1 and 2) are identical before and
+  after, fingerprints included.
+
 ## Actual exchange source batch — 2026-10-26
 
 Remaining: one independent source review; a naturally completed talk and its running,

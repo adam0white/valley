@@ -14,14 +14,34 @@ export function grainReceipt(
   const returned = note.includes('The sack came back up the lane before dark.');
   return `Dispatched ${dispatched} measures to ${house}.${returned ? ' The sack returned.' : onward ? ` ${onward}` : ''} Net granary cost: ${before - after} measures. Your granary now holds ${after} measures.`;
 }
-export function paceWords(s: { waiting: boolean; reading: boolean; hurrying: boolean }): string {
-  return s.waiting
-    ? 'Time moves slowly while replies or a decision remain open. Skip keeps this slowdown.'
-    : s.reading
-      ? 'Time moves slowly while you read. Return to the notebook to leave this reading view.'
-      : s.hurrying
-        ? 'Skipping toward the next event.'
-        : 'Time is moving. Menu and Information pause it.';
+export function paceWords(s: {
+  waiting: boolean;
+  reading: boolean;
+  hurrying: boolean;
+  asked?: boolean;
+  replies?: boolean;
+}): string {
+  return s.asked
+    ? 'Someone is waiting for your answer. Time almost stops until you answer or choose Not now.'
+    : s.waiting
+      ? 'Time moves slowly while someone is at your door or a decision is open.'
+      : s.reading
+        ? 'Time moves slowly while you read. Return to the notebook to leave this reading view.'
+        : s.hurrying
+          ? 'Skipping toward the next event.'
+          : s.replies
+            ? 'Time moves slowly while delayed replies to your call are open. Skip, or let them finish first.'
+            : 'Time is moving. Menu and Information pause it.';
+}
+/** Why Skip cannot run now, said at the button; null when it can. */
+export function skipBlock(s: { waiting: boolean; hurrying: boolean; asked?: boolean }): string | null {
+  return s.hurrying
+    ? 'Skipping. It stops at the next event.'
+    : s.asked
+      ? 'Someone is waiting for your answer. Answer or choose Not now first.'
+      : s.waiting
+        ? 'Skip waits until the person at your door or the open decision is answered.'
+        : null;
 }
 export function travelWords(v: { arrive: number; leave: number; back: number }, minute: number): string {
   const home = Math.max(0, v.back - minute);

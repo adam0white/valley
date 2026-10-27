@@ -45,7 +45,7 @@ it('keeps the previous saved run and receipts after failed admission, with a lit
     await page.goto(origin);
     const previous = JSON.stringify({
       game: 'valley',
-      version: '0.3.0',
+      version: '0.3.1',
       seed: 7,
       inputs: [],
       minute: 0,

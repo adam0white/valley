@@ -409,6 +409,53 @@ export function easeLaneWords(ctx: VoiceContext, p: Person, kind: number): strin
   return pick(ctx, p, 'eased-lane', EASED_LANE, kind);
 }
 
+/** What the steward can say at the hearth in the reply edition. Valley-authored words only; a saying never
+ * changes a reply to a call. Insisting is still the only way to press someone. */
+export type Saying = 'listen' | 'finish' | 'rain';
+/** How the house stands on the open barley call, if it was asked: their own words decide the answer. */
+export type CallStand = 'put-off' | 'coming' | 'none';
+const LISTEN: Record<CallStand, Pool> = {
+  'put-off': [
+    'Then hear this: our own barley comes first. We will come when it is cut.',
+    'Listen, then. If we leave our field, the rain takes it. That is all.',
+    'You want to listen? Our barley is still standing. That is the whole story.',
+  ],
+  coming: [
+    'We said we would come, and we will. You don’t need to sit here for that.',
+    'We are already cutting for the landowner. Listen to the other houses.',
+  ],
+  none: [
+    'There is not much to tell, steward. The work goes on.',
+    'Listen, then. The children are well. The goat is not.',
+    'You listen better than the last steward. That is not hard.',
+  ],
+};
+const FINISH: Pool = [
+  'That is fair. We will come once ours is in.',
+  'Good. Then we can come with a clear head.',
+  'We will remember that you let us finish.',
+  'Thank you. Ours first, then the landowner’s.',
+];
+const FINISH_BLUNT: Pool = [
+  'We would have done that anyway. But thank you for saying it.',
+  'Fine. Our field first, then his.',
+];
+const RAIN: Record<CallStand, Pool> = {
+  'put-off': [
+    'We know. Our barley will be ruined too, and we eat ours.',
+    'Rain falls on our field as well, steward. Ask us again when ours is cut.',
+    'If you want us sooner, ask us yourself. Telling us the date changes nothing.',
+  ],
+  coming: ['We know. That is why we are cutting already.', 'We heard. We are working as fast as we can.'],
+  none: ['Nobody asked us to cut it.', 'Then call us. We can only come if someone asks.'],
+};
+
+export function sayingWords(ctx: VoiceContext, p: Person, saying: Saying, stand: CallStand): string {
+  if (saying === 'finish')
+    return pick(ctx, p, 'say-finish', registerOf(p) === 'blunt' ? FINISH_BLUNT : FINISH, 0);
+  return pick(ctx, p, `say-${saying}-${stand}`, saying === 'listen' ? LISTEN[stand] : RAIN[stand], 0);
+}
+
 /** How each register says yes to a call, by job; a paid call is answered as paid. */
 export const ASSENT: Record<Register, { reap: Pool; share: Pool; carry: Pool; paid: Pool }> = {
   blunt: {

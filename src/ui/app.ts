@@ -9,7 +9,7 @@ import {
   rulesOf,
   type TermDecision,
 } from '../sim/edition.ts';
-import { clockWords, grainReceipt, paceWords, travelWords } from './clarity.ts';
+import { clockWords, grainReceipt, paceWords, skipBlock, travelWords } from './clarity.ts';
 import { validLocalLog } from './local-log.ts';
 import { musicEvent } from './music.ts';
 import { automaticRate, type Pace, READING_MS } from './pacing.ts';
@@ -67,11 +67,15 @@ import {
   type Note,
   nextRiderDay,
   personOf,
+  replyKey,
+  SAYING_WORDS,
+  sayingsAt,
   shareOwed,
   underSeal,
   V,
   type ValleyState,
 } from '../sim/valley.ts';
+import type { Saying } from '../sim/voices.ts';
 import { CastSession, type LocalCastReceipt } from './cast-session.ts';
 import { FOREIGN_FILE, LAB_TOOLS, lab, labScreen, mountLab, openFeedback } from './lab.ts';
 import {
@@ -111,6 +115,8 @@ interface Log {
   minute: number;
   volume: number;
   savedAt: string;
+  /** Presentation only: delays the player let be ("ask:person"). Never replayed. */
+  accepted?: string[];
 }
 
 const notice = telemetryNotice(undefined, FOREIGN_FILE ? { preservation: 'preserve' } : {});
@@ -135,7 +141,7 @@ function refreshRecordingNotice() {
     return;
   }
   notice?.remove();
-  recordingStatus.textContent =
+  const words =
     status === 'missing-identity'
       ? 'Recording is unavailable because this browser has no compatible recording identity. You can still play and download this file.'
       : status === 'incompatible-session'
@@ -143,6 +149,7 @@ function refreshRecordingNotice() {
         : status === 'identity-mismatch'
           ? 'Recording is unavailable because this browser has conflicting recording identities. You can still play and download this file.'
           : 'Recording is inactive in this file session. You can still play and download this file.';
+  if (recordingStatus.textContent !== words) recordingStatus.textContent = words;
   if (recordingStatus.parentNode !== noticeFooter) noticeFooter.append(recordingStatus);
 }
 if (FOREIGN_FILE) refreshRecordingNotice();
@@ -163,6 +170,12 @@ let insistReceipt: { ask: string; pid: string; previous: string; name: string; j
 let pendingGrain: { game: Game; house: Household; stock: number; members: string } | null = null;
 let importStatus = '';
 let houseDetails = false;
+/** A household call waiting for a second press because their jars looked low. */
+let confirmCall: string | null = null;
+/** The house whose list of things to say is open. */
+let sayOpen: string | null = null;
+/** What the last notebook answer did (insist with a group, let them finish). */
+let notebookReceipt = '';
 let tab: 'notes' | 'ledger' | 'reader' | 'orders' = 'notes';
 let lastDay = -1;
 let lastSnapDay = -1;
@@ -196,6 +209,60 @@ function partOfDay(m: number): string {
   return 'dusk';
 }
 
+/** Daylight minutes between two minutes (cutting happens in daylight). */
+function daylightBetween(a: number, b: number): number {
+  let total = 0;
+  for (let d = dayOfMinute(a); d <= dayOfMinute(Math.max(a, b - 1)); d++) {
+    const { rise, set } = daylight(doyOf(d));
+    total += Math.max(0, Math.min(b, d * DAY + set) - Math.max(a, d * DAY + rise));
+  }
+  return total;
+}
+
+/** The one dated public forecast: the opening two-day rain warning. The pace guess never simulates ahead. */
+function rainWarned(s: ValleyState): boolean {
+  return (
+    s.minute < 2 * DAY &&
+    s.agha.standing > 5 &&
+    s.asks.some((a) => a.job === 'reap-agha') &&
+    s.notes.some(
+      (n) =>
+        n.kind === 'weather' && n.at <= s.minute && n.text.startsWith('Clouds are building over the ridge.'),
+    )
+  );
+}
+
+/** What the steward has seen of the uncut barley, sampled as time passes. Presentation only. */
+let cutSamples: { seed: number; minute: number; standing: number }[] = [];
+function sampleCut(s: ValleyState) {
+  if (!rainWarned(s)) return;
+  const last = cutSamples.at(-1);
+  if (last && (last.seed !== s.seed || s.minute < last.minute || s.agha.standing > last.standing + 0.5))
+    cutSamples = [];
+  if (!last || cutSamples.length === 0 || s.minute - last.minute >= 20)
+    cutSamples = [...cutSamples, { seed: s.seed, minute: s.minute, standing: s.agha.standing }].slice(-30);
+}
+
+/** Your guess whether the cutting finishes before the rain, from the pace of the last few daylight hours. */
+function rainGuess(s: ValleyState): string | null {
+  if (!rainWarned(s)) return null;
+  const old = cutSamples.find(
+    (x) => x.seed === s.seed && x.minute <= s.minute && daylightBetween(x.minute, s.minute) <= 240,
+  );
+  const watched = old ? daylightBetween(old.minute, s.minute) : 0;
+  if (!old || watched < 60)
+    return 'Watch the field for an hour of daylight to judge whether the cutting will finish before the rain.';
+  const rate = (old.standing - s.agha.standing) / watched;
+  const left = daylightBetween(s.minute, 2 * DAY);
+  const uncut = Math.max(0, s.agha.standing - rate * left);
+  if (rate <= 0.001)
+    return 'Nobody has cut the landowner’s barley in the last few hours. At this pace it will all be standing when the rain comes.';
+  if (uncut < 5)
+    return 'At the pace of the last few hours, the cutting looks likely to finish before the rain.';
+  const share = uncut / Math.max(1, s.agha.standing);
+  return `At the pace of the last few hours, ${share > 0.66 ? 'most of' : share > 0.33 ? 'about half of' : 'some of'} the landowner’s barley would still be standing when the rain comes. More cutters would help.`;
+}
+
 // ---------- saves: the ledger ----------
 
 function writeLog(): boolean {
@@ -212,6 +279,7 @@ function writeLog(): boolean {
     minute: g.valley.minute,
     volume,
     savedAt: new Date().toISOString(),
+    ...(accepted().size ? { accepted: [...accepted()] } : {}),
   };
   try {
     const text = JSON.stringify(log);
@@ -559,7 +627,7 @@ function infoWords(): string {
   if (selected)
     return `<h2>What you know about a household</h2><p>Your guess comes from what you last saw. The local overseer makes his own guess about a person. Neither guess is certain.</p><p>A visit to the lower hamlet takes a couple of hours. A visit to the upper hamlet takes most of a morning. You can visit again when you return.</p>`;
   const s = g.valley;
-  return `<h2>Your work</h2><p>${esc(nextWords(s))}</p><p>The village announcer carries your requests. People consider their own field work and can refuse. Hold the button beside a refusal to insist. They will come, and they will remember.</p><p>A visit takes time to walk there and back. Reduce a household’s grain payment to leave more in its jars. The neighbours will notice.</p><p>The grain bar shows the harvest. The filled part is grain in the granary. The striped part is cut grain waiting to be separated from its stalks. The outline shows uncut grain. The mark shows what the landowner is owed.</p><p>Time slows for replies and knocks at your door. Opening the menu or this information panel stops time. ${esc(limitsWords(s))}</p>${seasonOf(doyOf(dayOfMinute(s.minute))) === 'winter' ? (s.edition ? '<p>Paid mill calls use grain from the granary for completed carrying. Ordinary calls offer no pay.</p>' : '<p>People receive no grain pay for mill work. You can write for grain when the estimate shows that you will have too little.</p>') : ''}<p>You are the steward. You manage the landowner’s grain, which is counted in grain measures.</p>`;
+  return `<h2>Your work</h2><p>${esc(nextWords(s))}</p><p>The village announcer carries your requests. People consider their own field work and can refuse. Hold the button beside a refusal, or tap it twice, to insist. They will come, and they will remember. Choose Let them finish first to accept a delay; their reply stays the same.</p><p>A visit takes time to walk there and back. Reduce a household’s grain payment to leave more in its jars. The neighbours will notice.</p><p>The grain bar shows the harvest. The filled part is grain in the granary. The striped part is cut grain waiting to be separated from its stalks. The outline shows uncut grain. The mark shows what the landowner is owed.</p><p>Time slows for replies and knocks at your door. Opening the menu or this information panel stops time. ${esc(limitsWords(s))}</p>${seasonOf(doyOf(dayOfMinute(s.minute))) === 'winter' ? (s.edition ? '<p>Paid mill calls use grain from the granary for completed carrying. Ordinary calls offer no pay.</p>' : '<p>People receive no grain pay for mill work. You can write for grain when the estimate shows that you will have too little.</p>') : ''}<p>You are the steward. You manage the landowner’s grain, which is counted in grain measures.</p>`;
 }
 
 function closeFileSession() {
@@ -670,12 +738,17 @@ function title() {
     <section class="title-premise"><h1>The Valley</h1><p class="purpose">${esc(PURPOSE)}</p><p class="soft">People can refuse you, and they remember how you answer.</p></section>
     ${LAB_TOOLS ? '<button data-ways>Lab tools ▸</button>' : ''}
     <div class="vignette" aria-hidden="true"><svg viewBox="0 0 360 140"><path d="M0 95Q80 15 160 90T360 70M0 130Q90 50 180 120T360 95M250 0Q200 70 260 140" fill="none" stroke="currentColor"/><g fill="none" stroke="currentColor" stroke-width="2"><path d="M70 95v-18l12-12 12 12v18zM130 105V87l12-12 12 12v18zM190 90V72l12-12 12 12v18zM280 100V82l12-12 12 12v18z"/></g></svg></div>
-    <footer class="title-actions"><label class="edition-choice"><input type="checkbox" data-reply-edition><span>Include a spoken answer during visits. <select data-visit-version aria-label="Visit version"><option value="reply">Original sentence</option><option value="dialogue">Questions for Zehra</option></select> Original grain rules and local people.</span></label><label class="edition-choice"><input type="checkbox" data-edition> Include grain wages, voluntary contributions, winter loans and inspections in this new term.</label><label class="edition-choice"><input type="checkbox" data-pass-edition> Also include pass journeys, family arrangements and a road agreement. This includes the grain rules. The steward eats from real provisions and rests between walks. Continuing people stay local in this edition.</label>${where ? `<p class="hand">${esc(where)}</p>` : ''}
+    <footer class="title-actions"><label class="edition-choice"><input type="checkbox" data-reply-edition><span>Spoken answers on visits: <select data-visit-version aria-label="Visit version"><option value="reply">Say something at every house</option><option value="dialogue">Questions for Zehra</option></select> <span class="edition-note" data-visit-note>${esc(VISIT_NOTE.reply)}</span> Original grain rules; people stay local.</span></label><label class="edition-choice"><input type="checkbox" data-edition> Include grain wages, voluntary contributions, winter loans and inspections in this new term.</label><label class="edition-choice"><input type="checkbox" data-pass-edition> Also include pass journeys, family arrangements and a road agreement, with the grain rules. The steward eats real provisions and rests between walks. People stay local.</label>${where ? `<p class="hand">${esc(where)}</p>` : ''}
     ${hasSave ? `${log && log.version === GAME_VERSION ? '<button class="primary" data-go="open">Resume</button>' : ''}<button data-go="new" class="hold">New game<span class="fill"></span></button><p class="soft">This replaces your saved game.</p>` : '<button class="primary" data-go="new">New game</button>'}${mark()}</footer>
     ${LAB_TOOLS ? `<dialog class="ways-panel" aria-label="Other ways to start"><header><h2>Other ways to start</h2><button data-ways-close aria-label="Close other ways to start">×</button></header><label for="valley-name">A named valley</label><input id="valley-name" placeholder="Kuyulu" maxlength="80"><p>The same name gives the same valley.</p><button data-seed${log ? ' class="hold"' : ''}>Begin this valley${log ? '<span class="fill"></span>' : ''}</button>${log ? '<p class="soft">This replaces your saved game.</p>' : ''}<label for="load-run">Load a playtest run</label><input id="load-run" type="file" accept=".json,application/json"><p id="load-result" role="status"></p></dialog>` : ''}
   </div>`;
   app.querySelector('[data-go="open"]')?.addEventListener('click', () => {
     if (log && log.version === GAME_VERSION) openLedger(log);
+  });
+  const visitVersion = app.querySelector<HTMLSelectElement>('[data-visit-version]');
+  visitVersion?.addEventListener('change', () => {
+    const note = app.querySelector('[data-visit-note]');
+    if (note) note.textContent = visitVersion.value === 'dialogue' ? VISIT_NOTE.dialogue : VISIT_NOTE.reply;
   });
   for (const option of app.querySelectorAll<HTMLInputElement>('.edition-choice input')) {
     option.addEventListener('change', () => {
@@ -781,6 +854,13 @@ function openLedger(log: Log) {
     .then(async (game) => {
       if (transition !== runTransition) return;
       g = game;
+      if (Array.isArray(log.accepted))
+        acceptedByGame.set(
+          game,
+          new Set(
+            log.accepted.filter((k): k is string => typeof k === 'string' && k.length < 200).slice(0, 500),
+          ),
+        );
       await castSession.loaded(game, log.continuity);
       if (transition !== runTransition) return;
       enter();
@@ -920,17 +1000,34 @@ function pacingState(t: number, s: ValleyState) {
         !s.pass.journey.returned &&
         !s.pass.journey.cargo &&
         s.minute < s.pass.journey.leave
-      ) ||
-      s.asks.some(
-        (a) =>
-          !a.closed &&
-          a.until > s.minute &&
-          Object.values(a.replies).some((r) => ['refused', 'deferred', 'modified'].includes(r.verdict)),
       ),
+    replies: s.asks.some(
+      (a) =>
+        !a.closed &&
+        a.until > s.minute &&
+        Object.entries(a.replies).some(
+          ([id, r]) =>
+            ['refused', 'deferred', 'modified'].includes(r.verdict) &&
+            !a.insisted.includes(id) &&
+            !letBe(s, a, id),
+        ),
+    ),
+    asked: questionOpen(s),
     hurrying,
     working: !!currentJob(s),
     pace: speed,
   };
+}
+
+/** A question from Zehra the player has not answered or set aside ("Not now"). */
+let setAside = '';
+function questionKey(s: ValleyState): string {
+  const choice = dialogueChoices(s)[0];
+  return choice ? `${s.seed}:${choice.visit}:${choice.prior}` : '';
+}
+function questionOpen(s: ValleyState): boolean {
+  const key = questionKey(s);
+  return !!key && key !== setAside;
 }
 
 function rateNow(t: number): number {
@@ -970,7 +1067,10 @@ function frame(t: number) {
     bindVolume().finally(() => ending());
     return;
   }
-  if (moved) drawTop();
+  if (moved) {
+    sampleCut(s);
+    drawTop();
+  }
   drawMap();
   if (moved && t - lastSheet > 450) drawSheet();
   if (moved && (Object.keys(s.castReleased ?? {}).length || Object.keys(s.castDeaths ?? {}).length))
@@ -1001,6 +1101,8 @@ function afterQuantum(t: number): boolean {
   const day = dayOfMinute(s.minute);
   if (day !== lastDay) {
     lastDay = day;
+    notebookReceipt = '';
+    confirmCall = null;
     void castSession.checkpoint();
     hunchCache = null;
     writeLog();
@@ -1023,8 +1125,14 @@ function drawTop() {
   if (pace) pace.textContent = `${clockWords(s.minute)} · ${paceWords(pacingState(performance.now(), s))}`;
   const button = app.querySelector<HTMLButtonElement>('[data-until]');
   if (button) {
-    button.disabled = hurrying;
-    button.textContent = 'Skip ⏩';
+    const block = skipBlock(pacingState(performance.now(), s));
+    button.disabled = !!block;
+    const hint =
+      block ?? (pacingState(performance.now(), s).replies ? 'Runs time quickly to the next reply.' : '');
+    if (button.dataset.hint !== hint) {
+      button.dataset.hint = hint;
+      button.innerHTML = `Skip ⏩${hint ? `<span class="h">${esc(hint)}</span>` : ''}`;
+    }
   }
   const label = app.querySelector('.grain-label');
   if (label)
@@ -1072,6 +1180,8 @@ function openReading(which: 'ledger' | 'reader' | 'orders') {
 function order(o: Order) {
   if (!g) return;
   pendingGrain = null;
+  notebookReceipt = '';
+  confirmCall = null;
   const grainBefore = g.valley.agha.granary;
   const noteBefore = new Set(g.valley.notes.map((n) => n.id));
   const ask = o.verb === 'insist' ? g.valley.asks.find((a) => a.id === o.ask) : undefined;
@@ -1100,7 +1210,10 @@ function order(o: Order) {
       };
       actionCaption = '';
     }
-    if (o.verb === 'reply') actionCaption = 'You said: “I came to listen. What you said matters to me.”';
+    if (o.verb === 'reply') {
+      actionCaption = `You said: “${SAYING_WORDS[o.saying ?? 'listen']}”`;
+      sayOpen = null;
+    }
     if (o.verb === 'visit' || o.verb === 'give') {
       selected = o.house;
       houseDetails = false;
@@ -1527,6 +1640,8 @@ function tapMap(cv: HTMLCanvasElement, e: MouseEvent) {
 /** Select a house (or none): the map tap and the accessible house list both land here. */
 function pick(id: string | null) {
   pendingGrain = null;
+  confirmCall = null;
+  armed = null;
   selected = id && selected !== id ? id : null;
   actionCaption = '';
   insistReceipt = null;
@@ -1540,6 +1655,8 @@ function pick(id: string | null) {
 
 function closeHouse() {
   pendingGrain = null;
+  confirmCall = null;
+  armed = null;
   const origin = selected;
   selected = null;
   tab = 'notes';
@@ -1583,6 +1700,7 @@ function drawHouses(s: ValleyState) {
             ([id, r]) =>
               h.members.includes(id) &&
               !a.insisted.includes(id) &&
+              !letBe(s, a, id) &&
               ['deferred', 'refused', 'modified'].includes(r.verdict),
           ),
       );
@@ -1623,7 +1741,7 @@ function btn(
 
 function drawSheet(force = false) {
   drawTop();
-  if (!g || (!force && app.querySelector('button.holding'))) return;
+  if (!g || (!force && app.querySelector('button.holding, button.armed'))) return;
   const s = g.valley;
   // Count newly due scheduled notes, and retain IDs when the capped log replaces an old note.
   const journey = s.pass?.journey;
@@ -1640,7 +1758,7 @@ function drawSheet(force = false) {
   const visitPhase = visit
     ? `${visit.house}:${visit.arrive}:${s.minute < visit.arrive ? 'out' : s.minute < visit.leave ? 'here' : s.minute < visit.back ? 'return' : 'home'}:${s.reply?.visits.includes(`${visit.house}:${visit.arrive}`) ?? false}`
     : '';
-  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${JSON.stringify(s.asks.map((a) => a.replies))}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${visitPhase}|${s.dialogue ? JSON.stringify([s.dialogue, dialogueChoices(s)]) : ''}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}`;
+  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${JSON.stringify(s.asks.map((a) => a.replies))}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${visitPhase}|${s.dialogue ? JSON.stringify([s.dialogue, dialogueChoices(s)]) : ''}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}|${accepted().size}|${setAside}|${s.reply?.visits.length ?? 0}|${selected === null || tab !== 'notes' ? (rainGuess(s) ?? '') : ''}|${confirmCall}|${sayOpen}|${notebookReceipt}`;
   const travel = app.querySelector<HTMLElement>('#reading-travel');
   if (travel) travel.textContent = englishText(caption(s, ''));
   const receipt = app.querySelector<HTMLElement>('#action-receipt');
@@ -1830,14 +1948,74 @@ const busy = (s: ValleyState) => !!s.kahyaState.visit && s.kahyaState.visit.back
 /** People who already have a Press button on screen: one per person, on their latest line. */
 const pressShown = new Set<string>();
 
-/** Keep still-actionable refusals visible even when their dated note is archived. */
+/** Delays the player accepted with "Let them finish first", per game: presentation only. The reply to the call
+ * stays as it is and nothing is cut by accepting; the row leaves the notebook and stops slowing the clock. */
+const acceptedByGame = new WeakMap<Game, Set<string>>();
+function accepted(): Set<string> {
+  if (!g) return new Set();
+  const known = acceptedByGame.get(g);
+  if (known) return known;
+  const set = new Set<string>();
+  acceptedByGame.set(g, set);
+  return set;
+}
+const acceptKey = (ask: string, pid: string) => `${ask}:${pid}`;
+/** A delayed reply the player let be: chosen in the notebook, or said in person with "finish your own barley first". */
+function letBe(s: ValleyState, a: { id: string; from: number }, pid: string): boolean {
+  if (accepted().has(acceptKey(a.id, pid))) return true;
+  const home = s.households.find((h) => h.members.includes(pid));
+  return !!(
+    home &&
+    s.reply?.visits.some((v) => {
+      const [house, arrive, saying] = v.split(':');
+      return house === home.id && saying === 'finish' && Number(arrive) >= a.from;
+    })
+  );
+}
+
+function namesWords(names: string[]): string {
+  const shown = names.length > 4 ? [...names.slice(0, 3), `${names.length - 3} others`] : names;
+  return shown.length < 2 ? (shown[0] ?? '') : `${shown.slice(0, -1).join(', ')} and ${shown.at(-1)}`;
+}
+
+function letFinish(ask: string, pids: string[]) {
+  for (const pid of pids) accepted().add(acceptKey(ask, pid));
+  insistReceipt = null;
+  actionCaption =
+    pids.length === 1
+      ? 'You let them finish their own work first. Their reply to the call stays the same. They may still come later.'
+      : `You let ${pids.length} people finish their own work first. Their replies to the call stay the same. They may still come later.`;
+  notebookReceipt = actionCaption;
+  writeLog();
+  drawSheet(true);
+}
+
+function insistAll(ask: string, pids: string[]) {
+  if (!g) return;
+  let done = 0;
+  for (const pid of pids) if (act(g, { verb: 'insist', ask, pid })) done++;
+  insistReceipt = null;
+  actionCaption = done
+    ? `You insisted with ${done} ${done === 1 ? 'person' : 'people'}. They will answer again, and they will remember.`
+    : 'No action was recorded.';
+  notebookReceipt = actionCaption;
+  if (done) {
+    writeLog();
+    hunchCache = null;
+  }
+  drawSheet(true);
+}
+
+/** Keep still-actionable refusals visible even when their dated note is archived. Identical words to one call share
+ * a row, so eight copies of the same put-off read as one line with eight names. */
 function pendingReplies(s: ValleyState, house?: Household): string {
   const asks = s.asks.filter(
     (a) => !a.closed && a.from <= s.minute && a.until > s.minute && (!house || a.houses.includes(house.id)),
   );
   if (!asks.length) return '';
   const counts = { came: 0, deferred: 0, refused: 0, modified: 0 };
-  const rows: string[] = [];
+  const groups = new Map<string, { ask: string; says: string; ids: string[]; names: string[] }>();
+  let letBeCount = 0;
   for (const ask of [...asks].reverse()) {
     for (const [id, reply] of Object.entries(ask.replies).sort((a, b) => b[1].at - a[1].at)) {
       const hh = s.households.find((h) => h.members.includes(id));
@@ -1860,13 +2038,34 @@ function pendingReplies(s: ValleyState, house?: Household): string {
         !['deferred', 'refused', 'modified'].includes(reply.verdict)
       )
         continue;
+      if (letBe(s, ask, id)) {
+        letBeCount++;
+        continue;
+      }
       pressShown.add(id);
-      rows.push(
-        `<div class="reply-row"><span><b>${esc(cap(personLabel(personOf(s, id) ?? { name: 'someone' }, hh)))}</b><span class="reply-words">“${esc(reply.says)}”</span></span>${btn('Hold to insist', () => order({ verb: 'insist', ask: ask.id, pid: id }), { hold: true })}</div>`,
-      );
+      const key = `${ask.id}|${reply.says}`;
+      const group = groups.get(key) ?? { ask: ask.id, says: reply.says, ids: [], names: [] };
+      group.ids.push(id);
+      group.names.push(cap(personLabel(personOf(s, id) ?? { name: 'someone' }, hh)));
+      groups.set(key, group);
     }
   }
-  return `<section class="pending-replies"><h2 class="section-label">Replies to the call</h2><p class="reply-count">${counts.came} came. ${counts.deferred} delayed. ${counts.refused} refused.${counts.modified ? ` ${counts.modified} agreed to do part of the work.` : ''}</p>${rows.join('')}</section>`;
+  const rows = [...groups.values()].map((group) => {
+    const many = group.ids.length > 1;
+    const finish = btn('Let them finish first', () => letFinish(group.ask, group.ids));
+    const insist = many
+      ? btn(`Hold to insist with all ${group.ids.length}`, () => insistAll(group.ask, group.ids), {
+          hold: true,
+        })
+      : btn('Hold to insist', () => order({ verb: 'insist', ask: group.ask, pid: group.ids[0] ?? '' }), {
+          hold: true,
+        });
+    return `<div class="reply-row${many ? ' grouped' : ''}"><span><b>${esc(namesWords(group.names))}</b>${many ? ` <span class="soft">(${group.ids.length} people, the same words)</span>` : ''}<span class="reply-words">“${esc(group.says)}”</span></span><div class="reply-actions">${insist}${finish}</div></div>`;
+  });
+  const letLine = letBeCount
+    ? `<p class="soft let-be">You let ${letBeCount} ${letBeCount === 1 ? 'person' : 'people'} finish their own work first. Their replies to the call stay the same.</p>`
+    : '';
+  return `<section class="pending-replies"><h2 class="section-label">Replies to the call</h2><p class="reply-count">${counts.came} came. ${counts.deferred} delayed. ${counts.refused} refused.${counts.modified ? ` ${counts.modified} agreed to do part of the work.` : ''}</p>${rows.join('')}${letLine}</section>`;
 }
 
 function notebook(s: ValleyState): string {
@@ -1878,7 +2077,31 @@ function notebook(s: ValleyState): string {
     .sort((a, b) => b.weight - a.weight || b.at - a.at)
     .slice(0, 3)
     .sort((a, b) => b.at - a.at);
-  return `${pending}<section class="current-notes"><h2 class="section-label">Today’s news</h2>${recent.length ? recent.map(noteLine).join('') : '<p class="soft">No new reply today.</p>'}</section>${btn('Earlier replies ▸', () => openReading('reader'), { cls: 'more' })}`;
+  const visit = s.kahyaState.visit;
+  const asking =
+    dialogueChoices(s).length && visit
+      ? btn(
+          'Zehra is waiting for your answer. Open her house ▸',
+          () => {
+            selected = visit.house;
+            houseDetails = false;
+            drawSheet(true);
+          },
+          { cls: 'primary' },
+        )
+      : '';
+  const legend =
+    pending || recent.length
+      ? '<p class="soft mark-legend">On the house buttons, ● means a delayed reply you can still answer there. ○ means news from that house today.</p>'
+      : '';
+  const guess = rainGuess(s);
+  const pace = guess
+    ? `<div class="hunch rain-guess">${esc(guess)}<span class="by">your guess</span></div>`
+    : '';
+  const receipt = notebookReceipt
+    ? `<p class="notebook-receipt" role="status">${esc(notebookReceipt)}</p>`
+    : '';
+  return `${asking}${receipt}${pace}${pending}<section class="current-notes"><h2 class="section-label">Today’s news</h2>${recent.length ? recent.map(noteLine).join('') : '<p class="soft">No new reply today.</p>'}</section>${legend}${btn('Earlier replies ▸', () => openReading('reader'), { cls: 'more' })}`;
 }
 
 function reader(s: ValleyState): string {
@@ -2012,7 +2235,19 @@ function dialogueCard(s: ValleyState, hh: Household): string {
     if (['pending', 'heard', 'talking'].includes(exchange.status))
       out.push(btn('End this question', () => order({ verb: 'dialogue-cancel', turn: exchange.turn })));
   }
-  for (const choice of dialogueChoices(s)) out.push(btn(dialogueWords(s, choice), () => order(choice)));
+  const choices = dialogueChoices(s);
+  if (choices.length)
+    out.push(
+      `<p class="soft">${esc(questionOpen(s) ? 'Zehra waits for your answer. Time almost stops until you answer or choose Not now. Her question closes when your visit ends.' : 'You set her question aside. You can still answer it until your visit ends.')}</p>`,
+    );
+  for (const choice of choices) out.push(btn(dialogueWords(s, choice), () => order(choice)));
+  if (choices.length && questionOpen(s))
+    out.push(
+      btn('Not now', () => {
+        setAside = questionKey(s);
+        drawSheet(true);
+      }),
+    );
   return out.length ? `<section class="dialogue"><h2>Speak with Zehra</h2>${out.join('')}</section>` : '';
 }
 
@@ -2129,11 +2364,36 @@ function visitHint(s: ValleyState): string {
     : 'A visit takes time to walk and sit with the household.';
 }
 
+const VISIT_NOTE = {
+  reply: 'Choose your words at any house; someone answers.',
+  dialogue: 'You can answer only Zehra, after she speaks at the Çoban house.',
+};
+
+function zehraNote(s: ValleyState): string {
+  const home = s.households.find((h) => h.members.includes('zehra'));
+  return `In the Questions for Zehra version, you can answer only Zehra.${home ? ` She lives at ${householdLabel(home)}.` : ''} She must speak to you first.`;
+}
+
+const SAYING_HINT: Record<Saying, string> = {
+  listen:
+    'Answer the greeting. Someone in the house answers you. This does not ask for work or promise grain.',
+  finish:
+    'Accept their delay. They answer you, but their reply to the call stays the same. Holding to insist is still the way to press them.',
+  rain: 'Remind them of the rain. They answer you, but their reply to the call stays the same.',
+};
+
 function houseThumbs(s: ValleyState, hh: Household): string {
   const out: string[] = [];
   const empty = !hh.members.length;
   const job = currentJob(s);
-  const add = (label: string, fn: () => void, reason: string | null, hint: string, hold = false) => {
+  const add = (
+    label: string,
+    fn: () => void,
+    reason: string | null,
+    hint: string,
+    hold = false,
+    wide = false,
+  ) => {
     const k = actions.length;
     actions.push(() => {
       insistReceipt = null;
@@ -2142,7 +2402,7 @@ function houseThumbs(s: ValleyState, hh: Household): string {
       else drawSheet(true);
     });
     out.push(
-      `<button data-k="${k}"${hold && !reason ? ' class="hold"' : ''}${reason ? ' aria-disabled="true" class="blocked"' : ''}>${esc(label)}${hold && !reason ? '<span class="fill"></span>' : ''}</button>`,
+      `<button data-k="${k}"${hold && !reason ? ` class="hold${wide ? ' wide' : ''}"` : reason ? ` aria-disabled="true" class="blocked${wide ? ' wide' : ''}"` : wide ? ' class="wide"' : ''}>${esc(label)}${hold && !reason ? '<span class="fill"></span>' : ''}</button>`,
     );
   };
   if (job)
@@ -2152,7 +2412,18 @@ function houseThumbs(s: ValleyState, hh: Household): string {
         : job === 'bring-share'
           ? 'Call this house for grain payment'
           : 'Call this house to build mill',
-      () => order({ verb: 'call', job, houses: [hh.id] }),
+      () => {
+        // A call cannot be taken back. When you last saw their jars low, ask once more before sending it.
+        const guess = s.kahyaState.guess?.[hh.id];
+        if (guess && guess.bread < 25 && confirmCall !== hh.id) {
+          confirmCall = hh.id;
+          actionCaption = `${cap(householdLabel(hh))} looked short of food when you saw their jars. A call cannot be taken back, and work for the landowner leaves their own field waiting. Press the call again to send it.`;
+          drawSheet(true);
+          return;
+        }
+        confirmCall = null;
+        order({ verb: 'call', job, houses: [hh.id] });
+      },
       callUnavailable(s, job, hh),
       `The village announcer carries your request only to ${householdLabel(hh)}. People can refuse.`,
     );
@@ -2189,15 +2460,42 @@ function houseThumbs(s: ValleyState, hh: Household): string {
       'Ask only if their jars are full. They can refuse. This is extra grain, not their normal share.',
     );
   const visit = s.kahyaState.visit;
-  if (s.reply && visit?.house === hh.id && visit.arrive <= s.minute && visit.leave > s.minute)
-    add(
-      'Say: I came to listen',
-      () => order({ verb: 'reply', house: hh.id }),
-      s.reply.visits.includes(`${hh.id}:${visit.arrive}`)
-        ? 'You have already said this during this visit.'
-        : null,
-      'Answer the greeting. This does not ask for work or promise grain.',
+  const sayings =
+    s.reply && visit?.house === hh.id && visit.arrive <= s.minute && visit.leave > s.minute
+      ? sayingsAt(s, hh)
+      : [];
+  // One saying shows directly; several sit behind one toggle so the house actions stay short on a phone.
+  if (sayings.length > 1) {
+    const k = actions.length;
+    actions.push(() => {
+      sayOpen = sayOpen === hh.id ? null : hh.id;
+      drawSheet(true);
+    });
+    out.push(
+      `<button data-k="${k}" class="wide say-toggle" aria-expanded="${sayOpen === hh.id}">${sayOpen === hh.id ? 'Say something ▾' : `Say something (${sayings.length} choices) ▸`}</button>`,
     );
+  }
+  if (sayOpen === hh.id || sayings.length === 1)
+    for (const saying of sayings)
+      add(
+        `Say: ${SAYING_WORDS[saying]}`,
+        () => order({ verb: 'reply', house: hh.id, saying }),
+        visit && s.reply?.visits.includes(replyKey(hh.id, visit.arrive, saying))
+          ? 'You have already said this during this visit.'
+          : null,
+        SAYING_HINT[saying],
+        false,
+        true,
+      );
+  if (
+    s.dialogue &&
+    !s.reply &&
+    visit?.house === hh.id &&
+    visit.arrive <= s.minute &&
+    visit.leave > s.minute &&
+    !hh.members.includes('zehra')
+  )
+    out.push(`<p class="soft say-note">${esc(zehraNote(s))} Here you can listen and see their jars.</p>`);
   if (s.edition && visit?.house === hh.id && visit.arrive <= s.minute && visit.leave > s.minute)
     for (const topic of ['person', 'debt', 'grievance'] as const)
       add(
@@ -2239,27 +2537,34 @@ function houseThumbs(s: ValleyState, hh: Household): string {
     actionCaption =
       reason ??
       `Send ${Math.min(6, s.agha.granary)} measures of grain to ${householdLabel(hh)}? This leaves your granary. No grain has been sent.`;
+    sayOpen = null;
     drawSheet(true);
+    // On a phone the actions scroll; keep the question and its answer in view.
+    app.querySelector('#thumbs .pending-grain')?.scrollIntoView({ block: 'nearest' });
   };
   if (pendingGrain?.house === hh) {
     const preview = pendingGrain;
     out.push(
       `<p class="pending-grain">Send ${Math.min(6, preview.stock)} measures of grain to ${esc(householdLabel(preview.house))}? This leaves your granary. No grain has been sent.</p>`,
-      btn('Confirm send grain', () => {
-        // Consume before act: repeated or reentrant callbacks cannot spend twice.
-        if (pendingGrain !== preview) return;
-        pendingGrain = null;
-        if (g !== preview.game || selected !== hh.id || tab !== 'notes') return;
-        if (
-          s.agha.granary !== preview.stock ||
-          JSON.stringify(hh.members) !== preview.members ||
-          grainBlocked()
-        ) {
-          previewGrain();
-          return;
-        }
-        order({ verb: 'give', house: hh.id, kile: 6 });
-      }),
+      btn(
+        'Confirm send grain',
+        () => {
+          // Consume before act: repeated or reentrant callbacks cannot spend twice.
+          if (pendingGrain !== preview) return;
+          pendingGrain = null;
+          if (g !== preview.game || selected !== hh.id || tab !== 'notes') return;
+          if (
+            s.agha.granary !== preview.stock ||
+            JSON.stringify(hh.members) !== preview.members ||
+            grainBlocked()
+          ) {
+            previewGrain();
+            return;
+          }
+          order({ verb: 'give', house: hh.id, kile: 6 });
+        },
+        { cls: 'wide' },
+      ),
     );
     add(
       'Cancel',
@@ -2311,7 +2616,8 @@ function hurry() {
     !s ||
     selected ||
     tab !== 'notes' ||
-    s.knocks.some((k) => !k.answered && k.at <= s.minute && k.until > s.minute)
+    s.knocks.some((k) => !k.answered && k.at <= s.minute && k.until > s.minute) ||
+    skipBlock(pacingState(performance.now(), s))
   )
     return;
   seenNote = Math.max(seenNote, s.notes.at(-1)?.id ?? 0);
@@ -2334,10 +2640,10 @@ function valleyThumbs(s: ValleyState): string {
   const primary =
     job && !reason
       ? btn(label, () => order({ verb: 'call', job, houses }), { cls: 'primary' })
-      : btn('Skip ⏩', hurry, { cls: 'primary', disabled: hurrying }).replace(
-          '<button ',
-          '<button data-until aria-label="Skip to the next event" ',
-        );
+      : btn('Skip ⏩', hurry, {
+          cls: 'primary',
+          disabled: !!skipBlock(pacingState(performance.now(), s)),
+        }).replace('<button ', '<button data-until aria-label="Skip to the next event" ');
   return `<p class="action-caption">${esc(ask ? `The call is open until ${fullDateEnglish(dayOfMinute(ask.until))}.` : job && !reason ? 'The village announcer carries your request. People can refuse.' : limitsWords(s))}</p>${primary}<div class="row">${btn('Other orders ▸', () => openReading('orders'))}${btn('The ledger ▸', () => openReading('ledger'))}</div>`;
 }
 
@@ -2489,6 +2795,7 @@ function ledger(s: ValleyState): string {
       <tr><td>In the granary</td><td class="n">${Math.round(s.agha.granary)} grain measures</td></tr>
       ${s.agha.reaped >= 1 ? `<tr><td>Cut grain awaiting separation from stalks</td><td class="n">about ${Math.round(s.agha.reaped / 5) * 5 || 1}</td></tr>` : ''}
       ${s.agha.standing >= 1 ? `<tr><td>Uncut grain in the landowner’s field</td><td class="n">about ${Math.round(s.agha.standing / 10) * 10 || 5}</td></tr>` : ''}
+      ${rainGuess(s) ? `<tr><td colspan="2" class="soft">${esc(rainGuess(s) ?? '')} (your guess)</td></tr>` : ''}
       <tr><td>Owed to the landowner</td><td class="n">${s.agha.due} grain measures</td></tr>
       <tr><td>The rider comes</td><td class="n">${esc(riderWords(s))}</td></tr>
       ${s.agha.arrears ? `<tr><td>Unpaid grain added to this year</td><td class="n">${s.agha.arrears}</td></tr>` : ''}
@@ -2502,11 +2809,22 @@ function ledger(s: ValleyState): string {
 
 // ---------- holding ----------
 
+/** A hold button can also be confirmed with a second tap or key press within a few seconds, so it works without
+ * press-and-hold (switch access, screen readers, drivers that cannot hold). The first tap only arms it. */
+const ARM_MS = 5000;
+let armed: { key: string; until: number } | null = null;
+function holdKey(b: HTMLButtonElement): string {
+  const row = b.closest('.reply-row, .decision-reply');
+  return `${selected}|${tab}|${b.firstChild?.textContent ?? ''}|${row?.querySelector('b, p:not(.reply-date)')?.textContent ?? ''}`;
+}
+
 function bindHold(b: HTMLButtonElement, fn: () => void) {
   let timer = 0;
   let fired = false;
   let progressTimer = 0;
+  let keyTapAt = -1e9;
   const duration = 650;
+  const key = holdKey(b);
   const progress = document.createElement('span');
   progress.className = 'hold-progress';
   progress.setAttribute('aria-hidden', 'true');
@@ -2516,17 +2834,42 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
     progress.textContent = fraction > 0 ? `${Math.floor(fraction * 100)}%` : '';
   };
   b.addEventListener('contextmenu', (e) => e.preventDefault());
-  const feedback = () => {
-    if (fired || b.disabled) return;
+  const say = (text: string) => {
     const status = app.querySelector<HTMLElement>('#hold-feedback') ?? document.createElement('p');
     status.id = 'hold-feedback';
-    status.className = b.closest('.decision-reply') ? 'sr' : 'hold-feedback';
+    status.className = 'hold-feedback';
     status.setAttribute('role', 'status');
     status.hidden = false;
-    status.textContent = 'Keep holding the button to carry out this action. Release after the button fills.';
+    status.textContent = text;
     b.after(status);
   };
-  b.addEventListener('click', feedback);
+  const disarm = () => {
+    if (armed?.key === key) armed = null;
+    b.classList.remove('armed');
+  };
+  if (armed && armed.key === key && performance.now() < armed.until) {
+    b.classList.add('armed');
+    window.setTimeout(disarm, armed.until - performance.now());
+  }
+  const tap = () => {
+    if (fired || b.disabled || !b.isConnected) return;
+    if (armed && armed.key === key && performance.now() < armed.until) {
+      cancel();
+      fired = true;
+      disarm();
+      fn();
+      return;
+    }
+    armed = { key, until: performance.now() + ARM_MS };
+    b.classList.add('armed');
+    window.setTimeout(disarm, ARM_MS);
+    say('Tap again to confirm, or hold the button until it fills.');
+  };
+  b.addEventListener('click', () => {
+    // A key press already counted on keyup; the browser may also send a click for it.
+    if (performance.now() - keyTapAt < 80) return;
+    tap();
+  });
   const startHold = () => {
     if (b.disabled || fired || timer || !b.isConnected) return;
     const started = performance.now();
@@ -2539,25 +2882,33 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
     timer = window.setTimeout(() => {
       clearInterval(progressTimer);
       timer = 0;
-      if (!b.isConnected || b.disabled) return cancel();
+      if (fired || !b.isConnected || b.disabled) return cancel();
       fired = true;
+      disarm();
       showProgress(1);
       b.classList.remove('holding');
       fn();
     }, duration);
   };
   b.addEventListener('pointerdown', startHold);
+  let keyDown = false;
   b.addEventListener('keydown', (e) => {
-    if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
-      e.preventDefault();
-      startHold();
-    }
+    if (e.key !== ' ' && e.key !== 'Enter') return;
+    // Repeats too: a held key must never turn into clicks that arm and fire.
+    e.preventDefault();
+    if (e.repeat) return;
+    keyDown = true;
+    startHold();
   });
   b.addEventListener('keyup', (e) => {
-    if (e.key === ' ' || e.key === 'Enter') {
-      feedback();
-      cancel();
-    }
+    if (e.key !== ' ' && e.key !== 'Enter') return;
+    e.preventDefault();
+    keyTapAt = performance.now();
+    // Only a press that began on this button counts as a tap.
+    if (!keyDown) return;
+    keyDown = false;
+    cancel();
+    tap();
   });
   b.addEventListener('blur', () => cancel());
   const cancel = () => {
@@ -2569,14 +2920,7 @@ function bindHold(b: HTMLButtonElement, fn: () => void) {
   };
   b.addEventListener('pointerleave', cancel);
   b.addEventListener('pointercancel', cancel);
-  b.addEventListener('pointerup', () => {
-    cancel();
-    if (!fired)
-      b.animate?.(
-        [{ transform: 'translateX(-2px)' }, { transform: 'translateX(2px)' }, { transform: 'none' }],
-        160,
-      );
-  });
+  b.addEventListener('pointerup', cancel);
 }
 
 // ---------- the ending ----------

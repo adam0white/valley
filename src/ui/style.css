@@ -2390,3 +2390,58 @@ body:has(.play[data-reflow="true"]) {
 .title-actions:has([data-visit-version]) {
   min-width: 0;
 }
+
+/* Each title option says what it changes, under its own control. */
+.title-actions .edition-note {
+  opacity: 0.85;
+}
+
+/* Grouped delayed replies: one row, its names and two answers. */
+.pending-replies .reply-row {
+  flex-wrap: wrap;
+  padding-block: 4px;
+}
+.pending-replies .reply-row > :first-child {
+  flex: 1 1 100%;
+}
+.reply-row .reply-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.thumbs button.primary .h {
+  display: block;
+  color: inherit;
+  opacity: 0.9;
+  font-size: 12px;
+  font-weight: normal;
+}
+.reply-row.grouped .soft {
+  font-weight: normal;
+}
+.mark-legend,
+.let-be,
+.say-note {
+  font-size: 13px;
+}
+button.hold.armed {
+  outline: 2px dashed currentColor;
+  outline-offset: 2px;
+}
+/* Long lines and the grain confirmation take the whole row, at every width. */
+.verb-grid > .pending-grain,
+.verb-grid > .say-note,
+.verb-grid > button.wide {
+  grid-column: 1 / -1;
+}
+.verb-grid > .pending-grain {
+  margin: 4px 0;
+}
+/* Phone: the house actions never take more than about a third of the screen; they scroll, and the reading keeps room. */
+@media (max-width: 899px) {
+  .play[data-house="true"]:not([data-reflow="true"]) .thumbs {
+    max-height: 32dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}

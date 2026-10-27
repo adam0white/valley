@@ -52,8 +52,9 @@ import {
   type Verb,
   visit,
 } from './valley.ts';
+import type { Saying } from './voices.ts';
 
-export const GAME_VERSION = '0.3.0';
+export const GAME_VERSION = '0.3.1';
 
 export type Input =
   | (DialogueOrder & { at: number })
@@ -70,7 +71,7 @@ export type Input =
   | { at: number; verb: 'give'; house: string; kile: number }
   | { at: number; verb: 'seize'; house: string }
   | { at: number; verb: 'ease'; house: string }
-  | { at: number; verb: 'reply'; house: string }
+  | { at: number; verb: 'reply'; house: string; saying?: Saying }
   | { at: number; verb: 'visit'; house: string; why?: Knock['what'] | 'call' }
   | { at: number; verb: 'turn-away'; knock: string }
   | { at: number; verb: 'borrow'; kile: number }
@@ -118,7 +119,10 @@ function apply(g: Game, i: Input): boolean {
     case 'dialogue-cancel':
       return Object.keys(i).every((k) => ['at', 'verb', 'turn'].includes(k)) && cancelDialogue(s, i.turn);
     case 'reply':
-      return replyAtHearth(s, i.house);
+      return (
+        (i.saying === undefined || ['listen', 'finish', 'rain'].includes(i.saying)) &&
+        replyAtHearth(s, i.house, i.saying ?? 'listen')
+      );
     case 'broker':
       return brokerChoice(s, i.choice);
     case 'alliance':
@@ -614,13 +618,13 @@ function validateReplyState(s: ValleyState): void {
     !Number.isSafeInteger(s.minute) ||
     s.minute < 0 ||
     s.minute > (END_DAY + 1) * DAY ||
-    r.visits.length > Math.floor(s.minute / 130) + 1
+    r.visits.length > 3 * (Math.floor(s.minute / 130) + 1)
   )
     throw new Error('Invalid Valley reply edition state.');
   const keys = new Set<string>();
   for (const key of r.visits) {
     if (typeof key !== 'string') throw new Error('Invalid Valley reply visit.');
-    const match = /^([\p{L}\p{N}_-]{1,100}):(0|[1-9][0-9]*)$/u.exec(key);
+    const match = /^([\p{L}\p{N}_-]{1,100}):(0|[1-9][0-9]*)(?::(?:finish|rain))?$/u.exec(key);
     const at = match ? Number(match[2]) : NaN;
     if (
       !match ||

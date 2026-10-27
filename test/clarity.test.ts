@@ -1,15 +1,32 @@
 import { expect, it } from 'vitest';
 import { newGame } from '../src/sim/game.ts';
 import { give } from '../src/sim/valley.ts';
-import { clockWords, grainReceipt, paceWords, travelWords } from '../src/ui/clarity.ts';
+import { clockWords, grainReceipt, paceWords, skipBlock, travelWords } from '../src/ui/clarity.ts';
 import { automaticRate } from '../src/ui/pacing.ts';
 
 it('shows advancing clock minutes and the slowdown that still overrides Skip', () => {
   expect(clockWords(420)).toBe('07:00');
   expect(clockWords(450)).toBe('07:30');
   const waiting = { waiting: true, reading: true, hurrying: true };
-  expect(paceWords(waiting)).toContain('replies');
+  expect(paceWords(waiting)).toContain('door');
   expect(automaticRate({ ...waiting, night: false, travelling: false })).toBe(1);
+  expect(skipBlock({ ...waiting, hurrying: false })).toMatch(/door/);
+  // Only delayed replies open: slower than usual, and Skip still runs time quickly.
+  const replies = {
+    waiting: false,
+    reading: false,
+    hurrying: false,
+    replies: true,
+    night: false,
+    travelling: false,
+  };
+  expect(paceWords(replies)).toContain('replies');
+  expect(automaticRate(replies)).toBe(30);
+  expect(automaticRate({ ...replies, hurrying: true })).toBe(960);
+  expect(skipBlock(replies)).toBeNull();
+  // An open question almost stops time, over every other pace.
+  expect(automaticRate({ ...replies, waiting: true, asked: true })).toBe(0.25);
+  expect(skipBlock({ waiting: false, hurrying: false, asked: true })).toMatch(/answer/);
   expect(paceWords({ waiting: false, reading: true, hurrying: true })).toContain('reading');
 });
 it('reports actual transferred grain and the next visit boundary', () => {

@@ -39,7 +39,7 @@ async function open(
         'valley-log-v1',
         JSON.stringify({
           game: 'valley',
-          version: '0.3.0',
+          version: '0.3.1',
           seed,
           inputs,
           minute,
@@ -203,6 +203,31 @@ it('replaces a call with Skip and opens replies without a fold', async () => {
   }
 });
 
+// Hold to insist has a non-hold way in: the first tap arms it, a second tap insists.
+it('insists on a refusal by tapping its hold button twice', async () => {
+  const inputs: Input[] = [{ verb: 'call', job: 'reap-agha', houses: ['coban'], at: 750 }];
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
+  try {
+    await page.route('**/api/**', (route) => route.abort());
+    await open(page, 990, 42, inputs);
+    await page.locator('#houses [data-h="coban"]').click();
+    const insists = () =>
+      page.evaluate<number>(
+        `import('/src/ui/app.ts').then(({ _debug }) => _debug.game().inputs.filter((i) => i.verb === 'insist').length)`,
+      );
+    const press = page.locator('.decision-reply .hold').first();
+    await press.scrollIntoViewIfNeeded();
+    await press.tap();
+    expect(await insists()).toBe(0);
+    expect(await press.getAttribute('class')).toContain('armed');
+    expect(await page.locator('#sheet').textContent()).toContain('Tap again to confirm');
+    await page.locator('.decision-reply .hold').first().tap();
+    expect(await insists()).toBe(1);
+  } finally {
+    await page.close();
+  }
+});
+
 it('reads a named refusal, cancels and completes one hold, then visits and confirms grain on a phone', async () => {
   const inputs: Input[] = [{ verb: 'call', job: 'reap-agha', houses: ['coban'], at: 750 }];
   const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
@@ -314,7 +339,9 @@ it('reads a named refusal, cancels and completes one hold, then visits and confi
     expect(await visibleText(page.locator('#reading-travel'))).toContain(
       `${visit.visit.arrive - visit.minute} game minutes until arrival; ${visit.visit.back - visit.minute} until home.`,
     );
-    await page.clock.runFor(60000);
+    // Open delayed replies no longer hold the clock at its slowest. Wait past arrival and its first spoken lines.
+    for (let i = 0; i < 60 && (await facts()).minute < visit.visit.arrive + 40; i++)
+      await page.clock.runFor(1000);
     const attended = await facts();
     expect(attended.minute).toBeGreaterThanOrEqual(attended.visit.arrive);
     expect(attended.minute).toBeLessThan(attended.visit.leave);
@@ -328,7 +355,8 @@ it('reads a named refusal, cancels and completes one hold, then visits and confi
       e.scrollTop = e.scrollHeight;
       return e.scrollTop;
     });
-    await page.clock.runFor(30000);
+    // Let the clock move within the visit.
+    for (let i = 0; i < 30 && (await facts()).minute <= attended.minute; i++) await page.clock.runFor(1000);
     const countdown = await facts();
     expect(countdown.minute).toBeGreaterThan(attended.minute);
     expect(countdown.minute).toBeLessThan(countdown.visit.leave);
@@ -856,7 +884,7 @@ it('refuses a legacy local log without a pinned narration choice', async () => {
     await page.goto(origin);
     const legacy = JSON.stringify({
       game: 'valley',
-      version: '0.3.0',
+      version: '0.3.1',
       seed: 7,
       inputs: [],
       minute: 1440,
@@ -900,7 +928,14 @@ it('offers an introductory visit and names the household a call reaches', async 
     await page.clock.runFor(50);
     expect((await state(page)).inputs).toContain('"verb":"visit"');
     expect(await visibleText(page.locator('#steward'))).toMatch(/walking to/);
-    await page.getByRole('button', { name: 'Call this house to cut barley', exact: true }).click();
+    const call = page.getByRole('button', { name: 'Call this house to cut barley', exact: true });
+    await call.click();
+    const inputs = JSON.parse((await state(page)).inputs);
+    if (inputs.at(-1)?.verb !== 'call') {
+      // A house with almost no food asks for a second press first, because a call cannot be taken back.
+      expect(await visibleText(page.locator('.action-caption'))).toMatch(/cannot be taken back/);
+      await page.getByRole('button', { name: /Call this house to cut barley/ }).click();
+    }
     expect(JSON.parse((await state(page)).inputs).at(-1)).toMatchObject({ verb: 'call', houses: ['coban'] });
     expect(await visibleText(page.locator('.action-caption'))).toMatch(/only.*Çoban house/);
   } finally {
@@ -1002,13 +1037,13 @@ it('offers the opt-in answer at first arrival without reopening the household', 
     await page.getByRole('button', { name: 'Send grain', exact: true }).click();
     await page.getByRole('button', { name: 'Confirm send grain', exact: true }).click();
     await page.getByRole('button', { name: 'Visit', exact: true }).click();
-    expect(await page.getByRole('button', { name: 'Say: I came to listen', exact: true }).count()).toBe(0);
+    expect(await page.getByRole('button', { name: /^Say: I came to listen/ }).count()).toBe(0);
     for (let i = 0; i < 30; i++) {
       await page.clock.runFor(1000);
       if ((await visibleText(page.locator('#steward'))).includes('at the Kavak house')) break;
     }
     expect(await visibleText(page.locator('#steward'))).toContain('at the Kavak house');
-    const answer = page.getByRole('button', { name: 'Say: I came to listen', exact: true });
+    const answer = page.getByRole('button', { name: /^Say: I came to listen/ });
     expect(await answer.count()).toBe(1);
     expect(await answer.isEnabled()).toBe(true);
     await answer.click();
@@ -1343,7 +1378,7 @@ it.each<{ name: string; minute: number; inputs: Input[] }>([
             'valley-log-v1',
             JSON.stringify({
               game: 'valley',
-              version: '0.3.0',
+              version: '0.3.1',
               seed: 7,
               rules: expected.rules,
               inputs,

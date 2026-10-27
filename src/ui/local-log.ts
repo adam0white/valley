@@ -129,7 +129,12 @@ export function validLocalLog(value: unknown): boolean {
         if (!name(input.person)) return false;
         break;
       case 'reply':
-        if (v.rules !== REPLY_EDITION || !name(input.house)) return false;
+        if (
+          v.rules !== REPLY_EDITION ||
+          !name(input.house) ||
+          (input.saying !== undefined && !['listen', 'finish', 'rain'].includes(input.saying as string))
+        )
+          return false;
         break;
       case 'topic':
         if (

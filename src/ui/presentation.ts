@@ -238,7 +238,7 @@ export function callUnavailable(s: ValleyState, job: Job, house?: Household): st
       (!house || a.houses.includes(house.id)),
   );
   return ask
-    ? `The current call is open; another opens when it expires on ${fullDateEnglish(dayOfMinute(ask.until))}.`
+    ? `Your call is still open. You can call again on ${fullDateEnglish(dayOfMinute(ask.until))}, when it ends.`
     : null;
 }
 
@@ -265,7 +265,7 @@ export function limitsWords(s: ValleyState, house?: Household): string {
     );
   if (ask)
     out.push(
-      `The current call is still open; another call for this work opens when it expires on ${fullDateEnglish(dayOfMinute(ask.until))}.`,
+      `Your call is still open. You can call again for this work on ${fullDateEnglish(dayOfMinute(ask.until))}, when it ends.`,
     );
   if (house?.eased) out.push(`${shareOwnerWords(s, house)} has already been reduced.`);
   if (house && house.paid >= shareOwed(house) - 0.5) out.push(paidShareWords(s, house));
