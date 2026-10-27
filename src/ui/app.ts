@@ -76,7 +76,16 @@ import {
 } from '../sim/valley.ts';
 import type { Saying } from '../sim/voices.ts';
 import { CastSession, type LocalCastReceipt } from './cast-session.ts';
-import { debugError, FOREIGN_FILE, lab, labScreen, mountLab, openFeedback, openMenu } from './lab.ts';
+import {
+  debugError,
+  entryMode,
+  FOREIGN_FILE,
+  lab,
+  labScreen,
+  mountLab,
+  openFeedback,
+  openMenu,
+} from './lab.ts';
 import {
   callUnavailable,
   cropReturnWords,
@@ -559,6 +568,10 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
 // ---------- the title page ----------
 
 export function start() {
+  if (entryMode === 'invalid') {
+    app.textContent = 'This file address is invalid. Use /file/ to choose a saved file.';
+    return;
+  }
   lab.trackRun(
     () => {
       if (!g || castSession.game !== g) return null;

@@ -893,6 +893,7 @@ it('refuses a legacy local log without a pinned narration choice', async () => {
     });
     await page.evaluate((text) => localStorage.setItem('valley-log-v1', text), legacy);
     await page.reload();
+    await page.locator('.title-premise').waitFor();
     expect(await page.getByRole('button', { name: 'Resume', exact: true }).count()).toBe(0);
     expect(await page.locator('body').textContent()).toMatch(/malformed or incompatible/);
     expect(await page.evaluate(() => localStorage.getItem('valley-log-v1'))).toBe(legacy);
@@ -1472,7 +1473,7 @@ it('opens a foreign file without reading or replacing occupied native storage or
     });
     await page.unroute('**/src/main.ts');
     await page.clock.install();
-    await page.goto(`${origin}/?file=1`);
+    await page.goto(`${origin}/file/`);
     await page.clock.pauseAt(Date.now() + 50);
     await expect.poll(() => page.getByLabel('Open a Valley file').count()).toBe(1);
     // Compare the exact uploaded JSON wire file, not the pre-serialization native -0 values.
