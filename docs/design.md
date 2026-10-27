@@ -395,3 +395,96 @@ seed and import controls are collapsed in Debug beside Lab privacy. No vendor ch
 This candidate ends at the independent director review gate before commit. Technical
 delivery and live verification remain required after CLEAR. Adam accepts feel and
 readiness on 2026-11-03. No panel, round or retest is part of this work.
+
+
+## Current scene and household reply context — 2026-10-27
+
+This is a bounded source candidate. Remaining: director independent review, exact signed
+source and green CI, root merge, clean live release and cleanup. Adam accepts feel separately.
+The notebook/Say/pace batch is already delivered at `0dfe3a4`; canonical `/file/` routing
+is already delivered at `f2afaf3`. Earlier dated candidate and deployment-hold paragraphs
+above describe their own batches. They do not undo those delivery receipts.
+
+The current scene projection quotes only retained outward words at or before the current
+minute. Zehra is selected by actual id and household membership. Her card explains the
+existing saved-term, walking, departed, sleeping, absent, short-visit and pending-question
+gates. It does not say she asked a question merely because the player has an available
+question to ask. After the field is cut, the notebook names her actual household and links
+to her earlier words. This does not invent a new need or claim a new conversation.
+
+Reply groups keep their call and household identity instead of sorting by latest reply
+hour. People with different words remain separately attributed within their household.
+Acceptance labels name the household and call; the household's own page also offers
+acceptance. The count distinguishes voluntary agreement, answers under pressure, delayed, refused,
+partial and unanswered.
+An agreement is not arrival evidence. A later answer may change the count. Accepting a
+reply without pressing neither moves its speaker nor promises future work.
+
+Cancel discards the pending grain command and invalidates its old confirmation callback.
+It does not undo earlier gifts. The existing dialogue cancel prevents a pending question
+from producing an answer. Earlier earned events and time remain. The title explicitly
+says the saved place is kept. Failed-save messages still report failure. There is no new
+input, edition, feature switch or simulation interpretation in this presentation batch.
+
+Literal scope uses the retests-1027b source-local F-numbers and the reconciled GDR
+rows. These are not claims about central ledger identity. F-1576/GDR-0034 closed reasons; F-1591/GDR-0035 a post-cut named-household
+lead only; F-1578/GDR-0047 stable group identity; F-1579/GDR-0048 answer-count explanation;
+F-1580/GDR-0049 household acceptance; F-1589/GDR-0058 named acceptance controls;
+F-1590/GDR-0059 saved-place wording. Cancel evidence qualifies F-1581/GDR-0050 command
+invalidation only; it does not close the separate footer-layout ask. F-1584/GDR-0053
+keeps the existing actual Call/Visit gate explanations and adds scene context; no new
+travel permission is created. These are engineering dispositions, not player acceptance.
+
+### Exact next scene work
+
+The next engineering unit is one explicit recorded Zehra follow-up tied to the current
+attended visit, an actual source-note id and the current completed-cut or birth event.
+Use `src/sim/dialogue.ts` for the authored source and answer; `src/sim/game.ts` for its
+public action; `src/ui/local-log.ts` for semantic admission; `src/ui/app.ts` for selection;
+`test/dialogue.test.ts` for one ordinary causal schedule and full/compact/1440-minute
+continuation; `test/ui.test.ts` for the same App path. Add fields only when the explicit
+new action is accepted, so every old no-new-input continuation stays exact. Do not
+silently change the current follow-up answer. Keep actual HF hearing, choice, timed
+activity and completion, with unavailable/withheld/interrupted outcomes. Target 2026-10-29.
+A naturally completed new answer is still unproved. No generic answer or forced meeting
+may substitute for it. F-1288/F-1309/F-1312 and GDI-1159/1178/1181/1192/1217/1220 remain
+open for those specific contextual exchanges. Yusuf/birth, Tepe/son and Danyal/Maryam
+remain distinct later units under GDI-1027/F-1155, not one conversation rewrite.
+
+Named group identity does not give unnamed residents new identities. F-1139 remains
+open; choose roles from actual local people and retained outward sources, not fabricated
+canonical identities. F-1292's named actual cutters still needs a projection of useful
+work/activity, not the agreed count. F-1583's grain-repayment words need an explicit
+record of the actual promise and terms before any new debt. Forecast/storm accounting,
+travel Skip, arbitrary gift amounts, per-person exemption and remaining physical layout
+asks remain engineering work with their own source units, targeted 2026-10-30.
+
+### Portable local-edition mapping remains separate engineering
+
+Supported current receiver pairs in `src/sim/passport.ts` are Well/Watch `site-cast/1`
+with `site-cast-calendar/1` and the exact listed source-role/cast-id pairs, and Valley
+`valley-cast/1` with `valley-calendar/1`. Receiver engine dialects are 2.17.0, 2.21.0 and
+2.23.0. Each still requires identity/revision, source checkpoint schema/minute/RNG/SHA256,
+trusted norm meanings, mapped skills/actions and lawful continuing worship commitments.
+Care/work/owed duties without an equivalent handover and unknown dialects are refused.
+These are supported source contracts, not fresh journey receipts from this batch.
+
+The canonical native header is `HOST_RULES = valley-cast-3`. A checkpoint source stamp
+is `{game: valley, build, engine: 2.23.0, rules: valley-cast-3}`. Its transfer fields are
+`castPassport`, `sourceRole`, `hostRun`, `person`, `checkpoint` and `life`. Ownership uses
+actual `castId`, `castRevision`, `branchId`, `parentRevision`, claims and local `runId`;
+file-imported receipts remain archive provenance. The local/public native export instead
+pins its actual rules edition and retains the whole Valley state, people, RNG, inputs,
+histories, recording and source archives. It has no reviewed portable counterpart for
+local cast roles plus steward provisions, pass journeys, family/road state and dialogue.
+`CastSession.stamps`, fresh carryover and checkpoint publication refuse that mapping;
+full native file play remains supported. Never stamp this local world `valley-cast-3`
+or remove world state to obtain admission.
+
+Next mapping unit, target 2026-10-30: inventory exact local producer roles and source
+calendar/body/world fields in `src/sim/people.ts`, `src/sim/edition.ts`,
+`src/sim/passport.ts` and `src/ui/cast-session.ts`; specify a named new native dialect,
+its lossless retained source archive and owner/receiver binding; prove one genuinely
+supported producer/receiver pair or retain an exact refusal for the missing binding.
+Do not enable public carryover before that contract exists. This is an engineering gap,
+not an owner-input deferral. File-only isolation and current archive capacity stay intact.
