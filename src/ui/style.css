@@ -2473,3 +2473,67 @@ button.hold.armed {
   line-height: 1.5;
   font-size: max(14px, 0.9rem);
 }
+
+/* An active phone notebook takes map space; its reading body and actions remain separate. */
+@media (max-width: 767px) {
+  .play.lk-stage[data-notebook-active="true"]:not([data-reflow="true"]) {
+    grid-template-rows: 44px 36px 120px 52px minmax(0, 1fr);
+  }
+  .play[data-notebook-active="true"] > .map {
+    min-height: 0;
+  }
+}
+#sheet .notebook-visit > button {
+  display: block;
+  width: 100%;
+  margin-block: 4px;
+  min-height: 44px;
+}
+#sheet .notebook-visit button .h {
+  display: block;
+  font-size: 13px;
+}
+.visit-reply p,
+.visit-question {
+  margin-block: 4px;
+}
+
+/* The reason belongs to the small i after the pace control, not a permanent reading line. */
+#pace {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-block: 0;
+}
+#pace.pace-status > button {
+  min-height: 44px;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  padding: 4px;
+  font: inherit;
+}
+#pace > [data-pace-info] {
+  min-width: 44px;
+}
+#pace > [data-pace-info] > span {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  line-height: 20px;
+}
+#pace-explanation {
+  position: absolute;
+  z-index: 5;
+  top: 100%;
+  left: 8px;
+  right: 8px;
+  padding: 8px;
+  border: 1px solid var(--ink-soft);
+  background: var(--paper);
+  color: var(--ink);
+  white-space: normal;
+}

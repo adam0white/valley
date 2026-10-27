@@ -1641,3 +1641,146 @@ it('opens a foreign file without reading or replacing occupied native storage or
     await page.close();
   }
 });
+
+async function paceReason(page: Page): Promise<string> {
+  const info = page.getByRole('button', { name: 'Current pace reason', exact: true });
+  await info.click();
+  const words = await visibleText(page.locator('#pace-explanation'));
+  await info.click();
+  return words;
+}
+
+// Scope: public notebook presentation only; real inputs and engine-produced answers, no actor/clock mutation.
+it('keeps the public phone notebook readable and exposes Say, its dated response and actual pace reason', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(
+      page,
+      1110,
+      7,
+      [
+        { at: 420, verb: 'call', job: 'reap-agha', houses: ['coban'] },
+        { at: 1080, verb: 'visit', house: 'coban' },
+      ],
+      true,
+      'valley-public-2026-10',
+    );
+    await page.evaluate(() => document.fonts.ready);
+    const geometry = await page
+      .locator('#sheet')
+      .evaluate((e) => ({ height: e.clientHeight, rect: e.getBoundingClientRect().toJSON() }));
+    console.log('NOTEBOOK_BASE_GEOMETRY', JSON.stringify(geometry));
+    expect(geometry.height).toBeGreaterThanOrEqual(200);
+    await page.getByRole('button', { name: /^Zehra is waiting for your answer/ }).click();
+    await page.getByRole('button', { name: 'Not now', exact: true }).click();
+    await page.getByRole('button', { name: 'Back to the notebook', exact: true }).click();
+    const say = page.getByRole('button', { name: /^Say something at the Çoban house/ });
+    await say.click();
+    const listen = page.getByRole('button', { name: /^Say: I came to listen/ });
+    await listen.click();
+    const pending = page.locator('.visit-reply');
+    expect(await pending.textContent()).toContain('No answer yet');
+    expect(await pending.textContent()).not.toContain('in answer');
+    const input = await page.evaluate(
+      `import('/src/ui/app.ts').then(({_debug})=>_debug.game().inputs.at(-1))`,
+    );
+    expect(input).toMatchObject({ verb: 'reply', house: 'coban', saying: 'listen' });
+    // Two ordinary sayings can share one game minute. The latest outward answer must stay the latest.
+    await page.getByRole('button', { name: /^Say something at the Çoban house/ }).click();
+    await page.getByRole('button', { name: /^Say: Finish your own barley first/ }).click();
+    const second = await page.evaluate(
+      `import('/src/ui/app.ts').then(({_debug})=>_debug.game().inputs.at(-1))`,
+    );
+    expect(second).toMatchObject({ verb: 'reply', house: 'coban', saying: 'finish', at: 1110 });
+    expect(await page.evaluate(() => document.activeElement?.closest('#sheet') !== null)).toBe(true);
+    await page.clock.runFor(6000);
+    const engine = await page.evaluate<{ minute: number; words: string }>(
+      `import('/src/ui/app.ts').then(({_debug})=>{const s=_debug.game().valley;const n=s.notes.findLast(n=>n.house==='coban'&&n.at===${1111}&&n.kind==='voice');return {minute:s.minute,words:n?.words??''}})`,
+    );
+    expect(engine.minute).toBeGreaterThanOrEqual(1111);
+    expect(engine.words).not.toBe('');
+    expect(await pending.textContent()).toContain(engine.words);
+    expect(await pending.textContent()).not.toContain('No answer yet');
+    const box = await pending.boundingBox();
+    const thumbs = await page.locator('#thumbs').boundingBox();
+    expect(box && thumbs && box.y >= geometry.rect.top && box.y + box.height <= thumbs.y).toBe(true);
+    const pace = await paceReason(page);
+    expect(pace).not.toContain('Return to the notebook');
+    await page.locator('[data-h="coban"]').click();
+    expect(await paceReason(page)).toContain('house');
+    await page.getByRole('button', { name: 'Back to the notebook', exact: true }).click();
+    expect(await paceReason(page)).not.toContain('Return to the notebook');
+  } finally {
+    await page.close();
+  }
+});
+
+it('shows an engine-produced Zehra pending question in the public notebook without promising an answer', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(
+      page,
+      1110,
+      7,
+      [
+        { at: 420, verb: 'call', job: 'reap-agha', houses: ['coban'] },
+        { at: 1080, verb: 'visit', house: 'coban' },
+      ],
+      true,
+      'valley-public-2026-10',
+    );
+    await page.locator('[data-h="coban"]').click();
+    await page.getByRole('button', { name: /^You said, “Who will feed my family/ }).click();
+    const exchange = await page.evaluate<{ status: string; answerNote?: number }>(
+      `import('/src/ui/app.ts').then(({_debug})=>_debug.game().valley.dialogue.exchanges.at(-1))`,
+    );
+    expect(exchange.status).toBe('pending');
+    expect(exchange.answerNote).toBeUndefined();
+    await page.getByRole('button', { name: 'Back to the notebook', exact: true }).click();
+    expect(await page.locator('#sheet').textContent()).toContain(
+      'Your question is waiting to reach Zehra. No answer yet.',
+    );
+    expect(await page.locator('#sheet').textContent()).not.toContain('The talk finished.');
+  } finally {
+    await page.close();
+  }
+});
+
+it('explains temporary new-news slowdown in the notebook and keeps menu pause', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await open(page, 420, 7, [], true, 'valley-public-2026-10');
+    await page.getByRole('button', { name: /^Call the hamlet to cut/ }).click();
+    await page.clock.runFor(1500);
+    const info = page.getByRole('button', { name: 'Current pace reason', exact: true });
+    expect(await info.count()).toBe(1);
+    expect(await page.locator('[data-pace-menu] + [data-pace-info]').count()).toBe(1);
+    expect(await page.locator('#pace-explanation').isVisible()).toBe(false);
+    const beforeInfo = await state(page);
+    expect(await paceReason(page)).toContain('New replies or news');
+    expect(await state(page)).toEqual(beforeInfo);
+    await info.click();
+    // The existing UI advances in 30-minute quanta; reading runs at two minutes per second.
+    await page.clock.runFor(16000);
+    expect((await state(page)).minute).toBeGreaterThan(beforeInfo.minute);
+    await info.press('Escape');
+    expect(await page.locator('#pace-explanation').isVisible()).toBe(false);
+    expect(await paceReason(page)).toContain('New replies or news');
+    expect(await paceReason(page)).not.toContain('Back returns');
+    const sheet = await page.locator('#sheet').boundingBox();
+    expect(sheet?.height).toBeGreaterThanOrEqual(200);
+    await page.getByRole('button', { name: 'The ledger ▸', exact: true }).click();
+    expect(await paceReason(page)).toContain('ledger is open');
+    await page.getByRole('button', { name: 'Back to the notebook', exact: true }).click();
+    await page.getByRole('button', { name: 'Time control', exact: true }).click();
+    const paused = await state(page);
+    await page.clock.runFor(2000);
+    expect(await state(page)).toEqual(paused);
+    await page.locator('[data-close-menu]').click();
+    await page.getByRole('button', { name: 'Skip to the next event', exact: true }).click();
+    expect(await paceReason(page)).toContain('Skipping');
+    expect(await paceReason(page)).not.toContain('Back returns');
+  } finally {
+    await page.close();
+  }
+});

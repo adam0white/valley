@@ -20,18 +20,26 @@ export function paceWords(s: {
   hurrying: boolean;
   asked?: boolean;
   replies?: boolean;
+  readingView?: string;
+  waitingReason?: string;
+  pace?: string;
+  night?: boolean;
+  travelling?: boolean;
+  working?: boolean;
 }): string {
   return s.asked
     ? 'Someone is waiting for your answer. Time almost stops until you answer or choose Not now.'
     : s.waiting
-      ? 'Time moves slowly while someone is at your door or a decision is open.'
+      ? `${s.waitingReason ?? 'Someone is at your door or a decision is open.'} Time moves slowly while this is open.`
       : s.reading
-        ? 'Time moves slowly while you read. Return to the notebook to leave this reading view.'
+        ? s.readingView
+          ? `Time moves slowly while the ${s.readingView === 'house' ? 'house page' : s.readingView === 'ledger' ? 'ledger' : s.readingView === 'reader' ? 'earlier replies view' : 'orders view'} is open. Back returns to the notebook.`
+          : 'New replies or news have slowed time for reading. This reading slowdown lasts a few seconds.'
         : s.hurrying
           ? 'Skipping toward the next event.'
           : s.replies
             ? 'Time moves slowly while delayed replies to your call are open. Skip, or let them finish first.'
-            : 'Time is moving. Menu and Information pause it.';
+            : `${s.pace && s.pace !== 'automatic' ? `Your ${s.pace} pace is selected.` : s.working ? 'Time follows the work season.' : 'Time follows the quiet season.'}${s.night && !s.travelling ? ' It runs faster at night while you are home.' : ''} Menu and Information pause it.`;
 }
 /** Why Skip cannot run now, said at the button; null when it can. */
 export function skipBlock(s: { waiting: boolean; hurrying: boolean; asked?: boolean }): string | null {
