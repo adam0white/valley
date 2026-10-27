@@ -11,8 +11,7 @@ to the households.
 ## How to play
 
 1. Choose **New game**, or **Resume** to continue this browser's saved term. Replacing an
-   existing save requires confirmation. The two rules checkboxes start unchecked. Choose
-   the edition before starting the term, as described below.
+   existing save requires confirmation. New terms include the current public host rules.
 2. Read the current task, date and seasonal forecast. Select a house on the map or with
    its named house button. Read the household's reply and available actions.
 3. Call people for seasonal work, collect their share, visit, give grain or reduce a share
@@ -34,22 +33,24 @@ in your note and send nothing. Changing or clearing a choice keeps your edited t
 
 ## Rules editions
 
-On the title screen, select the checkbox beginning **Also include pass journeys, family
-arrangements and a road agreement.** Then choose **New game**. This selects
-`valley-alliance-2026-10` and includes the October grain rules. The steward eats real
-provisions and rests between walks. Continuing people stay local in this edition.
+New terms use `valley-public-2026-10`: spoken household answers, the bounded Zehra
+scene, grain wages, voluntary contributions, winter loans, inspections, pass journeys,
+family arrangements and the road agreement. These have no title checkbox or query switch.
+The steward eats real provisions and rests between walks. HF remains pinned to 3.0.0.
 
-The first checkbox, **Include grain wages, voluntary contributions, winter loans and
-inspections in this new term.**, selects `valley-2026-10` when the second is unchecked.
-It adds completed mill wages, voluntary extra sacks, winter grain loans through real
-neighbour ties, topics during attended visits, a third-year labour levy and a separate
-grain store with inspection. People can refuse voluntary requests. Transfers use actual
-grain stores and do not guarantee gratitude or forgiveness.
+Existing saves keep their exact edition. Import and Resume preserve original, October,
+pass, replies, Zehra and alliance histories, including the older pass barter rules.
+A new term from the menu returns to the title before replacing a save.
 
-With both unchecked, a new term keeps the original rules. Existing terms do not upgrade
-in place. Saves, exports and recovery continuations retain their edition. The older
-`valley-pass-2026-10` edition retains its single introduction and ordinary stone barter.
-The new marriage and road paths belong only to the alliance edition.
+Pace controls are public in the menu. Run downloads, named seeds and imports sit in
+**Debug**, collapsed on every menu opening beside **Lab privacy**. Person controls live
+on the [central shelf](https://human.adamwhite.work/lab/people/).
+
+Compatible original/October terms attempt same-person carryover automatically.
+The public, replies, Zehra, pass and alliance editions remain local: their local people,
+travel and body rules have no reviewed portable dialect in the existing Valley passport.
+This exclusion prevents importing a person into incompatible rules or rewriting a loaded
+person. Loaded histories and file-session ownership rules are unchanged.
 
 ### Family arrangements
 

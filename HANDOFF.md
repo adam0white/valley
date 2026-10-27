@@ -1,5 +1,25 @@
 # Valley handoff
 
+## Public term candidate — 2026-10-27
+
+Remaining: director-launched independent review, signed source, exact green CI and clean
+live deployment. This is an uncommitted engineering candidate, not a live receipt.
+
+New terms use `valley-public-2026-10`, combining the existing spoken visits, bounded
+Zehra scene, grain, pass, family and road host paths. Old edition construction and replay
+are retained. No gameplay checkbox or lab query switch remains. Public pace controls
+and collapsed Debug beside Lab privacy replace gated tools. Cast controls are unmounted;
+compatible old worlds attempt carryover automatically. The public world remains local
+under the existing cast-region exclusion: a reviewed passport for its local people and
+travel/body rules is missing. No HF upgrade or generic faculty implementation is included.
+
+F-1575 is addressed by the public term and menu New game returning to the title. F-1319
+now previews the granary remainder before confirming a gift, separately from any later
+returned grain. Nothing promises Zehra will speak or makes her comply. Engineering
+checks provide no new player, device or notebook acceptance evidence. Adam accepts
+feel and readiness on 2026-11-03. Candidate and review receipts belong in the worker
+private report, `~/code/.lab-scratch/games-deferred/gd-resume-valley-report.md`.
+
 ## Retest fix cycle (Valley 0.3.1) — 2026-10-27
 
 Remaining: none for this cycle once the deploy receipt below is recorded in the lab

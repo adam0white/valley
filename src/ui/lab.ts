@@ -4,7 +4,6 @@ import type { SavedGame } from '../sim/game.ts';
 import { toggleMusic } from './music.ts';
 
 export const FOREIGN_FILE = new URLSearchParams(location.search).get('file') === '1';
-export const LAB_TOOLS = new URLSearchParams(location.search).get('lab') === '1';
 export const lab = createLab({
   game: 'valley',
   ...(FOREIGN_FILE ? { preservation: 'preserve' as const } : {}),
@@ -22,6 +21,7 @@ type RunControls = {
   closeFile?: () => void;
   recordingChanged?: () => void;
   newGame?: () => void;
+  diagnostics?: () => void;
   getSpeed: () => GameSpeed;
   setSpeed: (speed: GameSpeed) => void;
   date: () => string;
@@ -36,6 +36,14 @@ function readLocal(key: string): string {
   } catch {
     return '';
   }
+}
+
+/** Error detail stays in the same collapsed diagnostics as exports and imports. */
+export function debugError(error: unknown): void {
+  const detail = document.querySelector<HTMLElement>('[data-debug-error]');
+  if (!detail) return;
+  detail.textContent = error instanceof Error ? error.message : 'Unknown error.';
+  detail.hidden = false;
 }
 
 export function openMenu(): void {
@@ -53,17 +61,13 @@ export function mountLab(options: RunControls): void {
   controls.innerHTML = `<dialog class="game-menu-panel" aria-labelledby="valley-menu-title">
     <header class="menu-head"><h2 id="valley-menu-title">Game menu <small data-menu-date></small></h2><button type="button" data-close-menu aria-label="Close menu">×</button></header>
     <div class="menu-body"><button type="button" data-music aria-pressed="false">Music: off</button><p data-save-status role="status"></p><p>Time stops while this menu is open. ${FOREIGN_FILE ? 'This file stays in this tab. Download it to keep your progress.' : 'The game saves your progress as you play.'}</p>
-    ${
-      LAB_TOOLS
-        ? `<button type="button" data-notebook>The notebook <span aria-hidden="true">▸</span></button>
+    <button type="button" data-notebook>The notebook <span aria-hidden="true">▸</span></button>
     <fieldset class="menu-speed"><legend>Time</legend><div role="group" aria-label="Time control">${(['automatic', 'slow', 'steady', 'fast'] as const).map((speed) => `<button type="button" data-speed="${speed}" aria-pressed="false">${speed.charAt(0).toUpperCase() + speed.slice(1)}</button>`).join('')}</div></fieldset>
-    `
-        : ''
-    }<button type="button" data-feedback>Feedback <span aria-hidden="true">▸</span></button>
+    <button type="button" data-feedback>Feedback <span aria-hidden="true">▸</span></button>
     <button type="button" data-fullscreen>Full screen</button>
     <button type="button" data-new${FOREIGN_FILE ? ' hidden disabled' : ''}>New game</button>${FOREIGN_FILE ? '<button type="button" data-file-download>Download this Valley file</button><button type="button" data-file-open>Open another Valley file</button><button type="button" data-file-close>Close file session</button>' : ''}<span data-new-confirm hidden>Replace your saved game? <button type="button" data-confirm-new>Start new game</button><button type="button" data-cancel-new>Cancel</button></span>
-    <a href="https://human.adamwhite.work/games/" target="_top">All games</a></div>
-    <footer class="menu-footer"><label><input type="checkbox" data-events> Recording</label><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a><button type="button" class="primary" data-resume>Resume</button></footer>
+    <a href="https://human.adamwhite.work/games/" target="_top">All games</a><a href="https://human.adamwhite.work/lab/people/" target="_top">People between games</a></div>
+    <footer class="menu-footer"><label><input type="checkbox" data-events> Recording</label><div class="menu-privacy-debug"><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a><details class="menu-debug"><summary>Debug</summary><div><button type="button" data-download>Download this run</button><button type="button" data-diagnostics${FOREIGN_FILE ? ' hidden disabled' : ''}>Named seed</button><a href="/?file=1">Open a Valley file</a><p data-debug-error hidden></p></div></details></div><button type="button" class="primary" data-resume>Resume</button></footer>
   </dialog>
   <dialog class="feedback-panel" aria-labelledby="valley-feedback-title">
     <header class="feedback-head"><button type="button" data-feedback-back aria-label="Back to menu">←</button><h2 id="valley-feedback-title">Feedback</h2><button type="button" data-close-feedback aria-label="Close Feedback">×</button></header>
@@ -78,7 +82,7 @@ export function mountLab(options: RunControls): void {
     <label for="valley-feedback-note">Tell us what happened in the valley, what you wanted and what got in the way.</label><textarea id="valley-feedback-note" rows="4" maxlength="12000"></textarea>
     <label for="valley-feedback-name">Your name or tester ID <small>(optional)</small></label><input id="valley-feedback-name" type="text" maxlength="60" autocomplete="nickname"><p class="soft">A name labels your player ID and the past and future play linked to it on this device. Leave this empty to use only your player ID.</p>
     <details><summary>What is sent</summary><p data-send-preview>We send your note, your optional answer and name, and your current linked game, saves and log.</p><p>For long games, we send the starting seed and every action so the game can be replayed. We leave out the full game state.</p><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a></details>
-    ${LAB_TOOLS ? '<button type="button" data-download>Keep a copy of this run</button>' : ''}<p data-feedback-status role="status" aria-live="polite"></p></div>
+    <p data-feedback-status role="status" aria-live="polite"></p></div>
     <footer class="feedback-actions"><button type="submit" class="primary" data-send>Submit</button></footer></form>
   </dialog>`;
   document.body.append(controls);
@@ -150,6 +154,7 @@ export function mountLab(options: RunControls): void {
   showMenu = () => {
     if (feedback.open) feedback.close();
     menuOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    find<HTMLDetailsElement>('.menu-debug').open = false;
     sync();
     if (!menu.open) menu.showModal();
     void options.bindVolume().catch(() => lab.log('warn', 'Could not bind the volume on menu open.'));
@@ -190,6 +195,10 @@ export function mountLab(options: RunControls): void {
   controls.querySelector('[data-notebook]')?.addEventListener('click', () => {
     menu.close();
     options.notebook();
+  });
+  find('[data-diagnostics]').addEventListener('click', () => {
+    menu.close();
+    options.diagnostics?.();
   });
   find('[data-new]').addEventListener('click', () => {
     if (!FOREIGN_FILE) find('[data-new-confirm]').hidden = false;
@@ -279,10 +288,8 @@ export function mountLab(options: RunControls): void {
       send.textContent = 'Back to the game';
     } catch (error) {
       console.error(error);
-      status.textContent =
-        LAB_TOOLS && error instanceof Error
-          ? error.message
-          : 'Your feedback could not be sent. Please try again.';
+      debugError(error);
+      status.textContent = 'Your feedback could not be sent. Please try again.';
     } finally {
       busy = false;
       sync();

@@ -86,7 +86,7 @@ async function fits(page: Page) {
   expect(panel && panel.y >= 0 && panel.y + panel.height <= 691).toBe(true);
 }
 
-it('keeps notebook and pace tools behind exact lab=1', async () => {
+it('keeps notebook and pace controls public', async () => {
   const page = await browser.newPage({ viewport: { width: 820, height: 1180 } });
   try {
     await fixture(page);
@@ -107,6 +107,8 @@ it('sends linked feedback with an optional remembered name and keeps a full loca
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await fixture(page);
+    await page.locator('.menu-debug summary').click();
+    await page.locator('[data-download]').click();
     await sendWord(page);
     await fits(page);
     const panel = feedback(page);
@@ -119,7 +121,6 @@ it('sends linked feedback with an optional remembered name and keeps a full loca
     await note.fill('The winter felt slow.');
     await panel.getByLabel('Your name or tester id', { exact: false }).fill('River tester');
     expect(await visibleText(panel)).toMatch(/name.*(player|history)|history.*name/is);
-    await panel.getByRole('button', { name: 'Keep a copy of this run', exact: true }).click();
     expect(await page.evaluate('window.downloadCount')).toBe(1);
     expect(await page.evaluate('!!window.downloadedRun.state && !!window.downloadedRun.savedAt')).toBe(true);
     await panel.getByRole('button', { name: 'Submit', exact: true }).click();
@@ -146,11 +147,12 @@ it('allows notes while recording is off and keeps download', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await fixture(page, 'off');
+    await page.locator('.menu-debug summary').click();
+    await page.locator('[data-download]').click();
     await sendWord(page);
     const panel = feedback(page);
     const send = panel.getByRole('button', { name: 'Submit', exact: true });
     expect(await send.isDisabled()).toBe(false);
-    await panel.getByRole('button', { name: 'Keep a copy of this run', exact: true }).click();
     expect(await page.evaluate('window.downloadCount')).toBe(1);
     expect(await counts(page)).toEqual({ feedback: [], runs: [] });
     expect(await panel.getByRole('checkbox', { name: 'Record play for the lab', exact: true }).count()).toBe(

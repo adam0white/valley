@@ -78,6 +78,12 @@ export class CastSession {
     if (generation !== this.generation) throw new Error('Run or identity changed before startup.');
     let header = prepareCastStart(foundValley(seed, 0).people, []);
     let heads: Record<string, PersonaEnvelope> = {};
+    // Automatic carryover for compatible worlds. Local editions keep their region exclusion.
+    if (!localOnly && !this.shelf.enabled) {
+      this.shelf.setEnabled(true);
+      await this.shelf.ready;
+      if (generation !== this.generation) throw new Error('Run or identity changed.');
+    }
     if (this.shelf.enabled && !localOnly) {
       const opening = foundValley(seed, 0).people;
       const chapter = await claimCastChapterBatch(

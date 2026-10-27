@@ -8,11 +8,12 @@ import { type BrokerChoice, brokerChoice } from './brokering.ts';
 import { DAY, dateEnglish, dayOfMinute, doyOf, HOUR, yearOf } from './calendar.ts';
 import { cancelDialogue, type DialogueOrder, speakDialogue, validateDialogueState } from './dialogue.ts';
 import {
-  ALLIANCE_EDITION,
+  allianceEdition,
   chooseTerm,
-  DIALOGUE_EDITION,
+  dialogueEdition,
   type HearthTopic,
   knownEdition,
+  PUBLIC_EDITION,
   passEdition,
   REPLY_EDITION,
   type RulesEdition,
@@ -608,11 +609,12 @@ function validateReplyState(s: ValleyState): void {
     typeof r !== 'object' ||
     Array.isArray(r) ||
     r.id !== REPLY_EDITION ||
-    s.edition !== undefined ||
-    s.pass !== undefined ||
-    s.stewardCare !== undefined ||
-    s.introduction !== undefined ||
-    s.brokering !== undefined ||
+    (s.edition?.id !== PUBLIC_EDITION &&
+      (s.edition !== undefined ||
+        s.pass !== undefined ||
+        s.stewardCare !== undefined ||
+        s.introduction !== undefined ||
+        s.brokering !== undefined)) ||
     !Array.isArray(r.visits) ||
     Object.keys(r).some((key) => key !== 'id' && key !== 'visits') ||
     !Number.isSafeInteger(s.minute) ||
@@ -640,6 +642,11 @@ function validateReplyState(s: ValleyState): void {
 }
 
 export function restoreState(json: ValleyState): ValleyState {
+  if (
+    json.edition?.id === PUBLIC_EDITION &&
+    (!json.reply || !json.dialogue || !json.pass || !json.stewardCare)
+  )
+    throw new Error('Invalid Valley public edition state.');
   validateReplyState(json);
   validateDialogueState(json);
   const { people, kahya, ...rest } = json;
@@ -750,13 +757,13 @@ const exactKeys = (_key: string, value: unknown): unknown =>
 export function load(saved: SavedGame | CompactRun): Game {
   if (
     saved.inputs.some(
-      (i) => (i.verb === 'dialogue' || i.verb === 'dialogue-cancel') && saved.rules !== DIALOGUE_EDITION,
+      (i) => (i.verb === 'dialogue' || i.verb === 'dialogue-cancel') && !dialogueEdition(saved.rules),
     )
   )
     throw new Error('Dialogue commands require the dialogue edition.');
   if (saved.rules !== undefined && !knownEdition(saved.rules))
     throw new Error('Unknown Valley rules edition.');
-  if ('state' in saved && (saved.rules === DIALOGUE_EDITION) !== !!saved.state.dialogue)
+  if ('state' in saved && dialogueEdition(saved.rules) !== !!saved.state.dialogue)
     throw new Error('Invalid Valley dialogue configuration.');
   if ('state' in saved && rulesOf(saved.state) !== saved.rules)
     throw new Error('The saved rules do not match the run.');
@@ -768,9 +775,9 @@ export function load(saved: SavedGame | CompactRun): Game {
     throw new Error('The saved pass world does not match its edition.');
   if (
     'state' in saved &&
-    ((saved.rules === ALLIANCE_EDITION) !== !!saved.state.stewardCare ||
-      (saved.state.brokering && saved.rules !== ALLIANCE_EDITION) ||
-      (saved.state.pass?.alliance && saved.rules !== ALLIANCE_EDITION))
+    (allianceEdition(saved.rules) !== !!saved.state.stewardCare ||
+      (saved.state.brokering && !allianceEdition(saved.rules)) ||
+      (saved.state.pass?.alliance && !allianceEdition(saved.rules)))
   )
     throw new Error('The saved alliance world does not match its edition.');
   if (saved.version !== GAME_VERSION || saved.framework !== FRAMEWORK_VERSION)
@@ -807,7 +814,7 @@ export function load(saved: SavedGame | CompactRun): Game {
     saved.plainEnglish ?? true,
     saved.rules,
   );
-  if (saved.rules === DIALOGUE_EDITION && JSON.stringify(g.inputs) !== JSON.stringify(saved.inputs))
+  if (dialogueEdition(saved.rules) && JSON.stringify(g.inputs) !== JSON.stringify(saved.inputs))
     throw new Error('Invalid Valley dialogue commands.');
   if (fingerprint(g.valley) !== saved.fingerprint)
     throw new Error(

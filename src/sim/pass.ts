@@ -6,7 +6,7 @@
 import { type Affordance, begin, decide } from '@adam0white/human-framework';
 import type { AllianceState } from './alliance.ts';
 import { DAY, HOUR } from './calendar.ts';
-import { ALLIANCE_EDITION, passEdition } from './edition.ts';
+import { allianceEdition, passEdition } from './edition.ts';
 import { interruptStewardRoutine, stewardBusy } from './steward.ts';
 import { hasOfficeCard, note, V, type ValleyState } from './valley.ts';
 
@@ -34,7 +34,7 @@ export function passChoice(s: ValleyState, choice: 'depart' | 'buy' | 'deliver')
   if (!p) return false;
   const j = p.journey;
   if (choice === 'buy') {
-    if (s.edition?.id === ALLIANCE_EDITION) return false;
+    if (allianceEdition(s.edition?.id)) return false;
     if (
       !j?.seen ||
       j.failed ||
@@ -111,10 +111,9 @@ export function passChoice(s: ValleyState, choice: 'depart' | 'buy' | 'deliver')
   note(s, {
     at: s.minute,
     kind: 'visit',
-    text:
-      s.edition?.id === ALLIANCE_EDITION
-        ? 'You took provisions and a sack from the granary and set out over the pass for Çam. You will be away for two days. Stone is available only through the public road agreement: six grain, twelve useful hours of voluntary repairs, and a later journey to collect within fourteen days. You can decline. The fields, households and rider will not wait.'
-        : 'You took provisions and a barter sack from the granary and set out over the pass for Çam. You will be away for two days. The fields, households and rider will not wait. A sack can buy a stone load if the quarry has one when you arrive.',
+    text: allianceEdition(s.edition?.id)
+      ? 'You took provisions and a sack from the granary and set out over the pass for Çam. You will be away for two days. Stone is available only through the public road agreement: six grain, twelve useful hours of voluntary repairs, and a later journey to collect within fourteen days. You can decline. The fields, households and rider will not wait.'
+      : 'You took provisions and a barter sack from the granary and set out over the pass for Çam. You will be away for two days. The fields, households and rider will not wait. A sack can buy a stone load if the quarry has one when you arrive.',
     weight: 3,
   });
   return true;
@@ -128,7 +127,7 @@ export function passTick(s: ValleyState) {
     note(s, {
       at: s.minute,
       kind: 'visit',
-      text: `You reached Çam quarry in the neighbouring valley. The path descends from the same ridge. ${p.stock ? (s.edition?.id === ALLIANCE_EDITION ? 'Dressed stones are available only through the public road agreement. A sack alone cannot buy a load. Read the terms before spending grain.' : 'Dressed stones lie beside the public weighing shelter. A sack buys one load.') : 'The stone stacks are empty.'} No household food is for sale here.`,
+      text: `You reached Çam quarry in the neighbouring valley. The path descends from the same ridge. ${p.stock ? (allianceEdition(s.edition?.id) ? 'Dressed stones are available only through the public road agreement. A sack alone cannot buy a load. Read the terms before spending grain.' : 'Dressed stones lie beside the public weighing shelter. A sack buys one load.') : 'The stone stacks are empty.'} No household food is for sale here.`,
       weight: 3,
     });
   }

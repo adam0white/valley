@@ -21,7 +21,7 @@ import {
   type Suggestion,
 } from '@adam0white/human-framework';
 import { DAY, HOUR } from './calendar.ts';
-import { ALLIANCE_EDITION } from './edition.ts';
+import { allianceEdition } from './edition.ts';
 import {
   INTRO_CUSTOM,
   INTRO_IDS,
@@ -70,7 +70,7 @@ export function brokerReady(s: ValleyState): boolean {
   );
 }
 export function brokerUnavailable(s: ValleyState, choice: BrokerChoice): string | null {
-  if (s.edition?.id !== ALLIANCE_EDITION || s.flags.ended)
+  if (!allianceEdition(s.edition?.id) || s.flags.ended)
     return 'This term is not open for family arrangements.';
   if (!s.kahya.body.alive) return 'The steward cannot make this journey.';
   if (busy(s)) return 'Return from your current visit or hosting first.';

@@ -78,14 +78,16 @@ import {
   resolveDialogue,
 } from './dialogue.ts';
 import {
-  ALLIANCE_EDITION,
+  allianceEdition,
   captureTermReply,
   DIALOGUE_EDITION,
+  dialogueEdition,
   type EditionState,
   millPay,
   passEdition,
   REPLY_EDITION,
   type RulesEdition,
+  replyEdition,
   resolveTermWork,
   termDay,
   termOffers,
@@ -368,10 +370,10 @@ export function newValley(
   for (const p of [...people, kahya]) p.lexicon = { ...p.lexicon, plainEnglish };
   const s: ValleyState = {
     ...(rules && rules !== REPLY_EDITION && rules !== DIALOGUE_EDITION ? { edition: { id: rules } } : {}),
-    ...(rules === REPLY_EDITION ? { reply: { id: REPLY_EDITION, visits: [] } } : {}),
-    ...(rules === ALLIANCE_EDITION ? { stewardCare: { grain: 0, eaten: 0 } } : {}),
+    ...(replyEdition(rules) ? { reply: { id: REPLY_EDITION, visits: [] } } : {}),
+    ...(allianceEdition(rules) ? { stewardCare: { grain: 0, eaten: 0 } } : {}),
     ...(passEdition(rules) ? { pass: { stock: 3, stone: 0, grainReceived: 0 } } : {}),
-    ...(rules === DIALOGUE_EDITION ? { dialogue: { id: DIALOGUE_EDITION, exchanges: [] } } : {}),
+    ...(dialogueEdition(rules) ? { dialogue: { id: DIALOGUE_EDITION, exchanges: [] } } : {}),
     v: 1,
     seed,
     minute: 0,

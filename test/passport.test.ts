@@ -171,8 +171,9 @@ function fakeLab() {
     },
   };
 }
-it('claims all applicable heads together, pins all actors, and keeps loaded/file history separate', async () => {
+it('automatically claims all applicable heads, pins actors, and keeps loaded/file history separate', async () => {
   const shelf = new FakeShelf();
+  shelf.enabled = false; // Existing off preference no longer gates compatible carryover.
   const parent = await source();
   const second = await source('maryam');
   shelf.state = {

@@ -13,31 +13,33 @@ beforeAll(async () => {
 afterAll(async () => {
   server?.kill('SIGTERM');
   await browser?.close();
+}, 30000);
+it('makes gameplay public and keeps diagnostics collapsed beside privacy', async () => {
+  const page = await browser.newPage();
+  try {
+    await page.route('https://human.adamwhite.work/**', (r) => r.fulfill({ status: 204, body: '' }));
+    await page.goto(origin);
+    expect(await page.locator('.edition-choice input').count()).toBe(0);
+    expect(await page.locator('[data-continuity]').count()).toBe(0);
+    await page.locator('[data-menu]').click();
+    expect(await page.locator('[data-speed]').count()).toBe(4);
+    const debug = page.locator('.menu-debug');
+    expect(await debug.getAttribute('open')).toBeNull();
+    expect(await debug.locator('[data-download]').isVisible()).toBe(false);
+    await debug.locator('summary').click();
+    await page.locator('[data-diagnostics]').click();
+    expect(await page.locator('#valley-name').isVisible()).toBe(true);
+    await page.locator('[data-ways-close]').click();
+    await page.locator('[data-go="new"]').click();
+    await expect.poll(() => page.locator('.play').count()).toBe(1);
+    const rules = await page.evaluate(
+      `import('/src/ui/app.ts').then(({_debug})=>_debug.game().valley.edition.id)`,
+    );
+    expect(rules).toBe('valley-public-2026-10');
+  } finally {
+    await page.close();
+  }
 });
-for (const flag of ['', '?lab=0', '?lab=true', '?lab=1']) {
-  it(`shows diagnostics only for exact lab=1 (${flag})`, async () => {
-    const page = await browser.newPage();
-    try {
-      await page.route('https://human.adamwhite.work/**', (r) => r.fulfill({ status: 204, body: '' }));
-      await page.goto(`${origin}/${flag}`);
-      const lab = flag === '?lab=1';
-      expect(await page.locator('[data-ways]').count()).toBe(lab ? 1 : 0);
-      expect(await page.locator('#load-run').count()).toBe(lab ? 1 : 0);
-      expect(await page.locator('[data-continuity]').count()).toBe(lab ? 1 : 0);
-      await page.locator('[data-menu]').click();
-      expect(await page.locator('[data-speed]').count()).toBe(lab ? 4 : 0);
-      expect(await page.locator('[data-events]').count()).toBe(1);
-      expect(await page.locator('.game-menu-panel a').first().getAttribute('href')).toBe(
-        'https://human.adamwhite.work/games/',
-      );
-      await page.locator('[data-feedback]').click();
-      expect(await page.locator('[data-download]').count()).toBe(lab ? 1 : 0);
-      expect(await page.locator('.feedback-panel form').count()).toBe(1);
-    } finally {
-      await page.close();
-    }
-  });
-}
 it('keeps the previous saved run and receipts after failed admission, with a literal ordinary error', async () => {
   const page = await browser.newPage();
   try {
@@ -161,6 +163,41 @@ it('fits the visible SDK notice and keeps grain controls clear of the toolbar', 
       const toolbar = await page.locator('.topbar-actions').boundingBox();
       expect((grain?.x ?? Infinity) + (grain?.width ?? Infinity)).toBeLessThanOrEqual(toolbar?.x ?? 0);
     }
+  } finally {
+    await page.close();
+  }
+});
+
+it('opens public imports in a file session without replacing the native ledger or continuity receipt', async () => {
+  const page = await browser.newPage();
+  try {
+    await page.route('https://human.adamwhite.work/**', (r) => r.fulfill({ status: 204, body: '' }));
+    await page.goto(origin);
+    const prior = await page.evaluate(`(async () => {
+      const {newGame,compactRun}=await import('/src/sim/game.ts');
+      const log=JSON.stringify({...compactRun(newGame(42)),volume:0,continuity:{runId:'native-kept',heads:{},sources:{}}});
+      localStorage.setItem('valley-log-v1',log);
+      return log;
+    })()`);
+    await page.reload();
+    await page.locator('[data-menu]').click();
+    await page.locator('.menu-debug summary').click();
+    await page.getByRole('link', { name: 'Open a Valley file', exact: true }).click();
+    const input = page.getByLabel('Open a Valley file', { exact: true });
+    await input.waitFor();
+    const file = await page.evaluate(
+      `import('/src/sim/game.ts').then(({newGame,save})=>save(newGame(7,undefined,false,true,'valley-public-2026-10')))`,
+    );
+    await input.setInputFiles({
+      name: 'public.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(file)),
+    });
+    await expect.poll(() => page.locator('.play').count()).toBe(1);
+    expect(await page.evaluate(() => localStorage.getItem('valley-log-v1'))).toBe(prior);
+    expect(await page.evaluate(`import('/src/ui/app.ts').then(({_debug})=>_debug.game().valley.seed)`)).toBe(
+      7,
+    );
   } finally {
     await page.close();
   }

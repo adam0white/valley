@@ -368,3 +368,30 @@ Round retests-1027b played live `efdb940` (0.3.1) with the same 14 testers ([pla
 - F-1588 (retests-1027b): the clock line gives the wrong reason in some views. Target 2026-11-10.
 - F-1589 (retests-1027b): give each "Let them finish first" button its group in the label. Target 2026-11-10.
 - F-1590 (retests-1027b): say plainly that the saved place is kept. Target 2026-11-10.
+
+## Public term candidate — 2026-10-27
+
+The owner abolished gameplay flags after the rounds quoted above. New terms now use
+`valley-public-2026-10`. All existing host mechanics are public together: household
+sayings and the bounded Zehra exchange, October grain rules, pass journeys, family
+arrangements and the road agreement. This is a new replay edition. No old-edition
+constructor changes. Its full/compact replay and local-log admission preserve the
+combined state; bound recovery rejects missing public state slices.
+
+F-1575: no spoken-answer tick remains. Menu New game returns to the title and retains
+the previous save until the player confirms replacement. F-1586's obsolete title-option
+confusion is removed with those options. F-1319: the gift confirmation states the
+granary remainder before any returned grain. The transfer and its later receipt are
+unchanged. The other retest clauses above remain separate work.
+
+HF stays at 3.0.0. The public edition stays local under Valley's cast-region exclusion.
+The missing contract is a reviewed `prepareCastStart`/`calendarPassport`/`checkpointReceipt`
+portable dialect for local cast plus steward provisions, journeys, family/road state
+and dialogue receipts; the original `HOST_RULES` passport does not define that mapping.
+Compatible original/October worlds attempt same-person carryover automatically.
+Person controls belong to the central shelf; this host mounts none. Diagnostic download,
+seed and import controls are collapsed in Debug beside Lab privacy. No vendor changes.
+
+This candidate ends at the independent director review gate before commit. Technical
+delivery and live verification remain required after CLEAR. Adam accepts feel and
+readiness on 2026-11-03. No panel, round or retest is part of this work.
