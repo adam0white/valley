@@ -522,7 +522,10 @@ it('preserves SDK state before real file startup and reports recording refusal h
     expect(await page.locator('.notice-footer .lk-telemetry-notice').count()).toBe(0);
     const fileBytes = process.env.VALLEY_SELECTED_FILE
       ? readFileSync(process.env.VALLEY_SELECTED_FILE)
-      : Buffer.from(JSON.stringify(save(newGame(7), 0)));
+      : Buffer.from(
+          // Synthetic CI input uses the public export's explicit empty provenance maps.
+          JSON.stringify({ ...save(newGame(7), 0), castHeads: {}, castSources: {} }),
+        );
     const selected = JSON.parse(fileBytes.toString('utf8'));
     const importFile = async (bytes: Buffer) => {
       await page
