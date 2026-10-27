@@ -1973,8 +1973,31 @@ function letBe(s: ValleyState, a: { id: string; from: number }, pid: string): bo
   );
 }
 
-function namesWords(names: string[]): string {
-  const shown = names.length > 4 ? [...names.slice(0, 3), `${names.length - 3} others`] : names;
+function namesWords(raw: string[]): string {
+  // "Someone from the Demirci house" twice reads as "2 people from the Demirci house".
+  const counts = new Map<string, number>();
+  // Only unnamed people merge; two people who share a name both stay listed.
+  raw.forEach((name, i) => {
+    const key = name.startsWith('Someone from ') ? name : `${i}\u0000${name}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  });
+  const entries = [...counts]
+    .map(([key, n]) => ({
+      n,
+      name: key.split('\u0000').at(-1) ?? key,
+    }))
+    .map(({ n, name }) => ({
+      n,
+      words:
+        n > 1 && name.startsWith('Someone from ')
+          ? `${n} people from ${name.slice('Someone from '.length)}`
+          : name,
+    }));
+  const rest = entries.slice(3).reduce((sum, e) => sum + e.n, 0);
+  const shown =
+    entries.length > 4
+      ? [...entries.slice(0, 3).map((e) => e.words), `${rest} others`]
+      : entries.map((e) => e.words);
   return shown.length < 2 ? (shown[0] ?? '') : `${shown.slice(0, -1).join(', ')} and ${shown.at(-1)}`;
 }
 
