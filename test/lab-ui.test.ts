@@ -308,7 +308,7 @@ it('offers ordinary file download and close without exposing New game', async ()
     await page.route('**/src/main.ts', (route) =>
       route.fulfill({ status: 200, contentType: 'text/javascript', body: '' }),
     );
-    await page.goto(`${origin}/?file=1`);
+    await page.goto(`${origin}/file/`);
     await page.evaluate(`(async () => {
       const { mountLab, openMenu } = await import('/src/ui/lab.ts');
       mountLab({ getRun:()=>undefined, hasRun:()=>false, chooseRecording:async()=>{}, download:()=>{document.body.dataset.download='requested'}, bindVolume:async()=>{}, notebook:()=>{}, toTitle:()=>{document.body.dataset.fileOpen='requested'}, closeFile:()=>{document.body.dataset.fileClose='requested'}, getSpeed:()=>'automatic', setSpeed:()=>{}, date:()=>'' });
@@ -472,7 +472,7 @@ it('preserves SDK state before real file startup and reports recording refusal h
     expect(pristine.localStorage).toEqual({});
     expect(pristine.sessionStorage).toEqual({});
     retain('initial-pristine.json', pristine);
-    await page.goto(origin + '/?file=1&labRunSource=agent');
+    await page.goto(origin + '/file/?labRunSource=agent');
     await page.getByLabel('Open a Valley file').waitFor();
     await expect
       .poll(() => page.locator('[data-recording-status]').textContent())
@@ -515,7 +515,7 @@ it('preserves SDK state before real file startup and reports recording refusal h
     const occupied = await snapshot();
     retain('occupied-before.json', occupied);
     await page.clock.install();
-    await page.goto(origin + '/?file=1&labRunSource=agent');
+    await page.goto(origin + '/file/?labRunSource=agent');
     await page.clock.pauseAt(Date.now() + 50);
     await page.getByLabel('Open a Valley file').waitFor();
     await expect
@@ -593,7 +593,7 @@ it('preserves SDK state before real file startup and reports recording refusal h
     await page.goto(origin + '/icon.svg');
     await page.evaluate(() => sessionStorage.setItem('hf-lab-session:valley', 'invalid-existing-session'));
     const incompatible = await snapshot();
-    await page.goto(origin + '/?file=1');
+    await page.goto(origin + '/file/');
     await page.getByLabel('Open a Valley file').waitFor();
     await expect
       .poll(() => page.locator('[data-recording-status]').textContent())

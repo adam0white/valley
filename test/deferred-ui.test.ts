@@ -367,6 +367,7 @@ it('keeps the public term description readable and New game reachable with enlar
     await page.goto(`${origin}/?lab=1`);
     await page.evaluate(() => localStorage.setItem('valley-log-v1', '{"malformed":true}'));
     await page.reload();
+    await page.locator('.title-premise').waitFor();
     await page.evaluate(() => document.fonts.ready);
     const choices = page.locator('.title-actions > p').first();
     expect(await choices.count()).toBe(1);
