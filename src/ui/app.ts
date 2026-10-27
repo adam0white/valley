@@ -76,7 +76,7 @@ import {
 } from '../sim/valley.ts';
 import type { Saying } from '../sim/voices.ts';
 import { CastSession, type LocalCastReceipt } from './cast-session.ts';
-import { debugError, FOREIGN_FILE, lab, labScreen, mountLab, openFeedback } from './lab.ts';
+import { debugError, FOREIGN_FILE, lab, labScreen, mountLab, openFeedback, openMenu } from './lab.ts';
 import {
   callUnavailable,
   cropReturnWords,
@@ -864,9 +864,23 @@ function enter() {
     <button class="grain-bar" aria-label="Open the landowner’s ledger"><span class="grain-track"><span class="grain-solid"></span><span class="grain-cut"></span><span class="grain-standing"></span><span class="grain-due"></span></span><span class="grain-label"></span></button>
     <div class="map lk-scene"><canvas id="map" aria-label="The valley map"></canvas><p id="now" class="moment"></p><span id="steward"></span></div>
     <nav id="houses" aria-label="Households"></nav>
-    <section class="lk-sheet" aria-label="Valley notebook"><p id="pace" class="pace-status"></p><header class="lk-sheet-head" id="sheet-head" hidden></header><div id="house-answer" hidden></div><div class="sheet lk-sheet-body" id="sheet"></div><footer class="thumbs lk-commit" id="thumbs"></footer></section>
+    <section class="lk-sheet" aria-label="Valley notebook"><div id="pace" class="pace-status"><button type="button" data-pace-menu aria-label="Time control"></button><button type="button" data-pace-info aria-label="Current pace reason" aria-expanded="false" aria-controls="pace-explanation"><span aria-hidden="true">i</span></button><span id="pace-explanation" role="tooltip" hidden></span></div><header class="lk-sheet-head" id="sheet-head" hidden></header><div id="house-answer" hidden></div><div class="sheet lk-sheet-body" id="sheet"></div><footer class="thumbs lk-commit" id="thumbs"></footer></section>
   </div>`;
   app.querySelector('.grain-bar')?.addEventListener('click', () => openReading('ledger'));
+  app.querySelector('[data-pace-menu]')?.addEventListener('click', openMenu);
+  const paceInfo = app.querySelector<HTMLButtonElement>('[data-pace-info]');
+  const paceExplanation = app.querySelector<HTMLElement>('#pace-explanation');
+  paceInfo?.addEventListener('click', () => {
+    if (!paceExplanation) return;
+    paceExplanation.hidden = !paceExplanation.hidden;
+    paceInfo.setAttribute('aria-expanded', String(!paceExplanation.hidden));
+  });
+  paceInfo?.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && paceExplanation) {
+      paceExplanation.hidden = true;
+      paceInfo.setAttribute('aria-expanded', 'false');
+    }
+  });
   const root = app.querySelector<HTMLElement>('.lk-stage');
   if (root) {
     const checkTextSize = () => {
@@ -1052,8 +1066,29 @@ function drawTop() {
   const s = g.valley;
   const now = app.querySelector('#now');
   if (now) now.textContent = englishText(nowWords(s));
-  const pace = app.querySelector('#pace');
-  if (pace) pace.textContent = `${clockWords(s.minute)} · ${paceWords(pacingState(performance.now(), s))}`;
+  const pacing = pacingState(performance.now(), s);
+  const pace = app.querySelector('[data-pace-menu]');
+  const paceLabel = pacing.asked
+    ? 'Almost stopped'
+    : pacing.waiting || pacing.reading
+      ? 'Slowed'
+      : pacing.hurrying
+        ? 'Skipping'
+        : pacing.replies
+          ? 'Replies open'
+          : cap(speed);
+  if (pace) pace.textContent = `${clockWords(s.minute)} · ${paceLabel}`;
+  const explanation = app.querySelector('#pace-explanation');
+  if (explanation)
+    explanation.textContent = paceWords({
+      ...pacing,
+      readingView: selected ? 'house' : tab !== 'notes' ? tab : undefined,
+      waitingReason: s.knocks.some((k) => !k.answered && k.at <= s.minute && k.until > s.minute)
+        ? 'Someone is at your door.'
+        : pendingTerm(s)
+          ? 'A decision is open in the notebook.'
+          : 'The quarry trade is open while you are there.',
+    });
   const button = app.querySelector<HTMLButtonElement>('[data-until]');
   if (button) {
     const block = skipBlock(pacingState(performance.now(), s));
@@ -1740,6 +1775,7 @@ function drawSheet(force = false) {
   if (!hh || tab !== 'notes') pendingGrain = null;
   const root = app.querySelector<HTMLElement>('.play');
   root?.setAttribute('data-house', String(!!hh));
+  root?.setAttribute('data-notebook-active', String(!!visit || s.asks.length > 0 || !!notebookReceipt));
   root?.setAttribute('data-knock', String(!!knock || !!term));
   root?.setAttribute('data-reader', String(tab === 'ledger' || tab === 'reader'));
   const header = app.querySelector<HTMLElement>('#sheet-head');
@@ -1770,7 +1806,19 @@ function drawSheet(force = false) {
   thumbs.innerHTML = thumbs.hidden ? '' : hh ? houseThumbs(s, hh) : valleyThumbs(s);
   const generation = sheetGeneration;
   actions = actions.map((fn) => () => {
-    if (generation === sheetGeneration) fn();
+    if (generation !== sheetGeneration) return;
+    const before = g?.inputs.length;
+    const previousReceipt = notebookReceipt;
+    fn();
+    if (before === g?.inputs.length && previousReceipt === notebookReceipt) return;
+    const result = app.querySelector<HTMLElement>(
+      '.notebook-receipt, #action-receipt, .visit-reply, .visit-question',
+    );
+    if (result) {
+      result.tabIndex = -1;
+      result.focus({ preventScroll: true });
+      result.scrollIntoView({ block: 'nearest' });
+    }
   });
   for (const button of app.querySelectorAll<HTMLButtonElement>('button.hold[data-k]')) {
     const fn = actions[Number(button.dataset.k)];
@@ -1790,7 +1838,9 @@ function drawSheet(force = false) {
         el.getAttribute('aria-label') === focusKey.label &&
         el.getAttribute('data-h') === focusKey.house,
     );
-    replacement?.focus({ preventScroll: true });
+    const target = replacement ?? sheet;
+    if (!replacement) target.tabIndex = -1;
+    target.focus({ preventScroll: true });
   }
 }
 
@@ -2022,6 +2072,41 @@ function pendingReplies(s: ValleyState, house?: Household): string {
   return `<section class="pending-replies"><h2 class="section-label">Replies to the call</h2><p class="reply-count">${counts.came} came. ${counts.deferred} delayed. ${counts.refused} refused.${counts.modified ? ` ${counts.modified} agreed to do part of the work.` : ''}</p>${rows.join('')}${letLine}</section>`;
 }
 
+/** Only the steward's accepted input and already due outward notes enter this projection. */
+function visitReply(s: ValleyState): string {
+  const visit = s.kahyaState.visit;
+  if (!g) return '';
+  const input = g.inputs.findLast(
+    (i) =>
+      i.verb === 'reply' &&
+      (!visit || (i.house === visit.house && i.at >= visit.arrive && i.at < visit.leave)),
+  );
+  const exchange = s.dialogue?.exchanges.findLast(
+    (e) => !visit || (e.house === visit.house && e.visit === visit.arrive),
+  );
+  const status = exchange
+    ? `<p class="visit-question" role="status">${esc(dialogueStatus(exchange))}</p>`
+    : '';
+  if (input?.verb !== 'reply') return status;
+  const answer = s.notes.findLast(
+    (n) =>
+      n.house === input.house &&
+      n.at === input.at + 1 &&
+      n.at <= s.minute &&
+      (n.kind === 'voice' || n.kind === 'story'),
+  );
+  return `${status}<section class="visit-reply" role="status">${answer ? noteLine(answer) : `<p>You said: “${esc(SAYING_WORDS[input.saying ?? 'listen'])}” ${s.minute <= input.at ? 'No answer yet.' : 'No answer is retained on these pages.'}</p>`}</section>`;
+}
+
+function notebookVisit(s: ValleyState): string {
+  const visit = s.kahyaState.visit;
+  if (!visit || visit.back <= s.minute) return visitReply(s);
+  const house = houseOf(s, visit.house);
+  if (!house) return '';
+  const controls = sayingControls(s, house);
+  return `<section class="notebook-visit">${visitReply(s)}${controls || `<p class="soft">${s.minute < visit.arrive ? 'Say is available after you arrive.' : s.minute >= visit.leave ? 'You have left the house. Say is available during a visit.' : !s.reply ? 'This saved term has no household Say action.' : 'There is nobody here to answer.'}</p>`}</section>`;
+}
+
 function notebook(s: ValleyState): string {
   pressShown.clear();
   const pending = pendingReplies(s);
@@ -2055,7 +2140,7 @@ function notebook(s: ValleyState): string {
   const receipt = notebookReceipt
     ? `<p class="notebook-receipt" role="status">${esc(notebookReceipt)}</p>`
     : '';
-  return `${asking}${receipt}${pace}${pending}<section class="current-notes"><h2 class="section-label">Today’s news</h2>${recent.length ? recent.map(noteLine).join('') : '<p class="soft">No new reply today.</p>'}</section>${legend}${btn('Earlier replies ▸', () => openReading('reader'), { cls: 'more' })}`;
+  return `${receipt}${notebookVisit(s)}${asking}${pace}${pending}<section class="current-notes"><h2 class="section-label">Today’s news</h2>${recent.length ? recent.map(noteLine).join('') : '<p class="soft">No new reply today.</p>'}</section>${legend}${btn('Earlier replies ▸', () => openReading('reader'), { cls: 'more' })}`;
 }
 
 function reader(s: ValleyState): string {
@@ -2283,7 +2368,7 @@ function houseCard(s: ValleyState, hh: Household): string {
   const response = recent.find((n) => n.words && (n.kind === 'voice' || n.ask));
   const refusal = selectedRefusal(s, hh);
   const conversation = dialogueCard(s, hh);
-  const status = `<p id="reading-travel" class="reading-status">${esc(englishText(caption(s, '')))}</p><p id="action-receipt" class="action-caption" role="status">${esc(actionWords(s) || limitsWords(s, hh))}</p>`;
+  const status = `${s.kahyaState.visit?.house === hh.id && !conversation ? visitReply(s) : ''}<p id="reading-travel" class="reading-status">${esc(englishText(caption(s, '')))}</p><p id="action-receipt" class="action-caption" role="status">${esc(actionWords(s) || limitsWords(s, hh))}</p>`;
   if (!houseDetails)
     return `<div class="card">${response ? `<div class="house-response">${datedReply(s, response)}</div>` : ''}${status}${conversation}${refusal || (!response ? '<p class="soft">There is no new reply from this house.</p>' : '')}</div>`;
   return `<div class="card">
@@ -2330,6 +2415,52 @@ const SAYING_HINT: Record<Saying, string> = {
     'Accept their delay. They answer you, but their reply to the call stays the same. Holding to insist is still the way to press them.',
   rain: 'Remind them of the rain. They answer you, but their reply to the call stays the same.',
 };
+
+/** Existing sayings are the same public inputs in the house and notebook. No actor choice or clock change. */
+function sayingControls(s: ValleyState, hh: Household): string {
+  const out: string[] = [];
+  const add = (label: string, fn: () => void, reason: string | null, hint: string) => {
+    out.push(
+      btn(
+        label,
+        () => {
+          if (reason) {
+            actionCaption = `${label}: ${reason}`;
+            drawSheet(true);
+          } else fn();
+        },
+        { cls: reason ? 'wide blocked' : 'wide', ...(selected === null ? { hint: reason ?? hint } : {}) },
+      ).replace('<button ', reason ? '<button aria-disabled="true" ' : '<button '),
+    );
+  };
+  const visit = s.kahyaState.visit;
+  const sayings =
+    s.reply && visit?.house === hh.id && visit.arrive <= s.minute && visit.leave > s.minute
+      ? sayingsAt(s, hh)
+      : [];
+  // One saying shows directly; several sit behind one toggle so the house actions stay short on a phone.
+  if (sayings.length > 1) {
+    const k = actions.length;
+    actions.push(() => {
+      sayOpen = sayOpen === hh.id ? null : hh.id;
+      drawSheet(true);
+    });
+    out.push(
+      `<button data-k="${k}" class="wide say-toggle" aria-expanded="${sayOpen === hh.id}">${sayOpen === hh.id ? 'Say something ▾' : `Say something${selected === null ? ` at ${householdLabel(hh)}` : ''} (${sayings.length} choices) ▸`}</button>`,
+    );
+  }
+  if (sayOpen === hh.id || sayings.length === 1)
+    for (const saying of sayings)
+      add(
+        `Say: ${SAYING_WORDS[saying]}`,
+        () => order({ verb: 'reply', house: hh.id, saying }),
+        visit && s.reply?.visits.includes(replyKey(hh.id, visit.arrive, saying))
+          ? 'You have already said this during this visit.'
+          : null,
+        SAYING_HINT[saying],
+      );
+  return out.join('');
+}
 
 function houseThumbs(s: ValleyState, hh: Household): string {
   const out: string[] = [];
@@ -2409,33 +2540,7 @@ function houseThumbs(s: ValleyState, hh: Household): string {
       'Ask only if their jars are full. They can refuse. This is extra grain, not their normal share.',
     );
   const visit = s.kahyaState.visit;
-  const sayings =
-    s.reply && visit?.house === hh.id && visit.arrive <= s.minute && visit.leave > s.minute
-      ? sayingsAt(s, hh)
-      : [];
-  // One saying shows directly; several sit behind one toggle so the house actions stay short on a phone.
-  if (sayings.length > 1) {
-    const k = actions.length;
-    actions.push(() => {
-      sayOpen = sayOpen === hh.id ? null : hh.id;
-      drawSheet(true);
-    });
-    out.push(
-      `<button data-k="${k}" class="wide say-toggle" aria-expanded="${sayOpen === hh.id}">${sayOpen === hh.id ? 'Say something ▾' : `Say something (${sayings.length} choices) ▸`}</button>`,
-    );
-  }
-  if (sayOpen === hh.id || sayings.length === 1)
-    for (const saying of sayings)
-      add(
-        `Say: ${SAYING_WORDS[saying]}`,
-        () => order({ verb: 'reply', house: hh.id, saying }),
-        visit && s.reply?.visits.includes(replyKey(hh.id, visit.arrive, saying))
-          ? 'You have already said this during this visit.'
-          : null,
-        SAYING_HINT[saying],
-        false,
-        true,
-      );
+  out.push(sayingControls(s, hh));
   if (
     s.dialogue &&
     !s.reply &&
