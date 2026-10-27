@@ -1,5 +1,29 @@
 # Valley handoff
 
+## Scene and household context candidate — 2026-10-27
+
+Remaining: one director independent review of frozen READY, then signed source/exact
+CI, root-only merge, fresh exact-main deployment, clean live verification and cleanup.
+This candidate changes current scene/reply presentation only. No simulation, input,
+codec, dependency, vendor, recording, archive-capacity or ownership behavior changes.
+
+Notebook/Say/pace `0dfe3a4` and canonical file routing `f2afaf3` are delivered with
+clean technical receipts. Their older candidate/hold labels below are historical.
+Zehra's card now shows the actual closed gate and retained public source words. A
+post-cut link names her real household and labels the words as earlier. Household/call
+reply groups have stable identity and named acceptance. Counts describe replies rather
+than arrivals and include unanswered requests. Cancel keeps earlier earned gifts and
+invalidates the pending grain callback; the App control also covers a cancelled Zehra
+question. The title says the saved place is kept without changing save success/failure.
+
+See the final design section for exact remaining clauses and next source plans:
+explicit attended Zehra follow-up by 2026-10-29, later person-specific scene units,
+and a separate portable local-edition mapping contract by 2026-10-30. No naturally
+completed new answer or portable local world is claimed. Engineering gaps remain
+engineering. Adam's feel/device acceptance stays separate. Private proof prefix:
+`~/code/.lab-scratch/games-deferred/gd-resume-valley-scenes`.
+
+
 ## Public term candidate — 2026-10-27
 
 Remaining: director-launched independent review, signed source, exact green CI and clean

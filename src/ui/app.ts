@@ -12,6 +12,7 @@ import { clockWords, grainPreview, grainReceipt, paceWords, skipBlock, travelWor
 import { validLocalLog } from './local-log.ts';
 import { musicEvent } from './music.ts';
 import { automaticRate, type Pace, READING_MS } from './pacing.ts';
+import { zehraScene } from './scene-context.ts';
 /**
  * The Valley UI: plain DOM and a Canvas 2D ink map over the pure sim. The UI reads state and gives orders through
  * `act`; it never changes the sim directly. Real time drives sim minutes in fixed quanta (continuous, with a slowdown
@@ -742,7 +743,7 @@ function title() {
     : log && log.version !== GAME_VERSION
       ? 'This saved game uses an older Valley version. Start a new game to play with the new people. Your old saved game stays here until you start.'
       : log
-        ? `Your ledger is open at ${dateWords(dayOfMinute(log.minute))} of year ${yearWord(yearOf(dayOfMinute(log.minute)))}.`
+        ? `Your saved place is kept at ${dateWords(dayOfMinute(log.minute))} of year ${yearWord(yearOf(dayOfMinute(log.minute)))}. Resume continues from there.`
         : '';
   textSizeObserver?.disconnect();
   textSizeObserver = null;
@@ -1737,7 +1738,7 @@ function drawSheet(force = false) {
   const visitPhase = visit
     ? `${visit.house}:${visit.arrive}:${s.minute < visit.arrive ? 'out' : s.minute < visit.leave ? 'here' : s.minute < visit.back ? 'return' : 'home'}:${s.reply?.visits.includes(`${visit.house}:${visit.arrive}`) ?? false}`
     : '';
-  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${JSON.stringify(s.asks.map((a) => a.replies))}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${visitPhase}|${s.dialogue ? JSON.stringify([s.dialogue, dialogueChoices(s)]) : ''}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}|${accepted().size}|${setAside}|${s.reply?.visits.length ?? 0}|${selected === null || tab !== 'notes' ? (rainGuess(s) ?? '') : ''}|${confirmCall}|${sayOpen}|${notebookReceipt}`;
+  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${JSON.stringify(s.asks.map((a) => a.replies))}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${visitPhase}|${s.dialogue ? JSON.stringify([s.dialogue, dialogueChoices(s)]) : ''}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}|${accepted().size}|${selected ? (zehraScene(s, selected)?.reason ?? '') : ''}|${setAside}|${s.reply?.visits.length ?? 0}|${selected === null || tab !== 'notes' ? (rainGuess(s) ?? '') : ''}|${confirmCall}|${sayOpen}|${notebookReceipt}`;
   const travel = app.querySelector<HTMLElement>('#reading-travel');
   if (travel) travel.textContent = englishText(caption(s, ''));
   const receipt = app.querySelector<HTMLElement>('#action-receipt');
@@ -1997,11 +1998,20 @@ function namesWords(raw: string[]): string {
 
 function letFinish(ask: string, pids: string[]) {
   for (const pid of pids) accepted().add(acceptKey(ask, pid));
+  const houseNames = [
+    ...new Set(
+      pids
+        .map((id) => g?.valley.households.find((h) => h.members.includes(id)))
+        .filter((h): h is Household => !!h)
+        .map(householdLabel),
+    ),
+  ].join(', ');
   insistReceipt = null;
   actionCaption =
     pids.length === 1
       ? 'You let them finish their own work first. Their reply to the call stays the same. They may still come later.'
       : `You let ${pids.length} people finish their own work first. Their replies to the call stay the same. They may still come later.`;
+  actionCaption = `${houseNames}: ${actionCaption} This does not say where they are or promise that they will come.`;
   notebookReceipt = actionCaption;
   writeLog();
   drawSheet(true);
@@ -2030,17 +2040,24 @@ function pendingReplies(s: ValleyState, house?: Household): string {
     (a) => !a.closed && a.from <= s.minute && a.until > s.minute && (!house || a.houses.includes(house.id)),
   );
   if (!asks.length) return '';
-  const counts = { came: 0, deferred: 0, refused: 0, modified: 0 };
-  const groups = new Map<string, { ask: string; says: string; ids: string[]; names: string[] }>();
+  const counts = { agreed: 0, pressured: 0, deferred: 0, refused: 0, modified: 0, pending: 0 };
+  const groups = new Map<
+    string,
+    { ask: string; house: Household; lines: Map<string, string[]>; ids: string[] }
+  >();
   let letBeCount = 0;
-  for (const ask of [...asks].reverse()) {
-    for (const [id, reply] of Object.entries(ask.replies).sort((a, b) => b[1].at - a[1].at)) {
+  for (const ask of [...asks].sort((a, b) => a.from - b.from || a.id.localeCompare(b.id))) {
+    counts.pending += ask.personIds.filter(
+      (id) => !ask.replies[id] && (!house || house.members.includes(id)),
+    ).length;
+    for (const [id, reply] of Object.entries(ask.replies).sort(([a], [b]) => a.localeCompare(b))) {
       const hh = s.households.find((h) => h.members.includes(id));
       if (house && hh?.id !== house.id) continue;
       if (reply.verdict === 'deferred') counts.deferred++;
       else if (reply.verdict === 'refused') counts.refused++;
       else if (reply.verdict === 'modified') counts.modified++;
-      else counts.came++;
+      else if (reply.verdict === 'assented') counts.agreed++;
+      else counts.pressured++;
       const complete =
         ask.job === 'reap-agha'
           ? s.agha.standing <= 5
@@ -2060,29 +2077,53 @@ function pendingReplies(s: ValleyState, house?: Household): string {
         continue;
       }
       pressShown.add(id);
-      const key = `${ask.id}|${reply.says}`;
-      const group = groups.get(key) ?? { ask: ask.id, says: reply.says, ids: [], names: [] };
+      if (!hh) continue;
+      const key = `${ask.id}|${hh.id}`;
+      const group = groups.get(key) ?? {
+        ask: ask.id,
+        house: hh,
+        lines: new Map<string, string[]>(),
+        ids: [],
+      };
       group.ids.push(id);
-      group.names.push(cap(personLabel(personOf(s, id) ?? { name: 'someone' }, hh)));
+      const names = group.lines.get(reply.says) ?? [];
+      names.push(cap(personLabel(personOf(s, id) ?? { name: 'someone' }, hh)));
+      group.lines.set(reply.says, names);
       groups.set(key, group);
     }
   }
-  const rows = [...groups.values()].map((group) => {
-    const many = group.ids.length > 1;
-    const finish = btn('Let them finish first', () => letFinish(group.ask, group.ids));
-    const insist = many
-      ? btn(`Hold to insist with all ${group.ids.length}`, () => insistAll(group.ask, group.ids), {
-          hold: true,
-        })
-      : btn('Hold to insist', () => order({ verb: 'insist', ask: group.ask, pid: group.ids[0] ?? '' }), {
-          hold: true,
-        });
-    return `<div class="reply-row${many ? ' grouped' : ''}"><span><b>${esc(namesWords(group.names))}</b>${many ? ` <span class="soft">(${group.ids.length} people, the same words)</span>` : ''}<span class="reply-words">“${esc(group.says)}”</span></span><div class="reply-actions">${insist}${finish}</div></div>`;
-  });
+  const rows = [...groups.values()]
+    .sort((a, b) => a.ask.localeCompare(b.ask) || a.house.id.localeCompare(b.house.id))
+    .map((group) => {
+      const many = group.ids.length > 1;
+      const houseName = householdLabel(group.house);
+      const ask = s.asks.find((a) => a.id === group.ask);
+      const purpose = ask ? JOB_LABEL[ask.job] : 'for this call';
+      const finish = btn(`Let ${houseName} finish first (${purpose})`, () => letFinish(group.ask, group.ids));
+      const insist = many
+        ? btn(
+            `Hold to insist with ${houseName} (${group.ids.length} people, ${purpose})`,
+            () => insistAll(group.ask, group.ids),
+            { hold: true },
+          )
+        : btn(
+            `Hold to insist with ${houseName} (${purpose})`,
+            () => order({ verb: 'insist', ask: group.ask, pid: group.ids[0] ?? '' }),
+            { hold: true },
+          );
+      const lines = [...group.lines]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(
+          ([words, names]) =>
+            `<p><b>${esc(namesWords(names))}</b><span class="reply-words">“${esc(words)}”</span></p>`,
+        )
+        .join('');
+      return `<div class="reply-row${many ? ' grouped' : ''}" data-reply-group="${esc(`${group.ask}|${group.house.id}`)}"><span><b>${esc(houseName)}</b>${lines}</span><div class="reply-actions">${insist}${finish}</div></div>`;
+    });
   const letLine = letBeCount
     ? `<p class="soft let-be">You let ${letBeCount} ${letBeCount === 1 ? 'person' : 'people'} finish their own work first. Their replies to the call stay the same.</p>`
     : '';
-  return `<section class="pending-replies"><h2 class="section-label">Replies to the call</h2><p class="reply-count">${counts.came} came. ${counts.deferred} delayed. ${counts.refused} refused.${counts.modified ? ` ${counts.modified} agreed to do part of the work.` : ''}</p>${rows.join('')}${letLine}</section>`;
+  return `<section class="pending-replies"><h2 class="section-label">Replies to the call</h2><p class="reply-count">${counts.agreed} agreed. ${counts.pressured} answered under pressure. ${counts.deferred} delayed. ${counts.refused} refused. ${counts.pending} have not answered.${counts.modified ? ` ${counts.modified} offered part of the work.` : ''} These are replies, not arrivals. People may answer again as their day changes.</p>${rows.join('')}${letLine}</section>`;
 }
 
 /** Only the steward's accepted input and already due outward notes enter this projection. */
@@ -2129,11 +2170,23 @@ function notebook(s: ValleyState): string {
     .sort((a, b) => b.weight - a.weight || b.at - a.at)
     .slice(0, 3)
     .sort((a, b) => b.at - a.at);
+  const knownZehra = s.households.find((h) => h.members.includes('zehra'));
+  const scene = knownZehra && zehraScene(s, knownZehra.id);
+  const afterCut =
+    s.agha.standing <= 5 && scene?.source && knownZehra
+      ? `<section class="after-cut-context"><p>The landowner’s barley is cut. Zehra’s earlier reply from ${esc(householdLabel(knownZehra))}: “${esc(scene.source.words ?? '')}” This is an earlier reply.</p>${btn(
+          `Read Zehra’s visit at ${householdLabel(knownZehra)}`,
+          () => {
+            selected = knownZehra.id;
+            drawSheet(true);
+          },
+        )}</section>`
+      : '';
   const visit = s.kahyaState.visit;
   const asking =
     dialogueChoices(s).length && visit
       ? btn(
-          'Zehra is waiting for your answer. Open her house ▸',
+          'Ask Zehra about her words. Open her house ▸',
           () => {
             selected = visit.house;
             houseDetails = false;
@@ -2153,7 +2206,7 @@ function notebook(s: ValleyState): string {
   const receipt = notebookReceipt
     ? `<p class="notebook-receipt" role="status">${esc(notebookReceipt)}</p>`
     : '';
-  return `${receipt}${notebookVisit(s)}${asking}${pace}${pending}<section class="current-notes"><h2 class="section-label">Today’s news</h2>${recent.length ? recent.map(noteLine).join('') : '<p class="soft">No new reply today.</p>'}</section>${legend}${btn('Earlier replies ▸', () => openReading('reader'), { cls: 'more' })}`;
+  return `${receipt}${notebookVisit(s)}${asking}${afterCut}${pace}${pending}<section class="current-notes"><h2 class="section-label">Today’s news</h2>${recent.length ? recent.map(noteLine).join('') : '<p class="soft">No new reply today.</p>'}</section>${legend}${btn('Earlier replies ▸', () => openReading('reader'), { cls: 'more' })}`;
 }
 
 function reader(s: ValleyState): string {
@@ -2226,16 +2279,17 @@ function selectedRefusal(s: ValleyState, hh: Household): string {
         )
         .map(([id, reply]) => ({ ask, id, reply }));
     })
-    .sort((a, b) => b.reply.at - a.reply.at);
+    .sort((a, b) => a.ask.from - b.ask.from || a.ask.id.localeCompare(b.ask.id) || a.id.localeCompare(b.id));
   const choice = candidates[0];
   if (!choice) return '';
   const { ask, id, reply } = choice;
+  const unpressed = candidates.filter((c) => c.ask.id === ask.id && !letBe(s, ask, c.id)).map((c) => c.id);
   return `<div class="decision-reply"><p class="reply-date soft">${esc(fullDateEnglish(dayOfMinute(reply.at)))}</p>
     <p>${esc(cap(personLabel(personOf(s, id) ?? { name: 'someone' }, hh)))}: “${esc(reply.says)}”</p>
     ${btn(`Hold to insist on the work`, () => order({ verb: 'insist', ask: ask.id, pid: id }), {
       hold: true,
       hint: 'You press this person to answer again. They may still refuse.',
-    })}</div>`;
+    })}${unpressed.length ? btn(`Let ${householdLabel(hh)} finish first`, () => letFinish(ask.id, unpressed)) : '<p class="soft">You acknowledged these replies without pressing. Their answers have not changed.</p>'}</div>`;
 }
 
 const BREAD: [number, string][] = [
@@ -2279,18 +2333,23 @@ function jobInSeason(s: ValleyState): Job | null {
 }
 
 function dialogueCard(s: ValleyState, hh: Household): string {
-  if (!s.dialogue || s.kahyaState.visit?.house !== hh.id) return '';
-  const out: string[] = [];
+  const scene = zehraScene(s, hh.id);
+  if (!scene) return '';
+  const out: string[] = [
+    `<div class="scene-context" role="status"><p>${esc(scene.reason)}</p>${scene.source ? `<p>Earlier words from Zehra, ${esc(fullDateEnglish(dayOfMinute(scene.source.at)))}: “${esc(scene.source.words ?? '')}”</p>` : ''}</div>`,
+  ];
+  if (!s.dialogue) return `<section class="dialogue"><h2>Speak with Zehra</h2>${out.join('')}</section>`;
   const exchange = s.dialogue.exchanges.at(-1);
   if (exchange?.house === hh.id) {
-    out.push(`<p role="status">${esc(dialogueStatus(exchange))}</p>`);
+    const earlier = exchange.visit !== s.kahyaState.visit?.arrive;
+    out.push(`<p role="status">${earlier ? 'Earlier question: ' : ''}${esc(dialogueStatus(exchange))}</p>`);
     if (['pending', 'heard', 'talking'].includes(exchange.status))
       out.push(btn('End this question', () => order({ verb: 'dialogue-cancel', turn: exchange.turn })));
   }
-  const choices = dialogueChoices(s);
+  const choices = s.kahyaState.visit?.house === hh.id ? dialogueChoices(s) : [];
   if (choices.length)
     out.push(
-      `<p class="soft">${esc(questionOpen(s) ? 'Zehra waits for your answer. Time almost stops until you answer or choose Not now. Her question closes when your visit ends.' : 'You set her question aside. You can still answer it until your visit ends.')}</p>`,
+      `<p class="soft">${esc(questionOpen(s) ? 'You can choose a question for Zehra. Time almost stops until you ask or choose Not now. She may choose not to answer.' : 'You set these questions aside. You can still ask until your visit ends.')}</p>`,
     );
   for (const choice of choices) out.push(btn(dialogueWords(s, choice), () => order(choice)));
   if (choices.length && questionOpen(s))
@@ -2635,7 +2694,7 @@ function houseThumbs(s: ValleyState, hh: Household): string {
       'Cancel',
       () => {
         pendingGrain = null;
-        actionCaption = 'No grain was sent.';
+        actionCaption = 'No additional grain was sent. Earlier gifts and time spent are kept.';
         drawSheet(true);
       },
       null,

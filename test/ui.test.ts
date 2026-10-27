@@ -323,14 +323,17 @@ it('reads a named refusal, cancels and completes one hold, then visits and confi
               ? 'refused'
               : r.verdict === 'modified'
                 ? 'modified'
-                : 'came';
+                : r.verdict === 'assented'
+                  ? 'agreed'
+                  : 'pressured';
         c[key] = (c[key] ?? 0) + 1;
         return c;
       },
       {} as Record<string, number>,
     );
     const countText = await visibleText(page.locator('.reply-count'));
-    expect(countText).toContain(`${counts.came ?? 0} came`);
+    expect(countText).toContain(`${counts.agreed ?? 0} agreed`);
+    expect(countText).toContain(`${counts.pressured ?? 0} answered under pressure`);
     expect(countText).toContain(`${counts.delayed ?? 0} delayed`);
     expect(countText).toContain(`${counts.refused ?? 0} refused`);
     await page.getByRole('button', { name: 'Visit', exact: true }).click();
@@ -1672,7 +1675,7 @@ it('keeps the public phone notebook readable and exposes Say, its dated response
       .evaluate((e) => ({ height: e.clientHeight, rect: e.getBoundingClientRect().toJSON() }));
     console.log('NOTEBOOK_BASE_GEOMETRY', JSON.stringify(geometry));
     expect(geometry.height).toBeGreaterThanOrEqual(200);
-    await page.getByRole('button', { name: /^Zehra is waiting for your answer/ }).click();
+    await page.getByRole('button', { name: /^Ask Zehra about her words/ }).click();
     await page.getByRole('button', { name: 'Not now', exact: true }).click();
     await page.getByRole('button', { name: 'Back to the notebook', exact: true }).click();
     const say = page.getByRole('button', { name: /^Say something at the Çoban house/ });
@@ -1781,6 +1784,82 @@ it('explains temporary new-news slowdown in the notebook and keeps menu pause', 
     await page.getByRole('button', { name: 'Skip to the next event', exact: true }).click();
     expect(await paceReason(page)).toContain('Skipping');
     expect(await paceReason(page)).not.toContain('Back returns');
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps the actual Zehra gate and household identity through a cancelled question and late gift callback', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await page.route('**/api/**', (route) => route.abort());
+    await open(
+      page,
+      1110,
+      7,
+      [
+        {
+          at: 420,
+          verb: 'call',
+          job: 'reap-agha',
+          houses: newGame(7, undefined, false, true, 'valley-public-2026-10')
+            .valley.households.filter((h) => h.hamlet === 'lower')
+            .map((h) => h.id),
+        },
+        { at: 1080, verb: 'visit', house: 'coban' },
+      ],
+      true,
+      'valley-public-2026-10',
+    );
+    expect(await page.locator('.reply-count').textContent()).toContain('have not answered');
+    await page.locator('[data-h="coban"]').click();
+    expect(await page.locator('.scene-context').textContent()).toContain('Who will feed my family');
+    expect(await page.locator('.scene-context').textContent()).toContain('She may choose not to answer');
+    expect(await page.getByRole('button', { name: /^Let the Çoban house finish first/ }).count()).toBe(1);
+    const question = page.getByRole('button', { name: /^You said, “Who will feed my family/ });
+    await question.click();
+    await page.getByRole('button', { name: 'End this question', exact: true }).click();
+    await page.getByRole('button', { name: 'Send grain', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm send grain', exact: true }).click();
+    const gameTape = () =>
+      page.evaluate(
+        `Promise.all([import('/src/ui/app.ts'), import('/src/sim/game.ts')]).then(([{_debug},{save}])=>{const {savedAt,...run}=save(_debug.game());return run;})`,
+      );
+    const earned = await gameTape();
+    await page.getByRole('button', { name: 'Send grain', exact: true }).click();
+    // Retain the actual old DOM callback, then cancel the pending command and invoke it late.
+    await page.getByRole('button', { name: 'Confirm send grain', exact: true }).evaluate((b) => {
+      (window as unknown as { staleConfirm: HTMLElement }).staleConfirm = b as HTMLElement;
+    });
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.evaluate(() => (window as unknown as { staleConfirm: HTMLElement }).staleConfirm.click());
+    expect(await gameTape()).toEqual(earned);
+    expect(await page.locator('#action-receipt').textContent()).toContain('No additional grain was sent');
+    await page.clock.runFor(20000);
+    const after = await page.evaluate<{ exchange: { status: string; answerNote?: number }; gifts: Input[] }>(
+      `import('/src/ui/app.ts').then(({_debug})=>({exchange:_debug.game().valley.dialogue.exchanges[0],gifts:_debug.game().inputs.filter(i=>i.verb==='give')}))`,
+    );
+    expect(after.exchange.status).toBe('cancelled');
+    expect(after.exchange.answerNote).toBeUndefined();
+    expect(after.gifts).toHaveLength(1);
+    expect(await page.locator('.scene-context').textContent()).toMatch(
+      /asleep|not at this house|left the house|may choose not to answer/,
+    );
+    await page.evaluate(`import('/src/ui/app.ts').then(({_debug})=>_debug.skipTo(10))`);
+    await page.getByRole('button', { name: 'Back to the notebook', exact: true }).click();
+    expect(await page.locator('.after-cut-context').textContent()).toContain('This is an earlier reply');
+    await page.getByRole('button', { name: /^Read Zehra’s visit at the Çoban house/ }).click();
+    expect(await page.locator('.scene-context').textContent()).toContain('Visit this house');
+    await page.getByRole('button', { name: 'Visit', exact: true }).click();
+    expect(await page.locator('.scene-context').textContent()).toContain('still walking');
+    await page.evaluate(`import('/src/ui/app.ts').then(({_debug})=>_debug.skipTo(10 + 30 / 1440))`);
+    expect(await page.locator('.scene-context').textContent()).toContain('asleep');
+    const final = await state(page);
+    await page.reload();
+    expect(await page.locator('.title-actions').textContent()).toContain('Your saved place is kept');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('valley-log-v1') ?? '{}').minute)).toBe(
+      final.minute,
+    );
   } finally {
     await page.close();
   }
