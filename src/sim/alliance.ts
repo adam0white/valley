@@ -6,7 +6,7 @@
  */
 import type { Activity, Affordance, Outcome, Person, Suggestion } from '@adam0white/human-framework';
 import { DAY, daylight, dayOfMinute, doyOf, HOUR, minuteOfDay } from './calendar.ts';
-import { ALLIANCE_EDITION } from './edition.ts';
+import { allianceEdition } from './edition.ts';
 import { KAHYA } from './people.ts';
 import { hasOfficeCard, note, personOf, promote, type ValleyState } from './valley.ts';
 
@@ -22,7 +22,7 @@ export interface AllianceState {
 export type AllianceChoice = 'accept' | 'decline' | 'collect' | 'withdraw';
 const emit = (s: ValleyState, text: string) => note(s, { at: s.minute, kind: 'story', text, weight: 3 });
 export function allianceChoice(s: ValleyState, choice: AllianceChoice): boolean {
-  if (hasOfficeCard(s) || s.edition?.id !== ALLIANCE_EDITION || s.flags.ended || !s.pass) return false;
+  if (hasOfficeCard(s) || !allianceEdition(s.edition?.id) || s.flags.ended || !s.pass) return false;
   const p = s.pass;
   const a = p.alliance;
   const j = p.journey;

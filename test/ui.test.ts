@@ -650,20 +650,21 @@ it.each(['other-chapter', undefined])(
   },
 );
 
-it('loads a compact playtest run through Other ways in and restores its fingerprint', async () => {
+it('loads a compact playtest run through isolated public Debug and restores its fingerprint', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   const run = compactRun(save(newGame(7)));
   try {
     await page.goto(`${origin}/?lab=1`);
     await fits(page);
-    await page.getByRole('button', { name: /Lab tools/ }).click();
-    await page.getByLabel('Load a playtest run').setInputFiles({
+    await page.locator('[data-menu]').click();
+    await page.locator('.menu-debug summary').click();
+    await page.getByRole('link', { name: 'Open a Valley file', exact: true }).click();
+    await page.getByLabel('Open a Valley file').setInputFiles({
       name: 'compact.json',
       mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify(run)),
     });
-    await expect.poll(() => visibleText(page.locator('body'))).toMatch(/matches/i);
-    expect(await page.locator('#map').isVisible()).toBe(true);
+    await expect.poll(() => page.locator('#map').isVisible()).toBe(true);
     expect(
       await page.evaluate(
         `import('/src/sim/game.ts').then(async ({fingerprint}) => fingerprint((await import('/src/ui/app.ts'))._debug.game().valley))`,
@@ -1181,30 +1182,14 @@ it('keeps the pending grain disclosure after a blocked Visit click', async () =>
   }
 });
 
-it('offers an explicit Zehra edition and two actual scene lines in the existing reading panel', async () => {
+it('offers the public term and preserves two actual old Zehra scene lines in the existing reading panel', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await page.goto(`${origin}/?lab=1`);
     await page.evaluate(() => localStorage.setItem('valley-log-v1', '{"malformed":true}'));
     await page.reload();
     await page.evaluate(() => document.fonts.ready);
-    const edition = page.locator('[data-reply-edition]');
-    const version = page.getByRole('combobox', { name: 'Visit version' });
-    expect(await edition.isChecked()).toBe(false);
-    expect(await version.inputValue()).toBe('reply');
-    await version.selectOption('dialogue');
-    expect(await edition.isChecked()).toBe(false);
-    await edition.check();
-    await page.locator('[data-edition]').check();
-    expect(await edition.isChecked()).toBe(false);
-    await edition.check();
-    expect(await page.locator('[data-edition]').isChecked()).toBe(false);
-    await page.locator('.edition-choice').evaluateAll((es) =>
-      es.forEach((e) => {
-        (e as HTMLElement).style.fontSize = '34px';
-      }),
-    );
-    for (const label of await page.locator('.edition-choice').all()) await label.scrollIntoViewIfNeeded();
+    expect(await page.locator('.edition-choice input').count()).toBe(0);
     const start = page.getByRole('button', { name: 'New game', exact: true });
     await start.scrollIntoViewIfNeeded();
     const geometry = await start.evaluate((e) => ({

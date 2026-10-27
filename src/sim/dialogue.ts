@@ -11,7 +11,7 @@ import {
   type SimEvent,
 } from '@adam0white/human-framework';
 import { DAY, dateEnglish } from './calendar.ts';
-import { DIALOGUE_EDITION } from './edition.ts';
+import { DIALOGUE_EDITION, PUBLIC_EDITION } from './edition.ts';
 import { KAHYA } from './people.ts';
 import { houseOf, note, openAsksFor, personOf, promote, type Reply, type ValleyState } from './valley.ts';
 
@@ -402,12 +402,8 @@ export function validateDialogueState(s: ValleyState): void {
   if (
     !d ||
     d.id !== DIALOGUE_EDITION ||
-    s.reply ||
-    s.edition ||
-    s.pass ||
-    s.stewardCare ||
-    s.introduction ||
-    s.brokering ||
+    (s.edition?.id !== PUBLIC_EDITION &&
+      (s.reply || s.edition || s.pass || s.stewardCare || s.introduction || s.brokering)) ||
     Object.keys(d).some((k) => !['id', 'exchanges', 'place'].includes(k)) ||
     !Array.isArray(d.exchanges) ||
     (d.place !== undefined && typeof d.place !== 'string')

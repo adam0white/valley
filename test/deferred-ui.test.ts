@@ -307,54 +307,6 @@ it.each([undefined, 'valley-2026-10'] as const)(
     }
   },
 );
-it.each([false, true])(
-  'keeps the edition choice between title content and New game without overlap (lab=%s)',
-  async (lab) => {
-    const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-    try {
-      await page.goto(origin + (lab ? '/?lab=1' : '/'));
-      await page.evaluate(() => localStorage.setItem('valley-log-v1', '{"malformed":true}'));
-      await page.reload();
-      await page.evaluate(() => document.fonts.ready);
-      const geometry = await page.evaluate(() => {
-        const edition = document.querySelector('.edition-choice')?.getBoundingClientRect();
-        const tools = document.querySelector('[data-ways]')?.getBoundingClientRect();
-        const start = document.querySelector('[data-go="new"]')?.getBoundingClientRect();
-        if (!edition || !start) throw Error('Missing new-term choice');
-        const text = document.createRange();
-        const label = document.querySelector('.edition-choice');
-        if (!label) throw Error('Missing edition label');
-        text.selectNodeContents(label);
-        const lines = [...text.getClientRects()];
-        return {
-          editionTop: edition.top,
-          editionBottom: edition.bottom,
-          toolsBottom: tools?.bottom ?? 0,
-          startTop: start.top,
-          startBottom: start.bottom,
-          textFits: lines.every((r) => r.top >= edition.top - 1 && r.bottom <= edition.bottom + 1),
-          overflow: document.documentElement.scrollWidth > innerWidth + 1,
-        };
-      });
-      expect(geometry.editionTop).toBeGreaterThanOrEqual(geometry.toolsBottom);
-      expect(geometry.textFits).toBe(true);
-      expect(geometry.editionBottom).toBeLessThanOrEqual(geometry.startTop);
-      expect(geometry.startBottom).toBeLessThanOrEqual(690);
-      expect(geometry.overflow).toBe(false);
-      await page.locator('.edition-choice').evaluateAll((labels) => {
-        for (const label of labels) (label as HTMLElement).style.fontSize = '34px';
-      });
-      const startButton = page.getByRole('button', { name: 'New game', exact: true });
-      await startButton.scrollIntoViewIfNeeded();
-      const enlarged = await startButton.boundingBox();
-      expect(enlarged && enlarged.y >= 0 && enlarged.y + enlarged.height <= 690).toBe(true);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-    } finally {
-      await page.close();
-    }
-  },
-);
-
 it('offers the explicit alliance configuration and costed hosting at both required sizes', async () => {
   for (const viewport of [
     { width: 360, height: 690 },
@@ -406,64 +358,60 @@ it('offers the explicit alliance configuration and costed hosting at both requir
   }
 });
 
-it.each([
-  [360, 690],
-  [1280, 800],
-])(
-  'keeps all title choices unchecked, readable and reachable with enlarged text at %ix%i',
-  async (width, height) => {
-    const page = await browser.newPage({ viewport: { width, height } });
-    try {
-      await page.route('**/api/**', (route) => route.abort());
-      await page.goto(`${origin}/?lab=1`);
-      await page.evaluate(() => localStorage.setItem('valley-log-v1', '{"malformed":true}'));
-      await page.reload();
-      await page.evaluate(() => document.fonts.ready);
-      const choices = page.locator('.edition-choice');
-      expect(await choices.count()).toBe(3);
-      expect(await page.locator('.edition-choice input:checked').count()).toBe(0);
-      expect(
-        await choices.evaluateAll((es) =>
-          es.every(
-            (e) => parseFloat(getComputedStyle(e).fontSize) >= 14 && e.getBoundingClientRect().height >= 44,
-          ),
-        ),
-      ).toBe(true);
-      const start = page.getByRole('button', { name: 'New game', exact: true });
-      const initial = await start.boundingBox();
-      expect(initial && initial.y >= 0 && initial.y + initial.height <= height).toBe(true);
+it('keeps the public term description readable and New game reachable with enlarged text', async () => {
+  const width = 360,
+    height = 690;
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await page.route('**/api/**', (route) => route.abort());
+    await page.goto(`${origin}/?lab=1`);
+    await page.evaluate(() => localStorage.setItem('valley-log-v1', '{"malformed":true}'));
+    await page.reload();
+    await page.evaluate(() => document.fonts.ready);
+    const choices = page.locator('.title-actions > p').first();
+    expect(await choices.count()).toBe(1);
+    expect(await page.locator('.edition-choice input:checked').count()).toBe(0);
+    expect(
       await choices.evaluateAll((es) =>
-        es.forEach((e) => {
-          (e as HTMLElement).style.fontSize = '34px';
-        }),
-      );
-      for (let i = 0; i < 3; i++) {
-        const choice = choices.nth(i);
-        await choice.scrollIntoViewIfNeeded();
-        expect(
-          await choice.evaluate((e) => {
-            const r = e.getBoundingClientRect();
-            const text = document.createRange();
-            text.selectNodeContents(e);
-            return (
-              r.width > 0 &&
-              [...text.getClientRects()].every(
-                (t) =>
-                  t.left >= r.left - 1 &&
-                  t.right <= r.right + 1 &&
-                  t.top >= r.top - 1 &&
-                  t.bottom <= r.bottom + 1,
-              )
-            );
-          }),
-        ).toBe(true);
-      }
-      await start.scrollIntoViewIfNeeded();
-      const enlarged = await start.boundingBox();
-      expect(enlarged && enlarged.y >= 0 && enlarged.y + enlarged.height <= height).toBe(true);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-    } finally {
-      await page.close();
+        es.every(
+          (e) => parseFloat(getComputedStyle(e).fontSize) >= 14 && e.getBoundingClientRect().height >= 44,
+        ),
+      ),
+    ).toBe(true);
+    const start = page.getByRole('button', { name: 'New game', exact: true });
+    const initial = await start.boundingBox();
+    expect(initial && initial.y >= 0 && initial.y + initial.height <= height).toBe(true);
+    await choices.evaluateAll((es) =>
+      es.forEach((e) => {
+        (e as HTMLElement).style.fontSize = '34px';
+      }),
+    );
+    for (let i = 0; i < 1; i++) {
+      const choice = choices.nth(i);
+      await choice.scrollIntoViewIfNeeded();
+      const layout = await choice.evaluate((e) => {
+        const r = e.getBoundingClientRect();
+        const text = document.createRange();
+        text.selectNodeContents(e);
+        return { box: r.toJSON(), lines: [...text.getClientRects()].map((t) => t.toJSON()) };
+      });
+      expect(
+        layout.box.width > 0 &&
+          layout.lines.every(
+            (t) =>
+              t.left >= layout.box.left - 1 &&
+              t.right <= layout.box.right + 1 &&
+              t.top >= layout.box.top - 1 &&
+              t.bottom <= layout.box.bottom + 1,
+          ),
+        JSON.stringify(layout),
+      ).toBe(true);
     }
-  },
-);
+    await start.scrollIntoViewIfNeeded();
+    const enlarged = await start.boundingBox();
+    expect(enlarged && enlarged.y >= 0 && enlarged.y + enlarged.height <= height).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  } finally {
+    await page.close();
+  }
+});

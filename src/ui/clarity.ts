@@ -51,3 +51,9 @@ export function travelWords(v: { arrive: number; leave: number; back: number }, 
       ? `${v.leave - minute} game minutes left here; ${home} until home.`
       : `${home} game minutes until home.`;
 }
+
+/** Project the committed outflow; a full household may later return some grain. */
+export function grainPreview(house: string, stock: number): string {
+  const amount = Math.min(6, stock);
+  return `Send ${amount} measures of grain to ${house}? Your granary will hold ${stock - amount} measures before any returned grain. No grain has been sent.`;
+}

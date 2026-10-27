@@ -68,3 +68,11 @@ it('distinguishes an actual returned sack from forwarding, preserving fractional
     `Dispatched 2.5 measures to the Çoban house. They carried it on to ${needy.name} before dark. Net granary cost: 2.5 measures. Your granary now holds 0 measures.`,
   );
 });
+
+it('previews the granary remainder before a gift without claiming the sack was delivered', async () => {
+  const { grainPreview } = await import('../src/ui/clarity.ts');
+  expect(grainPreview('the Çoban house', 30)).toBe(
+    'Send 6 measures of grain to the Çoban house? Your granary will hold 24 measures before any returned grain. No grain has been sent.',
+  );
+  expect(grainPreview('the Çoban house', 2.5)).toContain('will hold 0 measures');
+});

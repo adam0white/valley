@@ -2445,3 +2445,31 @@ button.hold.armed {
     overscroll-behavior: contain;
   }
 }
+
+.menu-privacy-debug {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  position: relative;
+}
+.menu-debug summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.menu-debug > div {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  padding: 8px;
+  background: var(--paper);
+  border: 1px solid currentColor;
+  z-index: 3;
+}
+
+.title-actions .term-description {
+  flex-shrink: 0;
+  line-height: 1.5;
+  font-size: max(14px, 0.9rem);
+}

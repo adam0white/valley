@@ -1,15 +1,14 @@
 import { dialogueChoices, dialogueStatus, dialogueWords } from '../sim/dialogue.ts';
 import {
-  ALLIANCE_EDITION,
-  DIALOGUE_EDITION,
+  allianceEdition,
+  dialogueEdition,
+  PUBLIC_EDITION,
   passEdition,
-  REPLY_EDITION,
-  RULES_EDITION,
   type RulesEdition,
   rulesOf,
   type TermDecision,
 } from '../sim/edition.ts';
-import { clockWords, grainReceipt, paceWords, skipBlock, travelWords } from './clarity.ts';
+import { clockWords, grainPreview, grainReceipt, paceWords, skipBlock, travelWords } from './clarity.ts';
 import { validLocalLog } from './local-log.ts';
 import { musicEvent } from './music.ts';
 import { automaticRate, type Pace, READING_MS } from './pacing.ts';
@@ -77,7 +76,7 @@ import {
 } from '../sim/valley.ts';
 import type { Saying } from '../sim/voices.ts';
 import { CastSession, type LocalCastReceipt } from './cast-session.ts';
-import { FOREIGN_FILE, LAB_TOOLS, lab, labScreen, mountLab, openFeedback } from './lab.ts';
+import { debugError, FOREIGN_FILE, lab, labScreen, mountLab, openFeedback } from './lab.ts';
 import {
   callUnavailable,
   cropReturnWords,
@@ -500,7 +499,7 @@ async function reopen(log: Log, onProgress: (m: number) => void): Promise<Game> 
   let rest: Input[];
   if (
     // Dialogue receipts require authoritative input replay; a volume digest proves only integrity.
-    log.rules !== DIALOGUE_EDITION &&
+    !dialogueEdition(log.rules) &&
     bound &&
     typeof bound.runId === 'string' &&
     bound.runId.length > 0 &&
@@ -585,7 +584,13 @@ export function start() {
     download,
     notebook: openNotebook,
     toTitle: pauseToCover,
-    newGame: FOREIGN_FILE ? undefined : () => void begin(Math.floor(Math.random() * 1e9)),
+    newGame: FOREIGN_FILE ? undefined : title,
+    diagnostics: () => {
+      cancelAnimationFrame(raf);
+      writeLog();
+      title();
+      app.querySelector<HTMLDialogElement>('.ways-panel')?.showModal();
+    },
     closeFile: closeFileSession,
     recordingChanged: refreshRecordingNotice,
     getSpeed: () => speed,
@@ -608,8 +613,6 @@ export function start() {
           : 'The browser could not confirm a complete save. Keep this page open and download the run from Lab tools.';
     },
   });
-  const castHost = document.querySelector<HTMLElement>('.game-menu-panel .menu-body');
-  if (castHost && LAB_TOOLS) castSession.mount(castHost, writeLog);
   if (!FOREIGN_FILE && 'serviceWorker' in navigator && location.hostname !== 'localhost')
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   title();
@@ -684,7 +687,6 @@ function fileTitle() {
       if (Object.keys(saved).some((key) => !allowed.has(key)))
         throw new Error('This file has unsupported fields.');
       if (saved.game !== 'valley') throw new Error('Open a full Valley file.');
-      if (!('state' in saved)) throw new Error('Open the full Valley file, not a compact notebook.');
       restoring = true;
       const restored = load(saved);
       if (fingerprint(restored.valley) !== saved.fingerprint) throw new Error('The saved game differs.');
@@ -736,41 +738,16 @@ function title() {
   app.innerHTML = `<div class="page title-page">
     ${topbar(`<a href="${HUB}/games/" target="_top">All games</a>`)}
     <section class="title-premise"><h1>The Valley</h1><p class="purpose">${esc(PURPOSE)}</p><p class="soft">People can refuse you, and they remember how you answer.</p></section>
-    ${LAB_TOOLS ? '<button data-ways>Lab tools ▸</button>' : ''}
     <div class="vignette" aria-hidden="true"><svg viewBox="0 0 360 140"><path d="M0 95Q80 15 160 90T360 70M0 130Q90 50 180 120T360 95M250 0Q200 70 260 140" fill="none" stroke="currentColor"/><g fill="none" stroke="currentColor" stroke-width="2"><path d="M70 95v-18l12-12 12 12v18zM130 105V87l12-12 12 12v18zM190 90V72l12-12 12 12v18zM280 100V82l12-12 12 12v18z"/></g></svg></div>
-    <footer class="title-actions"><label class="edition-choice"><input type="checkbox" data-reply-edition><span>Spoken answers on visits: <select data-visit-version aria-label="Visit version"><option value="reply">Say something at every house</option><option value="dialogue">Questions for Zehra</option></select> <span class="edition-note" data-visit-note>${esc(VISIT_NOTE.reply)}</span> Original grain rules; people stay local.</span></label><label class="edition-choice"><input type="checkbox" data-edition> Include grain wages, voluntary contributions, winter loans and inspections in this new term.</label><label class="edition-choice"><input type="checkbox" data-pass-edition> Also include pass journeys, family arrangements and a road agreement, with the grain rules. The steward eats real provisions and rests between walks. People stay local.</label>${where ? `<p class="hand">${esc(where)}</p>` : ''}
+    <footer class="title-actions"><p class="term-description">Visit a household and choose what to say. Grain wages, winter loans, inspections, pass journeys and family arrangements are part of this term. The steward needs food and rest between walks. People stay local to this valley.</p>${where ? `<p class="hand">${esc(where)}</p>` : ''}
     ${hasSave ? `${log && log.version === GAME_VERSION ? '<button class="primary" data-go="open">Resume</button>' : ''}<button data-go="new" class="hold">New game<span class="fill"></span></button><p class="soft">This replaces your saved game.</p>` : '<button class="primary" data-go="new">New game</button>'}${mark()}</footer>
-    ${LAB_TOOLS ? `<dialog class="ways-panel" aria-label="Other ways to start"><header><h2>Other ways to start</h2><button data-ways-close aria-label="Close other ways to start">×</button></header><label for="valley-name">A named valley</label><input id="valley-name" placeholder="Kuyulu" maxlength="80"><p>The same name gives the same valley.</p><button data-seed${log ? ' class="hold"' : ''}>Begin this valley${log ? '<span class="fill"></span>' : ''}</button>${log ? '<p class="soft">This replaces your saved game.</p>' : ''}<label for="load-run">Load a playtest run</label><input id="load-run" type="file" accept=".json,application/json"><p id="load-result" role="status"></p></dialog>` : ''}
+    <dialog class="ways-panel" aria-label="Other ways to start"><header><h2>Other ways to start</h2><button data-ways-close aria-label="Close other ways to start">×</button></header><label for="valley-name">A named valley</label><input id="valley-name" placeholder="Kuyulu" maxlength="80"><p>The same name gives the same valley.</p><button data-seed${log ? ' class="hold"' : ''}>Begin this valley${log ? '<span class="fill"></span>' : ''}</button>${log ? '<p class="soft">This replaces your saved game.</p>' : ''}</dialog>
   </div>`;
   app.querySelector('[data-go="open"]')?.addEventListener('click', () => {
     if (log && log.version === GAME_VERSION) openLedger(log);
   });
-  const visitVersion = app.querySelector<HTMLSelectElement>('[data-visit-version]');
-  visitVersion?.addEventListener('change', () => {
-    const note = app.querySelector('[data-visit-note]');
-    if (note) note.textContent = visitVersion.value === 'dialogue' ? VISIT_NOTE.dialogue : VISIT_NOTE.reply;
-  });
-  for (const option of app.querySelectorAll<HTMLInputElement>('.edition-choice input')) {
-    option.addEventListener('change', () => {
-      if (!option.checked) return;
-      const reply = app.querySelector<HTMLInputElement>('[data-reply-edition]');
-      if (option === reply) {
-        for (const other of app.querySelectorAll<HTMLInputElement>('.edition-choice input'))
-          if (other !== option) other.checked = false;
-      } else if (reply) reply.checked = false;
-    });
-  }
   const fresh = (seed: number) => {
-    const rules = app.querySelector<HTMLInputElement>('[data-reply-edition]')?.checked
-      ? app.querySelector<HTMLSelectElement>('[data-visit-version]')?.value === 'dialogue'
-        ? DIALOGUE_EDITION
-        : REPLY_EDITION
-      : app.querySelector<HTMLInputElement>('[data-pass-edition]')?.checked
-        ? ALLIANCE_EDITION
-        : app.querySelector<HTMLInputElement>('[data-edition]')?.checked
-          ? RULES_EDITION
-          : undefined;
-    void begin(seed, false, rules);
+    void begin(seed, false, PUBLIC_EDITION);
   };
   const nb = app.querySelector<HTMLButtonElement>('[data-go="new"]');
   if (nb) {
@@ -802,44 +779,6 @@ function title() {
     if (hasSave) bindHold(seed, named);
     else seed.addEventListener('click', named);
   }
-  app.querySelector<HTMLInputElement>('#load-run')?.addEventListener('change', async (event) => {
-    const file = (event.target as HTMLInputElement).files?.[0];
-    const result = app.querySelector('#load-result');
-    if (!file || !result) return;
-    const transition = ++runTransition;
-    const previous = g;
-    const previousMeta = castSession.metadata();
-    castSession.invalidate();
-    try {
-      const text = await file.text();
-      if (transition !== runTransition) return;
-      const saved = JSON.parse(text) as SavedGame | CompactRun;
-      const restored = load(saved);
-      if (fingerprint(restored.valley) !== saved.fingerprint) throw new Error('differs');
-      result.textContent = 'The saved game matches and can be loaded.';
-      g = restored;
-      await castSession.loaded(restored, undefined, true, saved);
-      if (transition !== runTransition) return;
-      volume = 0;
-      importStatus = 'The saved game matches and has been loaded.';
-      ways?.close();
-      writeLog();
-      await bindVolume();
-      enter();
-    } catch {
-      if (transition !== runTransition) return;
-      // load() can reset module caches; restore the active instance before continuing.
-      if (previous) {
-        g = {
-          valley: restoreState(previous.valley),
-          inputs: previous.inputs,
-          ...(previous.cast ? { cast: previous.cast } : {}),
-        };
-        await castSession.loaded(g, previousMeta);
-      }
-      result.textContent = 'This saved game does not match this version. Start a new game instead.';
-    }
-  });
 }
 
 function openLedger(log: Log) {
@@ -870,7 +809,7 @@ function openLedger(log: Log) {
     });
 }
 
-async function begin(seed: number, localOnly = false, rules?: RulesEdition) {
+async function begin(seed: number, localOnly = false, rules: RulesEdition = PUBLIC_EDITION) {
   const transition = ++runTransition;
   cancelAnimationFrame(raf);
   app.innerHTML = `<div class="page">${topbar('The Valley')}<h2>Starting your game…</h2><p>Please wait.</p></div>`;
@@ -894,17 +833,9 @@ async function begin(seed: number, localOnly = false, rules?: RulesEdition) {
     const status = document.createElement('p');
     status.setAttribute('role', 'status');
     console.error(error);
-    status.textContent =
-      LAB_TOOLS && error instanceof Error
-        ? error.message
-        : 'The game could not start. Your saved game is kept. Try again or open Feedback.';
+    status.textContent = 'The game could not start. Your saved game is kept. Try again or open Feedback.';
     app.querySelector('.title-actions')?.prepend(status);
-    if (LAB_TOOLS) {
-      const local = document.createElement('button');
-      local.textContent = 'Start here without past history';
-      local.addEventListener('click', () => void begin(seed, true, rules));
-      status.after(local);
-    }
+    debugError(error);
   }
 }
 
@@ -2387,11 +2318,6 @@ function visitHint(s: ValleyState): string {
     : 'A visit takes time to walk and sit with the household.';
 }
 
-const VISIT_NOTE = {
-  reply: 'Choose your words at any house; someone answers.',
-  dialogue: 'You can answer only Zehra, after she speaks at the Çoban house.',
-};
-
 function zehraNote(s: ValleyState): string {
   const home = s.households.find((h) => h.members.includes('zehra'));
   return `In the Questions for Zehra version, you can answer only Zehra.${home ? ` She lives at ${householdLabel(home)}.` : ''} She must speak to you first.`;
@@ -2557,9 +2483,7 @@ function houseThumbs(s: ValleyState, hh: Household): string {
     pendingGrain = reason
       ? null
       : { game: g, house: hh, stock: s.agha.granary, members: JSON.stringify(hh.members) };
-    actionCaption =
-      reason ??
-      `Send ${Math.min(6, s.agha.granary)} measures of grain to ${householdLabel(hh)}? This leaves your granary. No grain has been sent.`;
+    actionCaption = reason ?? grainPreview(householdLabel(hh), s.agha.granary);
     sayOpen = null;
     drawSheet(true);
     // On a phone the actions scroll; keep the question and its answer in view.
@@ -2568,7 +2492,7 @@ function houseThumbs(s: ValleyState, hh: Household): string {
   if (pendingGrain?.house === hh) {
     const preview = pendingGrain;
     out.push(
-      `<p class="pending-grain">Send ${Math.min(6, preview.stock)} measures of grain to ${esc(householdLabel(preview.house))}? This leaves your granary. No grain has been sent.</p>`,
+      `<p class="pending-grain">${esc(grainPreview(householdLabel(preview.house), preview.stock))}</p>`,
       btn(
         'Confirm send grain',
         () => {
@@ -2717,7 +2641,7 @@ function otherOrders(s: ValleyState): string {
     );
   }
   if (passEdition(s.edition?.id) && s.pass) {
-    const roadTerms = s.edition?.id === ALLIANCE_EDITION;
+    const roadTerms = allianceEdition(s.edition?.id);
     const j = s.pass.journey;
     const away = !!j && !j.returned;
     const there = !!j?.seen && s.minute < j.leave && !j.returned;
@@ -2728,7 +2652,7 @@ function otherOrders(s: ValleyState): string {
     out.push(
       `<section><h3>A family introduction</h3><p>${s.introduction?.status === 'met' ? 'The adults met with her father present. Nobody has agreed to marry.' : s.introduction?.status === 'missed' ? 'No supervised meeting took place. Nobody was promised in marriage.' : s.introduction ? 'Each adult and her father has been invited. Their work and rest may come first.' : 'Ask an unmarried adult from Kavak and an unmarried adult from Kuyucu to meet at Kuyucu with her father present. They choose whether to attend. Meeting is not a marriage agreement.'}</p>${btn('Arrange an introduction at Kuyucu', () => send({ verb: 'introduce' }), { disabled: !!s.introduction || !introductionEligible(s), hint: 'Only these existing eligible adults are invited. No visitor is assigned a spouse or guardian.' })}</section>`,
     );
-    if (s.edition?.id === ALLIANCE_EDITION) {
+    if (allianceEdition(s.edition?.id)) {
       const b = s.brokering;
       const family =
         b?.phase === 'married'
@@ -2783,7 +2707,7 @@ function otherOrders(s: ValleyState): string {
           : 'A cart arrives in twelve days. Repay a quarter more when a later rider comes.'),
     }),
   );
-  return `<div class="other-orders${s.edition?.id === ALLIANCE_EDITION ? ' alliance-orders' : ''}">${out.join('')}</div>`;
+  return `<div class="other-orders${allianceEdition(s.edition?.id) ? ' alliance-orders' : ''}">${out.join('')}</div>`;
 }
 
 /** The rider's date, with the year when it is not this one. */
@@ -2979,7 +2903,7 @@ function ending() {
       .join('')}
     <p>${esc(letter)}</p>
     <details class="closing-grain"><summary>See the tally</summary><p data-closing-grain></p></details>
-    </div><footer class="ending-actions"><div class="row"><button data-feedback>Feedback</button><button data-ending-notebook>Earlier replies</button>${LAB_TOOLS ? '<button data-download>Download this run</button>' : ''}</div><button class="primary" data-go="new">Begin a new term</button>${mark()}${footer()}</footer>
+    </div><footer class="ending-actions"><div class="row"><button data-feedback>Feedback</button><button data-ending-notebook>Earlier replies</button></div><button class="primary" data-go="new">Begin a new term</button>${mark()}${footer()}</footer>
   </div>`;
   drawClosingGrain();
   app.querySelector('[data-feedback]')?.addEventListener('click', openFeedback);

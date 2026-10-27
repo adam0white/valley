@@ -26,18 +26,25 @@ import {
   underSeal,
   type ValleyState,
 } from './valley.ts';
+export const PUBLIC_EDITION = 'valley-public-2026-10';
+export const allianceEdition = (rules: unknown): boolean =>
+  rules === ALLIANCE_EDITION || rules === PUBLIC_EDITION;
+export const dialogueEdition = (rules: unknown): boolean =>
+  rules === DIALOGUE_EDITION || rules === PUBLIC_EDITION;
+export const replyEdition = (rules: unknown): boolean => rules === REPLY_EDITION || rules === PUBLIC_EDITION;
 export const DIALOGUE_EDITION = 'valley-dialogue-2026-10';
 export const REPLY_EDITION = 'valley-replies-2026-10';
 export const rulesOf = (s: ValleyState): RulesEdition | undefined =>
-  s.dialogue?.id ?? s.reply?.id ?? s.edition?.id;
+  s.edition?.id === PUBLIC_EDITION ? PUBLIC_EDITION : (s.dialogue?.id ?? s.reply?.id ?? s.edition?.id);
 export const RULES_EDITION = 'valley-2026-10';
 export const PASS_EDITION = 'valley-pass-2026-10';
 export const ALLIANCE_EDITION = 'valley-alliance-2026-10';
 export const localEdition = (rules: unknown): boolean =>
   rules === DIALOGUE_EDITION || rules === REPLY_EDITION || passEdition(rules);
 export const grainEdition = (rules: unknown): boolean => rules === RULES_EDITION || passEdition(rules);
-export const passEdition = (rules: unknown): boolean => rules === PASS_EDITION || rules === ALLIANCE_EDITION;
+export const passEdition = (rules: unknown): boolean => rules === PASS_EDITION || allianceEdition(rules);
 export type RulesEdition =
+  | typeof PUBLIC_EDITION
   | typeof RULES_EDITION
   | typeof PASS_EDITION
   | typeof ALLIANCE_EDITION

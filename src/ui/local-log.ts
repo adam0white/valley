@@ -4,12 +4,12 @@
 
 import { DAY } from '../sim/calendar.ts';
 import {
-  ALLIANCE_EDITION,
-  DIALOGUE_EDITION,
+  allianceEdition,
+  dialogueEdition,
   grainEdition,
   knownEdition,
   passEdition,
-  REPLY_EDITION,
+  replyEdition,
 } from '../sim/edition.ts';
 import { END_DAY, GAME_VERSION, QUANTUM } from '../sim/game.ts';
 
@@ -54,18 +54,18 @@ export function validLocalLog(value: unknown): boolean {
       case 'dialogue':
       case 'dialogue-cancel':
         // Replay performs semantic admission and must retain every accepted input.
-        if (v.rules !== DIALOGUE_EDITION) return false;
+        if (!dialogueEdition(v.rules)) return false;
         break;
       case 'broker':
         if (
-          v.rules !== ALLIANCE_EDITION ||
+          !allianceEdition(v.rules) ||
           !['meeting', 'proposal', 'ceremony'].includes(input.choice as string)
         )
           return false;
         break;
       case 'alliance':
         if (
-          v.rules !== ALLIANCE_EDITION ||
+          !allianceEdition(v.rules) ||
           !['accept', 'decline', 'collect', 'withdraw'].includes(input.choice as string)
         )
           return false;
@@ -130,7 +130,7 @@ export function validLocalLog(value: unknown): boolean {
         break;
       case 'reply':
         if (
-          v.rules !== REPLY_EDITION ||
+          !replyEdition(v.rules) ||
           !name(input.house) ||
           (input.saying !== undefined && !['listen', 'finish', 'rain'].includes(input.saying as string))
         )
