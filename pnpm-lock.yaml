@@ -175,11 +175,11 @@ importers:
         specifier: 3.0.0
         version: 3.0.0
       '@adam0white/lab-client':
-        specifier: file:vendor/adam0white-lab-client-0.4.14.tgz
-        version: file:vendor/adam0white-lab-client-0.4.14.tgz
+        specifier: file:vendor/adam0white-lab-client-0.4.15.tgz
+        version: file:vendor/adam0white-lab-client-0.4.15.tgz
       '@adam0white/lab-kit':
-        specifier: file:vendor/adam0white-lab-kit-0.5.16.tgz
-        version: file:vendor/adam0white-lab-kit-0.5.16.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.14.tgz)
+        specifier: file:vendor/adam0white-lab-kit-0.5.17.tgz
+        version: file:vendor/adam0white-lab-kit-0.5.17.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.15.tgz)
     devDependencies:
       '@biomejs/biome':
         specifier: 2.6.3
@@ -212,17 +212,17 @@ packages:
     resolution: {integrity: sha512-O0t7AytAqP3ZKNdNbyfJk4sSpeniQRJ6M29IPxXe9YQOaQVnr7C8VZ945PTkc6mao/zZpxPAjK0Cuuvz/0uR1A==}
     engines: {node: '>=24'}
 
-  '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.14.tgz':
-    resolution: {integrity: sha512-1BaxWT8eBTcpS9nI/ThL44/5RCWX6Ms4gdtvSywBZavVjMzMdnXIsyIAuopYIAxdLWbaeHEGOfEucxQfng9veg==, tarball: file:vendor/adam0white-lab-client-0.4.14.tgz}
-    version: 0.4.14
+  '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.15.tgz':
+    resolution: {integrity: sha512-hE6zVE3qg7TYWVJ1VRcf1+NssqGGdkUQzkYVFhaU14l4etEhWGSocsOIbE4AcjSdGORd6/lFsXpdzPenaJ3u5Q==, tarball: file:vendor/adam0white-lab-client-0.4.15.tgz}
+    version: 0.4.15
 
-  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.16.tgz':
-    resolution: {integrity: sha512-CmEoGuicv96L4hB9478pLkSp8HQdhmOvmGXDmUyldoQzPYRQC3WAaPO3YQaEJsvODPh0dJ3cII3ftEZaH9o1fg==, tarball: file:vendor/adam0white-lab-kit-0.5.16.tgz}
-    version: 0.5.16
+  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.17.tgz':
+    resolution: {integrity: sha512-nNPaIhh2nbQvuxGb2S3oUYISI/+OsP4wZvRi0c5o7h5SO2LSahm5g/kegImV/v5SM652u+RN2ooipku2U5pQHg==, tarball: file:vendor/adam0white-lab-kit-0.5.17.tgz}
+    version: 0.5.17
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
-      '@adam0white/lab-client': 0.4.11 || 0.4.12 || 0.4.13 || 0.4.14
+      '@adam0white/lab-client': 0.4.11 || 0.4.12 || 0.4.13 || 0.4.14 || 0.4.15
     peerDependenciesMeta:
       '@adam0white/lab-client':
         optional: true
@@ -1598,13 +1598,13 @@ snapshots:
 
   '@adam0white/human-framework@3.0.0': {}
 
-  '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.14.tgz':
+  '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.15.tgz':
     dependencies:
       '@adam0white/human-framework': 3.0.0
 
-  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.16.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.14.tgz)':
+  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.17.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.15.tgz)':
     optionalDependencies:
-      '@adam0white/lab-client': file:vendor/adam0white-lab-client-0.4.14.tgz
+      '@adam0white/lab-client': file:vendor/adam0white-lab-client-0.4.15.tgz
 
   '@biomejs/biome@2.6.3':
     optionalDependencies:
@@ -1895,10 +1895,10 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@napi-rs/wasm-runtime@1.2.6(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.3)':
+  '@napi-rs/wasm-runtime@1.2.6(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)':
     dependencies:
       '@emnapi/core': 1.11.2
-      '@emnapi/runtime': 1.11.3
+      '@emnapi/runtime': 1.11.2
       '@tybys/wasm-util': 0.10.4
     optional: true
 
@@ -2015,7 +2015,7 @@ snapshots:
     dependencies:
       '@emnapi/core': 1.11.2
       '@emnapi/runtime': 1.11.2
-      '@napi-rs/wasm-runtime': 1.2.6(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.3)
+      '@napi-rs/wasm-runtime': 1.2.6(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
     optional: true
 
   '@oxc-resolver/binding-win32-arm64-msvc@11.24.2':
