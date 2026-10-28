@@ -1,3 +1,7 @@
+# HF4 port handoff — 2026-10-28
+
+Remaining: published client Valley bindings (G2, review 2026-11-03), then the Run bridge and exact new-pin game export/replay, CI, deployment and acceptance. HF stays at 3.0.0; see [the concrete refusal receipt](docs/hf4-port-status.md). PR9 merged the exact causal tree 7005dd2 as 2e992a1. The bounded follow-up adopts kit 0.5.22 and its shelf-label constant; no simulation change is claimed.
+
 # Valley handoff
 
 ## Received words and finite food-for-work candidate — 2026-10-28

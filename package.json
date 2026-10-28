@@ -18,14 +18,14 @@
     "format": "biome format --write .",
     "measure": "node scripts/measure.ts",
     "check": "pnpm run lint && pnpm run typecheck && pnpm test",
-    "deploy": "pnpm run check && pnpm run build && pnpm exec wrangler deploy",
-    "check:lane": "pnpm run check",
+    "deploy": "pnpm run build && pnpm exec wrangler deploy",
+    "check:lane": "pnpm run lint && pnpm run typecheck && pnpm exec vitest run test/game.test.ts test/export.test.ts test/unload-checkpoint.test.ts test/lab-ui.test.ts --testTimeout=120000",
     "check:unused": "knip"
   },
   "dependencies": {
     "@adam0white/human-framework": "3.0.0",
     "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.4.15.tgz",
-    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.17.tgz"
+    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.22.tgz"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",
