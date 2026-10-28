@@ -2343,6 +2343,12 @@ function dialogueCard(s: ValleyState, hh: Household): string {
   if (exchange?.house === hh.id) {
     const earlier = exchange.visit !== s.kahyaState.visit?.arrive;
     out.push(`<p role="status">${earlier ? 'Earlier question: ' : ''}${esc(dialogueStatus(exchange))}</p>`);
+    if (exchange.cut) {
+      const source = exchange.cut.source;
+      out.push(
+        `<div class="cut-follow-up"><p>Question recorded ${esc(fullDateEnglish(dayOfMinute(exchange.cut.at)))}. Zehra’s earlier words, ${esc(fullDateEnglish(dayOfMinute(source.at)))}: “${esc(source.words ?? '')}”</p><p>The field was cut when you asked. Its completion time was not recorded. The earlier reply does not tell you whether her family has food now.</p>${exchange.answer ? `<p>Zehra’s answer, ${esc(fullDateEnglish(dayOfMinute(exchange.answer.at)))}: “${esc(exchange.answer.words)}”</p>` : ''}</div>`,
+      );
+    }
     if (['pending', 'heard', 'talking'].includes(exchange.status))
       out.push(btn('End this question', () => order({ verb: 'dialogue-cancel', turn: exchange.turn })));
   }

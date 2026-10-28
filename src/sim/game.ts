@@ -115,7 +115,7 @@ function apply(g: Game, i: Input): boolean {
   switch (i.verb) {
     case 'dialogue': {
       const { at: _at, ...order } = i;
-      return speakDialogue(s, order);
+      return speakDialogue(s, order, g.inputs.length);
     }
     case 'dialogue-cancel':
       return Object.keys(i).every((k) => ['at', 'verb', 'turn'].includes(k)) && cancelDialogue(s, i.turn);

@@ -1864,3 +1864,145 @@ it('keeps the actual Zehra gate and household identity through a cancelled quest
     await page.close();
   }
 });
+
+it.each([
+  [360, 690],
+  [1280, 800],
+])('answers the explicit completed-cut follow-up in the real App at %ix%i', async (width, height) => {
+  const page = await browser.newPage({ viewport: { width, height } });
+  page.setDefaultTimeout(4000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  // Synthetic file session: real SDK and host, no owner storage or external traffic.
+  await page.route('**/*', (route) =>
+    new URL(route.request().url()).origin === origin ? route.continue() : route.abort(),
+  );
+  const game = newGame(7, undefined, false, true, 'valley-public-2026-10');
+  const { act } = await import('../src/sim/game.ts');
+  expect(
+    act(game, {
+      verb: 'call',
+      job: 'reap-agha',
+      houses: game.valley.households.filter((h) => h.hamlet === 'lower').map((h) => h.id),
+    }),
+  ).toBe(true);
+  step(game, 6210);
+  // Native public visit acknowledges the actual invitation and reaches this attended scene.
+  expect(act(game, { verb: 'visit', house: 'coban' })).toBe(true);
+  step(game, 6240);
+  const opening = save(game);
+  const chooseFile = async (packet: unknown) => {
+    await page.getByLabel('Open a Valley file').setInputFiles({
+      name: 'synthetic-valley.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(packet)),
+    });
+  };
+  const downloadFile = async () => {
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    const pending = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download this Valley file', exact: true }).click();
+    const chunks: Buffer[] = [];
+    for await (const chunk of await (await pending).createReadStream()) chunks.push(Buffer.from(chunk));
+    const packet = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    return packet;
+  };
+  try {
+    await page.clock.install();
+    await page.goto(`${origin}/file/`);
+    await page.clock.pauseAt(Date.now() + 50);
+    await chooseFile(opening);
+    // Loading validates the full saved history by replaying it before rendering.
+    await expect.poll(() => page.locator('#map').count(), { timeout: 30000 }).toBe(1);
+    await page.locator('[data-h="coban"]').click();
+    const follow = page.getByRole('button', { name: /^The landowner’s barley is cut now/ });
+    expect(await follow.count()).toBe(1);
+    await follow.click();
+    expect(await page.locator('.cut-follow-up').textContent()).toContain('completion time was not recorded');
+    expect(await page.locator('.cut-follow-up').textContent()).toContain('Who will feed my family');
+    expect(await page.locator('.dialogue').textContent()).toContain('No answer yet');
+    await page.evaluate(`import('/src/ui/app.ts').then(({_debug})=>_debug.skipTo(6330 / 1440))`);
+    expect(await page.locator('.dialogue').textContent()).toContain('The talk finished.');
+    expect(await page.locator('.cut-follow-up').textContent()).toContain(
+      'Finishing his field does not answer that question.',
+    );
+    expect(await page.locator('.cut-follow-up').textContent()).toContain('18 July');
+    expect(await page.locator('.cut-follow-up').textContent()).toContain('22 July');
+    await fits(page);
+    const completed = await downloadFile();
+    const { load } = await import('../src/sim/game.ts');
+    const {
+      savedAt: _at,
+      castHeads: _heads,
+      castSources: _sources,
+      label: _volumeLabel,
+      ...wire
+    } = completed;
+    // App volume labels follow the existing binder count; load returns the game, not that count.
+    const {
+      savedAt: _restoredAt,
+      label: _defaultVolumeLabel,
+      ...restored
+    } = JSON.parse(JSON.stringify(save(load(completed))));
+    expect(restored).toEqual(wire);
+    if (process.env.VALLEY_PUBLIC_PROOF_DIR)
+      writeFileSync(
+        `${process.env.VALLEY_PUBLIC_PROOF_DIR}/after-cut-ui-${width}.json`,
+        JSON.stringify(completed),
+      );
+    // Whole-state replay refuses a changed historical anchor, preserving the held packet.
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('button', { name: 'Open another Valley file', exact: true }).click();
+    const forged = structuredClone(completed);
+    forged.state.dialogue.exchanges[0].cut.reaped += 1;
+    await chooseFile(forged);
+    await expect
+      .poll(() => page.locator('#foreign-result').textContent({ timeout: 30000 }), { timeout: 30000 })
+      .toContain('dialogue replay');
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    const held = await downloadFile();
+    const { savedAt: _heldAt, label: _heldVolumeLabel, ...heldRest } = held;
+    const { savedAt: _originalAt, label: _originalVolumeLabel, ...originalRest } = completed;
+    // Existing menu saves advance the volume label; every run/source/history value stays literal.
+    expect(held.label).toMatch(/^Volume /);
+    expect(heldRest).toEqual(originalRest);
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('button', { name: 'Open another Valley file', exact: true }).click();
+    await chooseFile(completed);
+    await expect.poll(() => page.locator('#map').count(), { timeout: 30000 }).toBe(1);
+    await page.evaluate(`import('/src/ui/app.ts').then(({_debug})=>_debug.skipTo(7770 / 1440))`);
+    const continued = await downloadFile();
+    const reference = load(completed);
+    step(reference, continued.minute);
+    expect(continued.state).toEqual(JSON.parse(JSON.stringify(save(reference).state)));
+    expect(continued.inputs).toEqual(completed.inputs);
+    // One later ordinary visit must retain the old source without claiming a new request.
+    await page.evaluate(`import('/src/ui/app.ts').then(({_debug})=>{
+      _debug.order({verb:'visit',house:'coban'});
+      _debug.skipTo(7800 / 1440);
+    })`);
+    if ((await page.locator('[data-h="coban"]').getAttribute('aria-pressed')) !== 'true')
+      await page.locator('[data-h="coban"]').click();
+    const laterText = await visibleText(page.locator('.dialogue'));
+    expect(laterText).toContain('Earlier question: The talk finished.');
+    expect(laterText).toContain('Question recorded 22 July, year one');
+    expect(laterText).toContain('18 July, year one');
+    expect(laterText).toContain('completion time was not recorded');
+    expect(laterText).toContain('Finishing his field does not answer that question.');
+    expect(laterText).not.toContain('during this visit');
+    const later = await page.evaluate<{ requestAt: number; requestVisit: number; currentVisit: number }>(
+      `import('/src/ui/app.ts').then(({_debug})=>{const s=_debug.game().valley;return {requestAt:s.dialogue.exchanges[0].saidAt,requestVisit:s.dialogue.exchanges[0].visit,currentVisit:s.kahyaState.visit.arrive}})`,
+    );
+    expect(later).toEqual({ requestAt: 6240, requestVisit: 6230, currentVisit: 7790 });
+    await fits(page);
+    if (process.env.VALLEY_PUBLIC_PROOF_DIR)
+      writeFileSync(
+        `${process.env.VALLEY_PUBLIC_PROOF_DIR}/later-visit-ui-${width}.json`,
+        JSON.stringify({ later, laterText }),
+      );
+    expect(errors).toEqual([]);
+  } finally {
+    await page.close();
+  }
+});

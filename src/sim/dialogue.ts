@@ -10,12 +10,48 @@ import {
   perceive,
   type SimEvent,
 } from '@adam0white/human-framework';
-import { DAY, dateEnglish } from './calendar.ts';
+import { DAY, dateEnglish, dayOfMinute, yearOf } from './calendar.ts';
 import { DIALOGUE_EDITION, PUBLIC_EDITION } from './edition.ts';
 import { KAHYA } from './people.ts';
-import { houseOf, note, openAsksFor, personOf, promote, type Reply, type ValleyState } from './valley.ts';
+import {
+  houseOf,
+  type Note,
+  note,
+  openAsksFor,
+  personOf,
+  promote,
+  type Reply,
+  type ValleyState,
+} from './valley.ts';
 
-export type DialogueLine = 'follow-up' | 'work-need';
+export type DialogueLine = 'follow-up' | 'work-need' | 'after-cut';
+/** Scope: one current question about an actual outward food/work concern after cutting.
+ * This is a prospective request anchor, never an old completion timestamp. Full native
+ * admission regenerates it at this input against the complete deterministic world.
+ * It grants no food, work, debt, permission or trust; HF may withhold or interrupt. */
+export interface CutRequest {
+  kind: 'valley-cut-request/1';
+  input: number;
+  at: number;
+  beat: string;
+  standing: number;
+  reaped: number;
+  source: Note;
+}
+const FOOD_QUESTION = 'Who will feed my family while I cut his barley?';
+const cutBeat = (s: ValleyState) => `cut-${yearOf(dayOfMinute(s.minute))}`;
+function cutSource(s: ValleyState, house: string): Note | undefined {
+  if (s.agha.standing > 0.5 || !s.flags.beats.includes(cutBeat(s))) return undefined;
+  if (s.dialogue?.exchanges.some((e) => e.cut?.beat === cutBeat(s))) return undefined;
+  return s.notes.findLast(
+    (n) =>
+      n.who === 'zehra' &&
+      n.house === house &&
+      n.at <= s.minute &&
+      (n.kind === 'reply' || n.kind === 'voice') &&
+      n.words === FOOD_QUESTION,
+  );
+}
 export interface DialogueOrder {
   verb: 'dialogue';
   turn: number;
@@ -36,6 +72,7 @@ export interface Exchange {
   line: DialogueLine;
   ask?: string;
   existingWork?: Reply;
+  cut?: CutRequest;
   saidAt: number;
   words: string;
   speechNote: number;
@@ -123,15 +160,19 @@ export function dialogueChoices(s: ValleyState): DialogueOrder[] {
     )
   )
     choices.push({ ...base, line: 'work-need', ask: ask.id });
+  const source = cutSource(s, v.house);
+  if (source) choices.push({ ...base, prior: source.id, line: 'after-cut' });
   return choices;
 }
 export function dialogueWords(s: ValleyState, o: DialogueOrder): string {
   const prior = s.notes.find((n) => n.id === o.prior);
+  if (o.line === 'after-cut')
+    return `The landowner’s barley is cut now. You asked, “${prior?.words ?? ''}” What did you want me to understand about your family’s food?`;
   return o.line === 'follow-up'
     ? `You said, “${prior?.words ?? ''}” What would you like me to know about that?`
     : `Rain is due on ${dateEnglish(2)}. I need hands to cut the landowner’s barley. Can you help before then?`;
 }
-export function speakDialogue(s: ValleyState, o: DialogueOrder): boolean {
+export function speakDialogue(s: ValleyState, o: DialogueOrder, inputIndex: number): boolean {
   if (
     Object.keys(o).some(
       (k) => !['verb', 'turn', 'house', 'person', 'visit', 'prior', 'line', 'ask'].includes(k),
@@ -148,7 +189,8 @@ export function speakDialogue(s: ValleyState, o: DialogueOrder): boolean {
       c.line === o.line &&
       c.ask === o.ask,
   );
-  if (!choice) return false;
+  if (!choice || (o.line === 'after-cut' && (!Number.isSafeInteger(inputIndex) || inputIndex < 0)))
+    return false;
   const prior = s.notes.find((n) => n.id === o.prior),
     v = s.kahyaState.visit;
   if (!prior?.words || !v || !s.dialogue) return false;
@@ -162,6 +204,19 @@ export function speakDialogue(s: ValleyState, o: DialogueOrder): boolean {
     leave: v.leave,
     prior: { id: prior.id, at: prior.at, words: prior.words, ...(prior.ask ? { ask: prior.ask } : {}) },
     line: o.line,
+    ...(o.line === 'after-cut'
+      ? {
+          cut: {
+            kind: 'valley-cut-request/1' as const,
+            input: inputIndex,
+            at: s.minute,
+            beat: cutBeat(s),
+            standing: s.agha.standing,
+            reaped: s.agha.reaped,
+            source: structuredClone(prior),
+          },
+        }
+      : {}),
     ...(o.ask ? { ask: o.ask } : {}),
     ...(ask?.replies[o.person] ? { existingWork: structuredClone(ask.replies[o.person]) } : {}),
     saidAt: s.minute,
@@ -257,7 +312,7 @@ export function dialogueOffers(s: ValleyState, p: Person, at: number): Affordanc
       label: 'sit and answer the steward’s question',
       placeId: `house:${e.house}`,
       duration: 5,
-      effort: 0.05,
+      effort: e.cut ? 0 : 0.05, // This new exchange is seated; old offers remain literal.
       advertises: { belonging: 0.12, leisure: 0.06 },
       tags: ['social'],
     },
@@ -326,9 +381,11 @@ export function resolveDialogue(
         who: p.id,
         text: 'Zehra answers your question after sitting with you:',
         words:
-          e.line === 'follow-up'
-            ? `When I said “${e.prior.words}”, that is what I wanted you to hear. I have given this time to answer you. It is not a promise to leave my work.`
-            : `I heard why you need hands before the rain. It is not a promise to leave my work. You have heard my answer about talking. My answer to the work request is separate.`,
+          e.line === 'after-cut'
+            ? 'His barley is cut now. I was asking how my family would eat if I went to his field. Finishing his field does not answer that question. Sitting here with you is not a promise to work for you.'
+            : e.line === 'follow-up'
+              ? `When I said “${e.prior.words}”, that is what I wanted you to hear. I have given this time to answer you. It is not a promise to leave my work.`
+              : `I heard why you need hands before the rain. It is not a promise to leave my work. You have heard my answer about talking. My answer to the work request is separate.`,
         weight: 3,
       });
       const answer = s.notes.find((n) => n.id === e.answerNote);
@@ -419,6 +476,7 @@ export function validateDialogueState(s: ValleyState): void {
     'line',
     'ask',
     'existingWork',
+    'cut',
     'saidAt',
     'words',
     'speechNote',
@@ -444,7 +502,7 @@ export function validateDialogueState(s: ValleyState): void {
       !Number.isSafeInteger(e.leave) ||
       e.leave <= e.saidAt ||
       e.saidAt < e.visit ||
-      !['follow-up', 'work-need'].includes(e.line) ||
+      !['follow-up', 'work-need', 'after-cut'].includes(e.line) ||
       ![
         'pending',
         'heard',
@@ -470,6 +528,36 @@ export function validateDialogueState(s: ValleyState): void {
       (e.endedAt !== undefined && !minute(e.endedAt))
     )
       fail();
+    if (e.line === 'after-cut') {
+      const c = e.cut;
+      if (
+        !c ||
+        Object.keys(c).some(
+          (k) => !['kind', 'input', 'at', 'beat', 'standing', 'reaped', 'source'].includes(k),
+        ) ||
+        c.kind !== 'valley-cut-request/1' ||
+        !Number.isSafeInteger(c.input) ||
+        c.input < 0 ||
+        c.at !== e.saidAt ||
+        c.beat !== `cut-${yearOf(dayOfMinute(e.saidAt))}` ||
+        !Number.isFinite(c.standing) ||
+        c.standing < 0 ||
+        c.standing > 0.5 ||
+        !Number.isFinite(c.reaped) ||
+        c.reaped < 0 ||
+        !c.source ||
+        c.source.id !== e.prior.id ||
+        c.source.at !== e.prior.at ||
+        c.source.at > c.at ||
+        c.source.words !== FOOD_QUESTION ||
+        c.source.words !== e.prior.words ||
+        c.source.who !== e.person ||
+        c.source.house !== e.house ||
+        !['reply', 'voice'].includes(c.source.kind) ||
+        e.ask !== undefined
+      )
+        fail();
+    } else if (e.cut !== undefined) fail();
     if (
       e.hearing &&
       (!minute(e.hearing.deliveredAt) ||
