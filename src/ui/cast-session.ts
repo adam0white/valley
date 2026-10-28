@@ -455,7 +455,13 @@ export class CastSession {
   }
   connect(saveLocal: () => void) {
     this.saveLocal = saveLocal;
-    if (this.shelf) watchPersonaCheckpoint(() => this.checkpoint());
+    if (this.shelf)
+      watchPersonaCheckpoint(() => {
+        // Local editions cannot publish. Keep complete source validation on explicit
+        // checkpoint/alternative actions rather than replaying on document exit.
+        if (this.game && localEdition(rulesOf(this.game.valley))) return;
+        return this.checkpoint();
+      });
   }
   mount(host: HTMLElement, saveLocal: () => void) {
     if (!this.shelf) return;
