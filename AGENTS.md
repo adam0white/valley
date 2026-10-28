@@ -15,4 +15,4 @@ The ordinary New game opens the complete public term. Notebook, pace, visits, di
 
 The HF4 port is blocked by the published client role bindings, not an owner question. See [the dated G2 receipt](docs/hf4-port-status.md). Keep HF 3.0.0/client 0.4.15 until the supported Valley carryover route is released. Do not replace continuing people with fresh defaults or bypass the client identity checks.
 
-Run only check:lane locally before commits. It checks lint, types, game/export replay and focused browser controls without the suite lock. Hosted CI runs the full check. Never acquire the machine suite lock for this game.
+Run only check:lane locally before commits. It checks lint, types, game/export replay and focused browser controls without the suite lock. Hosted CI runs the full check. Deploy only after green ci on the exact merged commit; the deploy script builds and uploads that source without repeating the suite. Never acquire the machine suite lock for this game.

@@ -18,7 +18,7 @@
     "format": "biome format --write .",
     "measure": "node scripts/measure.ts",
     "check": "pnpm run lint && pnpm run typecheck && pnpm test",
-    "deploy": "pnpm run check && pnpm run build && pnpm exec wrangler deploy",
+    "deploy": "pnpm run build && pnpm exec wrangler deploy",
     "check:lane": "pnpm run lint && pnpm run typecheck && pnpm exec vitest run test/game.test.ts test/export.test.ts test/unload-checkpoint.test.ts test/lab-ui.test.ts --testTimeout=120000",
     "check:unused": "knip"
   },
