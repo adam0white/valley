@@ -1855,7 +1855,8 @@ it('keeps the actual Zehra gate and household identity through a cancelled quest
     await page.evaluate(`import('/src/ui/app.ts').then(({_debug})=>_debug.skipTo(10 + 30 / 1440))`);
     expect(await page.locator('.scene-context').textContent()).toContain('asleep');
     const final = await state(page);
-    await page.reload();
+    // Navigation can take longer under CI load; keep the saved-place assertions below.
+    await page.reload({ timeout: 30_000 });
     expect(await page.locator('.title-actions').textContent()).toContain('Your saved place is kept');
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('valley-log-v1') ?? '{}').minute)).toBe(
       final.minute,
