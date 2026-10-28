@@ -55,13 +55,22 @@ export function validLocalLog(value: unknown): boolean {
         // The new public line carries no caller-authored history or field facts.
         // Only deterministic acceptance creates its prospective request anchor.
         if (
-          input.line === 'after-cut' &&
+          ['after-cut', 'birth', 'son', 'friendship', 'reciprocal-help'].includes(input.line as string) &&
           (Object.keys(input).some(
             (k) => !['at', 'verb', 'turn', 'house', 'person', 'visit', 'prior', 'line'].includes(k),
           ) ||
             !integer(input.turn, 20000) ||
             !name(input.house) ||
-            input.person !== 'zehra' ||
+            input.person !==
+              (
+                {
+                  birth: 'yusuf',
+                  son: 'serife',
+                  friendship: 'danyal',
+                  'reciprocal-help': 'zehra',
+                  'after-cut': 'zehra',
+                } as Record<string, string>
+              )[input.line as string] ||
             !integer(input.visit, input.at as number) ||
             !integer(input.prior, Number.MAX_SAFE_INTEGER))
         )

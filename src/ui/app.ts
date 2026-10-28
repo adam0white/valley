@@ -980,7 +980,7 @@ function pacingState(t: number, s: ValleyState) {
   };
 }
 
-/** A question from Zehra the player has not answered or set aside ("Not now"). */
+/** An available visit question the player has not asked or set aside ("Not now"). */
 let setAside = '';
 function questionKey(s: ValleyState): string {
   const choice = dialogueChoices(s)[0];
@@ -2188,7 +2188,9 @@ function notebook(s: ValleyState): string {
   const asking =
     dialogueChoices(s).length && visit
       ? btn(
-          'Ask Zehra about her words. Open her house ▸',
+          dialogueChoices(s).some((c) => !['birth', 'son', 'friendship', 'reciprocal-help'].includes(c.line))
+            ? 'Ask Zehra about her words. Open her house ▸'
+            : 'Choose a question during this visit ▸',
           () => {
             selected = visit.house;
             houseDetails = false;
@@ -2341,7 +2343,7 @@ function dialogueCard(s: ValleyState, hh: Household): string {
     `<div class="scene-context" role="status"><p>${esc(scene.reason)}</p>${scene.source ? `<p>Earlier words from Zehra, ${esc(fullDateEnglish(dayOfMinute(scene.source.at)))}: “${esc(scene.source.words ?? '')}”</p>` : ''}</div>`,
   ];
   if (!s.dialogue) return `<section class="dialogue"><h2>Speak with Zehra</h2>${out.join('')}</section>`;
-  const exchange = s.dialogue.exchanges.at(-1);
+  const exchange = s.dialogue.exchanges.findLast((e) => !e.context);
   if (exchange?.house === hh.id) {
     const earlier = exchange.visit !== s.kahyaState.visit?.arrive;
     out.push(`<p role="status">${earlier ? 'Earlier question: ' : ''}${esc(dialogueStatus(exchange))}</p>`);
@@ -2354,7 +2356,10 @@ function dialogueCard(s: ValleyState, hh: Household): string {
     if (['pending', 'heard', 'talking'].includes(exchange.status))
       out.push(btn('End this question', () => order({ verb: 'dialogue-cancel', turn: exchange.turn })));
   }
-  const choices = s.kahyaState.visit?.house === hh.id ? dialogueChoices(s) : [];
+  const choices =
+    s.kahyaState.visit?.house === hh.id
+      ? dialogueChoices(s).filter((c) => ['follow-up', 'work-need', 'after-cut'].includes(c.line))
+      : [];
   if (choices.length)
     out.push(
       `<p class="soft">${esc(questionOpen(s) ? 'You can choose a question for Zehra. Time almost stops until you ask or choose Not now. She may choose not to answer.' : 'You set these questions aside. You can still ask until your visit ends.')}</p>`,
@@ -2368,6 +2373,52 @@ function dialogueCard(s: ValleyState, hh: Household): string {
       }),
     );
   return out.length ? `<section class="dialogue"><h2>Speak with Zehra</h2>${out.join('')}</section>` : '';
+}
+
+/** Current authored context is not a remembered or heard conversation. Only the
+ * explicit input below creates an anchor; only a completed HF talk creates an answer. */
+function contextVisitCard(s: ValleyState, hh: Household): string {
+  if (s.edition?.id !== PUBLIC_EDITION || !['coban', 'tepe', 'water-guest'].includes(hh.id)) return '';
+  const choices =
+    s.kahyaState.visit?.house === hh.id
+      ? dialogueChoices(s).filter((c) => ['birth', 'son', 'friendship', 'reciprocal-help'].includes(c.line))
+      : [];
+  const e = s.dialogue?.exchanges.findLast((e) => e.house === hh.id && e.context);
+  const out: string[] = [];
+  if (e?.context) {
+    const source = e.context.source;
+    out.push(
+      `<p>${e.visit !== s.kahyaState.visit?.arrive ? 'Earlier question: ' : ''}${esc(dialogueStatus(e))}</p>`,
+    );
+    out.push(
+      source.kind === 'note'
+        ? `<p>Original public note, ${esc(fullDateEnglish(dayOfMinute(source.note.at)))} at ${esc(clockWords(source.note.at))}: “${esc(source.note.words ?? source.note.text)}”</p>`
+        : `<p>Public house description, original date not recorded: “${esc(source.text)}”</p>`,
+    );
+    out.push(
+      `<p>Question recorded ${esc(fullDateEnglish(dayOfMinute(e.saidAt)))} at ${esc(clockWords(e.saidAt))}. This question creates no work or help agreement.</p>`,
+    );
+    if (e.answer) out.push(`<p>Completed answer: “${esc(e.answer.words)}”</p>`);
+    if (['pending', 'heard', 'talking'].includes(e.status))
+      out.push(btn('End this question', () => order({ verb: 'dialogue-cancel', turn: e.turn })));
+  }
+  if (!choices.length && !e)
+    out.push(
+      '<p>These questions need an attended visit, the person awake and here, and a public source. A birth question also needs retained actual birth news. A visit does not bring anyone home or wake them.</p>',
+    );
+  for (const choice of choices) out.push(btn(dialogueWords(s, choice), () => order(choice)));
+  if (
+    choices.length &&
+    questionOpen(s) &&
+    !dialogueChoices(s).some((c) => ['follow-up', 'work-need', 'after-cut'].includes(c.line))
+  )
+    out.push(
+      btn('Not now', () => {
+        setAside = questionKey(s);
+        drawSheet(true);
+      }),
+    );
+  return `<section class="context-visit"><h2>Ask about this visit</h2>${out.join('')}</section>`;
 }
 
 function houseCard(s: ValleyState, hh: Household): string {
@@ -2447,7 +2498,7 @@ function houseCard(s: ValleyState, hh: Household): string {
       : '';
   const response = recent.find((n) => n.words && (n.kind === 'voice' || n.ask));
   const refusal = selectedRefusal(s, hh);
-  const conversation = dialogueCard(s, hh);
+  const conversation = dialogueCard(s, hh) + contextVisitCard(s, hh);
   const status = `${s.kahyaState.visit?.house === hh.id && !conversation ? visitReply(s) : ''}<p id="reading-travel" class="reading-status">${esc(englishText(caption(s, '')))}</p><p id="action-receipt" class="action-caption" role="status">${esc(actionWords(s) || limitsWords(s, hh))}</p>`;
   if (!houseDetails)
     return `<div class="card">${response ? `<div class="house-response">${datedReply(s, response)}</div>` : ''}${status}${conversation}${refusal || (!response ? '<p class="soft">There is no new reply from this house.</p>' : '')}</div>`;
