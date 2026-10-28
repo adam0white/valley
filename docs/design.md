@@ -559,3 +559,39 @@ Reciprocal help, Yusuf/birth, Tepe/son, Danyal/Maryam and portable local physica
 mapping remain separate available engineering work at their existing dated targets.
 No whole ask set or game is complete. Root accepts the technical handback; Adam accepts
 feel separately. No next scene unit belongs to this candidate.
+
+
+## Weather and storm reading candidate — 2026-10-28
+
+F-1162 originally asks: “Make the ledger show the storm loss, and drop the rain warning
+once its date has passed.” Pavel's retests-1027b report adds the storm-day observation:
+“Rain is expected on 20 July” remained in the ledger and header, with no loss figure.
+His return also depends on a useful house visit and clock behavior. Preserve those
+conditions and the existing Deferred targets; this source candidate closes no whole row.
+
+The opening forecast stays conditional before20July. On20July and thereafter the
+header and seasonal ledger show only the current day's host weather, already used
+by the map. A dated ledger section copies actual retained storm notes. It preserves
+the approximate landowner grain loss and, when recorded, the count of affected household
+fields; it does not invent household amounts or supply losses. At midnight the existing
+host has applied the loss, but a05:00 public note remains undisclosed until05:00.
+No retained report means the ledger says it has no report to show, not that no loss
+occurred. Current cut, standing and granary grain never reconstruct historical damage.
+The400-note bound can remove an old report. Persistent exact historical accounting
+would require a separately scoped saved fact; none is added in this reading unit.
+
+This candidate changes no simulation, clock, call window, yield, resource, person,
+RNG, source/native authority, edition, pin, immutable dependency or faith rule.
+F-1585's24July explanation remains separate for2026-11-10. Review and delivery of
+this candidate remain targeted2026-11-03; Adam accepts feel separately. Synthetic
+local two-size Chromium checks, causal date/report controls and literal old raw/native
+continuations are builder evidence. They establish no player or physical-phone result.
+Private proof/READY prefix: `~/code/.lab-scratch/games-deferred/gd-resume-valley-weather-reading-v2`.
+
+The earlier completed-cut Zehra candidate above is parent-verified delivered at
+`0a43e759ff845a0f5903902ba75c2a810ba01cd2` from `b8f06c5`, with source
+CI40620884617/main CI40621352493 and clean release receipts. Its foreign CI deadline
+correction, missing merge trailer and postmerge final-byte R4 review remain recorded
+exceptions. The earlier red open PR was not red main. No duplicate delivery is needed.
+Broader households, birth, Tepe/son, Danyal/Maryam, reciprocal help, portable physical
+and source contracts, and owner acceptance remain separate at their existing dates.

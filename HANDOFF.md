@@ -1,12 +1,45 @@
 # Valley handoff
 
-## Completed-cut Zehra question candidate — 2026-10-27
+## Weather and storm reading candidate — 2026-10-28
 
-Remaining: root's one independent Codex review of the exact frozen candidate, then
-signed source, exact CI, root-only merge, clean exact-main deployment and cleanup.
-No commit, release, source ownership, receipt acknowledgment or player acceptance is
-claimed. Adam accepts feel separately. Private plan/proofs/READY use the prefix
-`~/code/.lab-scratch/games-deferred/gd-resume-valley-zehra-source`.
+Remaining: root's one independent review of this frozen candidate, then the normal
+source, CI, integration and clean-release gates. This reading change is not delivered.
+The private evidence and handback prefix is `gd-resume-valley-weather-reading-v2`.
+
+The header and seasonal ledger retain the opening forecast before 20 July. From
+20 July they read the actual current day's weather, using the same host weather
+function as the map. They do not inspect a later day. The ledger separately shows
+retained storm reports with their full dates and original amounts/owners/units.
+A report dated 05:00 stays hidden at midnight even though the host has applied the
+storm loss. Missing or pruned reports say only that this ledger has none to show.
+Current stocks never supply a reconstructed loss or a claim of zero damage.
+
+F-1162's original compound request is “Make the ledger show the storm loss, and drop
+the rain warning once its date has passed.” The source-local retests-1027b wording
+also concerns the storm day. This candidate addresses that reading; it does not close
+the row, the clock/visit conditions on Pavel's return, or any wider acceptance gate.
+Review/delivery remains targeted 2026-11-03. F-1585's call-to-24-July explanation
+remains separate, targeted 2026-11-10; no agronomy explanation is invented here.
+
+Focused causal controls cover 19 July, midnight and 05:00 on 20 July, 21 July,
+retained actual damage and absent records. Synthetic local Chromium covers both
+360x690 and1280x800, one sheet, readable scrollable reports, collapsed Debug and no
+page overflow. The map is stable across these ledger readings. Its existing phone
+house-selection resize (200px to120px) remains, with repeated house views stable.
+These are desktop builder controls, not a physical-phone or player result. Seven
+old raw editions and full/compact1440 continuations are preserved literally; the
+source-identical Zehra native/refusal proofs are reused with exact identities.
+
+## Completed-cut Zehra question delivery — parent verified 2026-10-28
+
+Parent receipt `resume-valley-zehra-delivery-parent-receipt.json` verifies source
+`b8f06c5074d6ad74159c940ddbd931cc7b16dfd7`, merge
+`0a43e759ff845a0f5903902ba75c2a810ba01cd2`, source CI40620884617 and
+main CI40621352493, matching clean release and the scoped browser checks. The foreign
+CI deadline correction belongs to that source. The earlier red open-PR run was not
+red main. The merge omitted the final Codex trailer and final-byte R4 review occurred
+after the foreign merge; neither exception is retroactive premerge approval. Exact
+receipts remain external. Adam's acceptance and broader conversation work stay open.
 
 The public `after-cut` question is separate from both existing dialogue lines. It
 requires an attended visit, Zehra present and awake, her retained actual food/work

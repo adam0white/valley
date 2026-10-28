@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DAY, monthEnglish, START_DOY, YEAR_DAYS } from '../src/sim/calendar.ts';
-import { compactRun, fingerprint, newGame, save, volumeLabel } from '../src/sim/game.ts';
+import { compactRun, fingerprint, newGame, save, step, volumeLabel } from '../src/sim/game.ts';
 import { call, shareOwed } from '../src/sim/valley.ts';
 import {
   callUnavailable,
@@ -10,6 +10,8 @@ import {
   nextWords,
   nowWords,
   PURPOSE,
+  stormReportWords,
+  weatherWords,
 } from '../src/ui/presentation.ts';
 
 function required<T>(value: T | undefined): T {
@@ -366,4 +368,46 @@ it('authors complete opening text without a display rewrite', () => {
     'A young family lives here. The roof is partly repaired. A baby cries most evenings.',
   );
   expect(fingerprint(g.valley)).toBe(before);
+});
+
+it('keeps forecasts separate from current weather and future-dated damage reports', () => {
+  const g = newGame(7);
+  const s = g.valley;
+  expect(weatherWords(s)).toBe('Rain is expected on 20 July.');
+  expect(nextWords(s)).toContain('Rain is expected on 20 July.');
+  step(g, DAY + 23 * 60);
+  expect(weatherWords(s)).toBe('Rain is expected on 20 July.');
+  step(g, 2 * DAY);
+  expect(weatherWords(s)).toBe('There is a storm today.');
+  expect(nextWords(s)).not.toMatch(/expected on 20 July|before more rain/);
+  // Midnight has applied damage, but the public report is dated 05:00.
+  expect(s.notes.some((n) => n.text.includes('about 108 grain measures'))).toBe(true);
+  expect(stormReportWords(s)).toEqual([]);
+  step(g, 2 * DAY + 5 * 60);
+  const report = s.notes.find((n) => n.text.startsWith('The storm came over the ridge'));
+  expect(report?.text).toContain('about 108 grain measures in the landowner’s field');
+  expect(report?.text).toContain('14 household fields');
+  expect(stormReportWords(s)).toEqual([`20 July, year one: ${report?.text}`]);
+  step(g, 3 * DAY);
+  const before = JSON.stringify(s);
+  expect(weatherWords(s)).not.toMatch(/expected|20 July|before more rain/);
+  expect(nextWords(s)).not.toMatch(/expected on 20 July|before more rain/);
+  expect(stormReportWords(s)).toEqual([`20 July, year one: ${report?.text}`]);
+  expect(JSON.stringify(s)).toBe(before);
+});
+
+it('does not reconstruct storm loss from stocks or claim zero when reports are missing', () => {
+  const g = newGame(7);
+  step(g, 3 * DAY);
+  const s = g.valley;
+  const original = stormReportWords(s);
+  // Harvested, spent and gifted grain cannot change an earlier reported loss.
+  s.agha.reaped += 50;
+  s.agha.granary = 0;
+  s.agha.standing = 0;
+  expect(stormReportWords(s)).toEqual(original);
+  s.notes = s.notes.filter((n) => n.kind !== 'weather');
+  expect(stormReportWords(s)).toEqual([]);
+  s.minute = 365 * DAY;
+  expect(weatherWords(s)).not.toMatch(/expected.*20 July/);
 });
