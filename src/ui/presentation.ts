@@ -1,5 +1,5 @@
 /** English explanations and term glosses for preserved HF labels and older saved text. */
-import { DAY, dateEnglish, dayOfMinute, doyOf, seasonOf, yearOf } from '../sim/calendar.ts';
+import { DAY, dateEnglish, dayOfMinute, doyOf, seasonOf, weatherOf, yearOf } from '../sim/calendar.ts';
 import { END_DAY } from '../sim/game.ts';
 import type { Household } from '../sim/people.ts';
 import { type Job, nextRiderDay, shareOwed, underSeal, V, type ValleyState } from '../sim/valley.ts';
@@ -103,6 +103,32 @@ function riderReceipt(s: ValleyState) {
 export const PURPOSE =
   'You are the valley’s steward. Bring in the landowner’s due, keep the valley fed, and earn its trust. Your term lasts three years; the elders will say what they remember.';
 
+/** Read-only weather and damage readings. Never roll future weather or infer loss from stocks.
+ * Notes can be future-dated or pruned; their absence does not establish zero damage. */
+export function weatherWords(s: ValleyState): string {
+  const day = dayOfMinute(s.minute);
+  if (day < 2) return 'Rain is expected on 20 July.';
+  return {
+    clear: 'The sky is clear today.',
+    cloud: 'The sky is cloudy today.',
+    rain: 'It is raining today.',
+    storm: 'There is a storm today.',
+    snow: 'It is snowing today.',
+    frost: 'There is frost today.',
+  }[weatherOf(s.seed, day).sky];
+}
+
+export function stormReportWords(s: ValleyState): string[] {
+  return s.notes
+    .filter(
+      (n) =>
+        n.kind === 'weather' &&
+        n.at <= s.minute &&
+        n.text.startsWith('The storm came over the ridge in the night'),
+    )
+    .map((n) => `${fullDateEnglish(dayOfMinute(n.at))}: ${englishText(n.text)}`);
+}
+
 /** What follows this season, including dates that explain an idle granary. */
 export function nextWords(s: ValleyState): string {
   if (s.flags.ended) return 'The term is over. The valley keeps its own account of your years here.';
@@ -121,7 +147,7 @@ export function nextWords(s: ValleyState): string {
     return `${rider} The households turn to sowing before winter.`;
   switch (seasonOf(doy)) {
     case 'harvest':
-      return `${s.agha.reaped === 0 ? 'No barley is cut yet.' : s.agha.reaped < 2.5 ? 'Less than 5 grain measures are cut.' : `About ${Math.round(s.agha.reaped / 5) * 5} grain measures are cut.`} About ${Math.round(s.agha.standing / 10) * 10} grain measures are still in the field. ${day < 18 ? 'Rain is expected on 20 July.' : 'Cut the barley before more rain.'} From 5 August, people will beat the cut barley to separate the grain from its stalks. The landowner’s payment must be ready by ${dateEnglish(nextRiderDay(s))}. ${s.flags.verbs.includes('take') ? 'Collect each household’s share while people separate the grain.' : 'You can collect each household’s share from 9 August.'}`;
+      return `${s.agha.reaped === 0 ? 'No barley is cut yet.' : s.agha.reaped < 2.5 ? 'Less than 5 grain measures are cut.' : `About ${Math.round(s.agha.reaped / 5) * 5} grain measures are cut.`} About ${Math.round(s.agha.standing / 10) * 10} grain measures are still in the field. ${weatherWords(s)} From 5 August, people will beat the cut barley to separate the grain from its stalks. The landowner’s payment must be ready by ${dateEnglish(nextRiderDay(s))}. ${s.flags.verbs.includes('take') ? 'Collect each household’s share while people separate the grain.' : 'You can collect each household’s share from 9 August.'}`;
     case 'threshing':
       return doy < 220 && !s.flags.verbs.includes('take')
         ? `People are separating grain from bundles of cut barley. Shares can be called in from 9 August. ${rider}`

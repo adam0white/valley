@@ -102,6 +102,8 @@ import {
   PURPOSE,
   paidShareWords,
   shareOwnerWords,
+  stormReportWords,
+  weatherWords,
 } from './presentation.ts';
 import { closingGrain } from './tally.ts';
 
@@ -1118,7 +1120,7 @@ function drawTop() {
   if (label)
     label.textContent =
       seasonOf(doyOf(dayOfMinute(s.minute))) === 'harvest'
-        ? 'Rain is due on 20 July.'
+        ? weatherWords(s)
         : `The rider comes on ${dateWords(nextRiderDay(s)).replace('September', 'Sep')}.`;
   const total = Math.max(1, s.agha.due * 1.2, s.agha.granary + s.agha.reaped + s.agha.standing);
   for (const [selector, value] of [
@@ -2933,6 +2935,11 @@ function ledger(s: ValleyState): string {
       <tr><td>Years with too little grain paid</td><td class="n">${s.agha.missed}</td></tr>
     </table>
     ${s.flags.verbs.includes('take') ? `<h3 style="margin:8px 0 0">${sharesFresh(s) ? 'Grain payments this year' : 'Grain payments brought to the last rider'}</h3><table>${rows}</table>` : ''}
+    <section class="storm-reports"><h3>Storm damage reports</h3>${
+      stormReportWords(s)
+        .map((words) => `<p>${esc(words)}</p>`)
+        .join('') || '<p>This ledger has no storm damage report to show.</p>'
+    }</section>
     <p class="soft" >The term ends at the elders’ gathering, ${esc(dateWords(END_DAY))} of year three.</p>
   </div>`;
 }

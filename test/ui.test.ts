@@ -989,7 +989,7 @@ it('keeps the rain deadline and complete immediate reply visible with About open
         return r.top >= body.top && r.bottom <= body.bottom && e.scrollWidth <= e.clientWidth;
       }),
     ).toBe(true);
-    expect(await visibleText(page.locator('.grain-label'))).toContain('Rain is due on 20 July.');
+    expect(await visibleText(page.locator('.grain-label'))).toContain('Rain is expected on 20 July.');
     expect(await page.locator('.grain-label').evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
     await fits(page);
   } finally {
@@ -2002,6 +2002,90 @@ it.each([
         JSON.stringify({ later, laterText }),
       );
     expect(errors).toEqual([]);
+  } finally {
+    await page.close();
+  }
+});
+
+it.each([
+  [360, 690],
+  [1280, 800],
+])('reads dated weather and retained storm damage in the actual App at %ix%i', async (width, height) => {
+  const page = await browser.newPage({ viewport: { width, height } });
+  const proof: unknown[] = [];
+  try {
+    await page.route('**/*', (route) =>
+      new URL(route.request().url()).origin === origin ? route.continue() : route.abort(),
+    );
+    await open(page, 420, 7, [], true, 'valley-public-2026-10');
+    await page.evaluate(() => document.fonts.ready);
+    const map = await page.locator('#map').boundingBox();
+    expect(await visibleText(page.locator('.grain-label'))).toBe('Rain is expected on 20 July.');
+    for (const day of [2, 2 + 5 / 24, 3]) {
+      await page.evaluate(`import('/src/ui/app.ts').then(({ _debug }) => _debug.skipTo(${day}))`);
+      await page.clock.runFor(50);
+      const header = await visibleText(page.locator('.grain-label'));
+      expect(header).not.toMatch(/expected.*20 July|before more rain/);
+      if (day < 3) expect(header).toBe('There is a storm today.');
+      const invitation = page.getByRole('button', { name: 'Decline the invitation', exact: true });
+      if (await invitation.isVisible()) await invitation.click();
+      await page.locator('.grain-bar').click();
+      const report = await visibleText(page.locator('.storm-reports'));
+      const ledger = await visibleText(page.locator('.ledger'));
+      expect(ledger).not.toContain('Rain is expected on 20 July.');
+      if (day === 2) {
+        expect(report).toContain('This ledger has no storm damage report to show.');
+        expect(report).not.toContain('108');
+      } else {
+        expect(report).toContain('20 July, year one: The storm came over the ridge in the night.');
+        expect(report).toContain('about 108 grain measures in the landowner’s field');
+        expect(report).toContain('14 household fields');
+      }
+      const paragraph = page.locator('.storm-reports p').first();
+      await paragraph.scrollIntoViewIfNeeded();
+      expect(
+        await paragraph.evaluate((e) => {
+          const r = e.getBoundingClientRect();
+          const body = e.closest('#sheet')?.getBoundingClientRect();
+          return (
+            !!body && r.top >= body.top - 1 && r.bottom <= body.bottom + 1 && e.scrollWidth <= e.clientWidth
+          );
+        }),
+      ).toBe(true);
+      await fits(page);
+      expect(await page.locator('#map').boundingBox()).toEqual(map);
+      expect(await page.locator('.lk-sheet').count()).toBe(1);
+      proof.push({ day, header, report, map, sheet: await page.locator('.lk-sheet').boundingBox() });
+      await page.getByRole('button', { name: 'Back to the notebook', exact: true }).click();
+    }
+    // Simulate a bounded history whose old damage report has aged out.
+    await page.evaluate(`import('/src/ui/app.ts').then(({ _debug }) => {
+      const s = _debug.game()?.valley;
+      if (!s) throw new Error('Missing synthetic game');
+      s.notes = s.notes.filter((n) => n.kind !== 'weather');
+    })`);
+    await page.locator('.grain-bar').click();
+    const missing = await visibleText(page.locator('.storm-reports'));
+    expect(missing).toContain('This ledger has no storm damage report to show.');
+    expect(missing).not.toMatch(/no loss|zero|108/);
+    await page.getByRole('button', { name: 'Back to the notebook', exact: true }).click();
+    await page.locator('#houses [data-h="coban"]').click();
+    const houseMap = await page.locator('#map').boundingBox();
+    await page.getByRole('button', { name: 'Back to the notebook', exact: true }).click();
+    await page.locator('#houses [data-h="coban"]').click();
+    expect(await page.locator('#map').boundingBox()).toEqual(houseMap);
+    proof.push({ houseMap, existingPhoneHouseResize: width === 360, repeatedHouseMapStable: true });
+    await fits(page);
+    await page.locator('[data-menu]').click();
+    const debug = page.locator('details').filter({ has: page.locator('summary', { hasText: /^Debug$/ }) });
+    expect(await debug.count()).toBe(1);
+    expect(await debug.getAttribute('open')).toBeNull();
+    proof.push({ missing, debugCollapsed: true, noOverflow: true, stableMap: true, oneSheet: true });
+    if (process.env.VALLEY_WEATHER_PROOF_DIR)
+      writeFileSync(
+        `${process.env.VALLEY_WEATHER_PROOF_DIR}/app-${width}.json`,
+        JSON.stringify(proof, null, 2),
+      );
   } finally {
     await page.close();
   }
