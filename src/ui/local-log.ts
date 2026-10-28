@@ -52,6 +52,22 @@ export function validLocalLog(value: unknown): boolean {
     prior = input.at as number;
     switch (input.verb) {
       case 'dialogue':
+        // The new public line carries no caller-authored history or field facts.
+        // Only deterministic acceptance creates its prospective request anchor.
+        if (
+          input.line === 'after-cut' &&
+          (Object.keys(input).some(
+            (k) => !['at', 'verb', 'turn', 'house', 'person', 'visit', 'prior', 'line'].includes(k),
+          ) ||
+            !integer(input.turn, 20000) ||
+            !name(input.house) ||
+            input.person !== 'zehra' ||
+            !integer(input.visit, input.at as number) ||
+            !integer(input.prior, Number.MAX_SAFE_INTEGER))
+        )
+          return false;
+        if (!dialogueEdition(v.rules)) return false;
+        break;
       case 'dialogue-cancel':
         // Replay performs semantic admission and must retain every accepted input.
         if (!dialogueEdition(v.rules)) return false;

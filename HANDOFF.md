@@ -1,5 +1,51 @@
 # Valley handoff
 
+## Completed-cut Zehra question candidate — 2026-10-27
+
+Remaining: root's one independent Codex review of the exact frozen candidate, then
+signed source, exact CI, root-only merge, clean exact-main deployment and cleanup.
+No commit, release, source ownership, receipt acknowledgment or player acceptance is
+claimed. Adam accepts feel separately. Private plan/proofs/READY use the prefix
+`~/code/.lab-scratch/games-deferred/gd-resume-valley-zehra-source`.
+
+The public `after-cut` question is separate from both existing dialogue lines. It
+requires an attended visit, Zehra present and awake, her retained actual food/work
+question, the current year's host cut marker, and no more than half a measure standing.
+One accepted request per harvest creates a prospective anchor at its actual input
+index/time. It retains the complete outward source note and field facts visible then.
+It never invents when the old cut finished or whether her family has food now.
+The new seated five-minute offer has zero physical effort, unchanged small social
+advertisements and no completion rewards. Old offers and answers stay literal. HF
+still owns hearing, voluntary choice, timing and completion; sleep can win instead.
+
+Seed7's public lower-hamlet call at420 reaches standing0/cut-1 by5760. Zehra's actual
+source is note6 at994. A public ordinary visit at6210 (arrival6230) acknowledges the
+actual pending household invitation under existing rules. The cut question at6240 is
+input2. HF attends at6240, starts talking6277 and completes6282. The new answer says
+that finishing his field did not answer her food question; it promises no further work.
+The actual App loads that deterministic attended scene through `/file/`, then selects
+the public question and displays the completed answer at360x690 and1280x800. No owner
+profile, live Start/Resume, selected file, preferences or storage was used.
+
+Full and compact native replay plus1440-minute continuation retain every state value.
+Full admission regenerates the complete world and anchor from accepted inputs; a digest
+or two editable source copies alone are insufficient. Missing/changed activation,
+changed source/history/current-world fields and extra source fields refuse. A real
+later grain gift remains valid. Local recovery still replays dialogue inputs. Actual
+withheld and cancelled forks have no answer. An interrupted premature-resolution guard
+uses a real sibling activity; it is a unit negative, not a claimed public interruption.
+
+Original plus all six current configurations retain raw full/compact output and actual
+1440-minute continuations from before edits. Original source archives, six-source/1MiB
+bounds, supported old passports, SDK/HF3/engine2.23 and native file lifecycle are unchanged.
+The existing production checkpoint guard refuses this local world; no passport path
+was needed. Menu saves still advance volume labels and save timestamps independently
+of world values; the App comparison states that metadata distinction explicitly.
+
+This closes no whole F-1288/F-1309/F-1312 or GDI ask set. Broader reciprocal help,
+Yusuf/birth, Tepe/son, Danyal/Maryam and portable physical/source contracts remain
+separate available engineering units. No next scene was started.
+
 ## Scene and household context candidate — 2026-10-27
 
 Remaining: one director independent review of frozen READY, then signed source/exact

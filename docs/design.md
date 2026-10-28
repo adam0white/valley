@@ -488,3 +488,74 @@ its lossless retained source archive and owner/receiver binding; prove one genui
 supported producer/receiver pair or retain an exact refusal for the missing binding.
 Do not enable public carryover before that contract exists. This is an engineering gap,
 not an owner-input deferral. File-only isolation and current archive capacity stay intact.
+
+
+## Explicit completed-cut Zehra follow-up candidate — 2026-10-27
+
+This implements the completed-cut route of “Exact next scene work” above. It is a
+source candidate awaiting root's single independent review; no technical delivery or
+Adam/player acceptance is claimed. The older “naturally completed talk unproved” notes
+remain the evidence for those earlier batches, not for this new action.
+
+The deliberately chosen `dialogue` line `after-cut` is public wherever the existing
+Zehra dialogue world is playable. It introduces no game edition, feature switch or
+faculty default. Both older lines keep their exact words, costs and continuations.
+Its scope comment in `src/sim/dialogue.ts` defines one finite authored exchange. There
+can be one accepted after-cut request per harvest, including a request later withdrawn.
+The player needs a retained Zehra note saying “Who will feed my family while I cut his
+barley?”, the current-year `cut-N` marker, at most0.5 standing, and the ordinary attended
+visit/presence/awake/five-minute gates. A visit does not force her to talk.
+
+Only acceptance adds `Exchange.cut`: kind `valley-cut-request/1`, zero-based accepted
+input index, actual request minute, host cut marker, current standing/reaped grain and
+the complete retained source Note. This records what was known and asked now. There is
+no historical completion id/time to backfill. UI shows the dated source and request,
+says that the cut time was not recorded, and keeps current household food unknown.
+Full native admission regenerates every state value from actual deterministic inputs,
+including this anchor at the request. It rejects missing activation, mismatched source
+copies, edited historical or current-world values and unsupported nested fields before
+installation. Compact replay regenerates the same complete game. Local recovery always
+replays these worlds instead of trusting editable volume contents or their digest.
+A later legitimate world change need not equal historical field facts.
+
+The new question offers a seated five-minute talk with effort0 and the existing small
+belonging/leisure advertisements (0.12/0.06). These are host action assumptions, not
+Person edits or guaranteed selection. Existing body, care, work, prayer and other
+alternatives still compete. Nothing wakes her, overwrites a decision or forces a winning
+actor. Hearing, attention, HF selection, actual start and completion remain distinct.
+The authored answer interprets the actual food/work question conditionally; it claims
+neither that she cut barley nor that the household lacks food. It gives no food, debt,
+work credit, permission, scalar trust benefit, safety benefit or divine credit.
+
+One causal seed7 schedule: call every lower household at420; ordinary visit to Çoban
+at6210; arrive6230; ask6240; attended hearing6240; HF starts6277, finishes6282. The host
+had already reached standing0 and `cut-1` by5760; the request does not call5760 the
+completion time. Source note6 was actually recorded at994. The actual invitation present
+in this world is acknowledged by the ordinary visit under existing rules; no birth fact
+or new birth route is authored here. Source-backed answer text is visible in the actual
+App at360x690 and1280x800 after loading the same attended public-native scene through
+canonical `/file/`. Both use real SDK artifacts and block external traffic. No live owner
+game actions, model/provider call, Submit, panel or retest occurs.
+
+Native controls cover full/compact replay, exact1440-minute continuation, unavailable
+before-cut, a real HF withholding at6000, accepted-then-cancelled request, forged/missing
+activation and source/history refusal, and a later real grain gift. The premature
+interrupted-resolution guard uses a naturally produced sibling activity; it is not
+presented as a real public interrupted run. The App refuses a forged reaped value and
+keeps the held world's complete state/input/source values before a legitimate reload
+and continuation. Existing menu binding advances volume labels and save timestamps;
+those presentation metadata are stated separately from literal run data.
+
+Raw pre-edit full/compact and actual1440-minute continuations for original, October,
+pass, alliance, replies, dialogue and public worlds remain exact. No new input means
+no new fields in old saves. Native source archives and caps stay intact. The actual
+production checkpoint guard refuses this local world instead of stamping it with
+`valley-cast-3`; supported older producer/receiver contracts remain unchanged. This
+adds no source ownership, ingestion or receipt acknowledgment claim.
+
+Remaining broader contextual exchanges in F-1288/F-1309/F-1312 and
+GDI-1159/1178/1181/1192/1217/1220 stay open beyond this one cut/food question.
+Reciprocal help, Yusuf/birth, Tepe/son, Danyal/Maryam and portable local physical/source
+mapping remain separate available engineering work at their existing dated targets.
+No whole ask set or game is complete. Root accepts the technical handback; Adam accepts
+feel separately. No next scene unit belongs to this candidate.
