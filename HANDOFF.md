@@ -1,10 +1,51 @@
 # Valley handoff
 
-## Weather and storm reading candidate — 2026-10-28
+## Contextual visit questions candidate — 2026-10-28
 
-Remaining: root's one independent review of this frozen candidate, then the normal
-source, CI, integration and clean-release gates. This reading change is not delivered.
-The private evidence and handback prefix is `gd-resume-valley-weather-reading-v2`.
+Remaining: root's ONE independent review of the frozen source before commit, then
+signed source/exact CI, integration/main CI, deployment and live verification. The
+parent accepts the source handback; Adam accepts feel separately on2026-11-03.
+
+One candidate combines Yusuf/actual birth news, a Tepe adult/son, Danyal/Maryam and
+Zehra/reciprocal-help questions. Existing Zehra lines keep their literal behavior.
+Only an explicit accepted input adds `Exchange.context`. The anchor retains an actual
+Note with its original id/time or an undated authored public house description. A
+request date does not supply an original description date. No source note is called a
+heard conversation. The actor must be present, awake and in the attended visit.
+HF attention, competing choices and timed completion remain authoritative.
+
+R1's immutable source/proof archives and219+1 lane remain historical. Its first
+planned controls had zero completed new answers. R2 found and fixed a host presence
+bug: HF clears the preceding activity before enumerating the next offers, and R1
+lost the new actor's already established home location. The new check retains the
+accepted visit's location until a real next activity supplies its place. It adds no
+saved field and changes no authored difficulty, benefit, world or admission rule.
+The old Zehra location path stays literal. R1's missing-offer cases are actual negative
+outcomes, but are not evidence that HF considered and refused that missing offer.
+
+The new Tepe `son` public control has actual request/hearing6330, HF choice/start6364
+and completion6369. The App first declines the actual pending birth invitation using
+its public control, then asks the Tepe question. Full/compact pending/heard/completed
+files and continuation7830 match. Actual local App at360x690/1280x800 renders this new
+answer. The five-minute activity falls between public30-minute steps, so its actual
+start/finish are retained in completed history; no separate running export is claimed.
+Withholding/continued-work/cancellation/source-refusal controls remain. No reward,
+new physical reason, debt, food, trust, work agreement or future help is granted.
+Binding reciprocal terms remain separate. Root still supplies ONE independent review
+of the complete final unit before commit. Evidence/report prefix:
+`gd-resume-valley-households-r2` outside this repository.
+
+## Weather and storm reading delivery — parent verified 2026-10-28
+
+Delivered: source `4fb9bea3037e3b816063afda7b5cbb3e915c3d78`, matching signed merge
+`30c0c0793dbd68af97af6fb93f8cec561a24d752`, exact source/main CI40635954387/
+40637680670 green, normal lane214 passed/1 existing skip and clean release `dirty:false`.
+Parent receipt: `resume-valley-weather-delivery-parent-receipt.json`. Live Chrome was
+unavailable before task-tab creation. The allowed fallback was independent built local
+App at360x690/1280x800, twelve byte-exact non-HTML resources and both canonical HTML
+asset-reference sets. Cloudflare transforms HTML; its bytes were not claimed equal.
+No current live weather-world or live Chrome viewport result is claimed.
+The private evidence prefix is `gd-resume-valley-weather-reading-v2`.
 
 The header and seasonal ledger retain the opening forecast before 20 July. From
 20 July they read the actual current day's weather, using the same host weather
@@ -18,7 +59,7 @@ F-1162's original compound request is “Make the ledger show the storm loss, an
 the rain warning once its date has passed.” The source-local retests-1027b wording
 also concerns the storm day. This candidate addresses that reading; it does not close
 the row, the clock/visit conditions on Pavel's return, or any wider acceptance gate.
-Review/delivery remains targeted 2026-11-03. F-1585's call-to-24-July explanation
+This bounded reading is delivered; Adam’s feel review remains2026-11-03. F-1585's call-to-24-July explanation
 remains separate, targeted 2026-11-10; no agronomy explanation is invented here.
 
 Focused causal controls cover 19 July, midnight and 05:00 on 20 July, 21 July,
@@ -79,11 +120,14 @@ This closes no whole F-1288/F-1309/F-1312 or GDI ask set. Broader reciprocal hel
 Yusuf/birth, Tepe/son, Danyal/Maryam and portable physical/source contracts remain
 separate available engineering units. No next scene was started.
 
-## Scene and household context candidate — 2026-10-27
+## Scene and household context delivery — parent verified 2026-10-27
 
-Remaining: one director independent review of frozen READY, then signed source/exact
-CI, root-only merge, fresh exact-main deployment, clean live verification and cleanup.
-This candidate changes current scene/reply presentation only. No simulation, input,
+Delivered: signed source `9bc40448f3766b853bf43e95d8dee6b47d839780`, matching merge
+`b7cd8f1bdfcecac59a2bd2f5bbddc3c688d23480`, exact source/main CI40591656261/
+40592604855 green, normal lane204 passed/1 existing skip and matching clean release.
+`resume-valley-scenes-parent-receipt.json` retains qualified title/menu/chooser UI
+checks and five rehashed resources. Owner native startup was not exercised.
+This increment changes current scene/reply presentation only. No simulation, input,
 codec, dependency, vendor, recording, archive-capacity or ownership behavior changes.
 
 Notebook/Say/pace `0dfe3a4` and canonical file routing `f2afaf3` are delivered with
@@ -103,10 +147,12 @@ engineering. Adam's feel/device acceptance stays separate. Private proof prefix:
 `~/code/.lab-scratch/games-deferred/gd-resume-valley-scenes`.
 
 
-## Public term candidate — 2026-10-27
+## Public term delivery — parent verified 2026-10-27
 
-Remaining: director-launched independent review, signed source, exact green CI and clean
-live deployment. This is an uncommitted engineering candidate, not a live receipt.
+Delivered: signed source `43c0b54bfd6df83990cab54350ade05c578f0c65`, matching merge
+`5090e9381d5ea75c3a7c23bd14c99825ba1161e4`, exact source/main CI40537776993/
+40538611837 green, normal lane195 passed/1 existing skip and matching clean release.
+See `resume-valley-batch1-parent-receipt.json`. Adam's acceptance remains separate.
 
 New terms use `valley-public-2026-10`, combining the existing spoken visits, bounded
 Zehra scene, grain, pass, family and road host paths. Old edition construction and replay

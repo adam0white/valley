@@ -12,7 +12,7 @@ import {
 } from '@adam0white/human-framework';
 import { DAY, dateEnglish, dayOfMinute, yearOf } from './calendar.ts';
 import { DIALOGUE_EDITION, PUBLIC_EDITION } from './edition.ts';
-import { KAHYA } from './people.ts';
+import { KAHYA, personLabel } from './people.ts';
 import {
   houseOf,
   type Note,
@@ -24,7 +24,88 @@ import {
   type ValleyState,
 } from './valley.ts';
 
-export type DialogueLine = 'follow-up' | 'work-need' | 'after-cut';
+export type ContextLine = 'birth' | 'son' | 'friendship' | 'reciprocal-help';
+export type DialogueLine = 'follow-up' | 'work-need' | 'after-cut' | ContextLine;
+/** Scope: four finite authored visit questions. A Note keeps its original id/time and
+ * complete bytes; a public house description has no recorded original date. The
+ * request time is prospective. No new physical reason, trust, promise, resource or
+ * cooperation follows from this scene. HF still owns hearing and competing choices. */
+export interface ContextRequest {
+  kind: 'valley-context-request/1';
+  input: number;
+  at: number;
+  source: { kind: 'note'; note: Note } | { kind: 'house-description'; house: string; text: string };
+}
+const CONTEXT_PEOPLE = { birth: 'yusuf', son: 'serife', friendship: 'danyal', 'reciprocal-help': 'zehra' };
+function contextual(line: DialogueLine): line is ContextLine {
+  return Object.hasOwn(CONTEXT_PEOPLE, line);
+}
+function contextSource(s: ValleyState, line: ContextLine): ContextRequest['source'] | undefined {
+  const v = s.kahyaState.visit;
+  if (!v || s.edition?.id !== PUBLIC_EDITION) return undefined;
+  const h = houseOf(s, v.house);
+  const p = personOf(s, CONTEXT_PEOPLE[line]);
+  if (!h || !p || !present(s, p, h.id)) return undefined;
+  if (line === 'birth') {
+    if (h.id !== 'coban' || !h.members.includes('zehra')) return undefined;
+    const source = s.notes.findLast(
+      (n) => n.kind === 'birth' && n.house === h.id && n.who === 'zehra' && n.at <= s.minute,
+    );
+    // The actual child must retain both parental references; the prose alone is not kinship authority.
+    const child = s.people.find(
+      (c) =>
+        c.social.relationships.some((r) => r.otherId === 'zehra' && r.roles.includes('parent')) &&
+        c.social.relationships.some((r) => r.otherId === p.id && r.roles.includes('parent')),
+    );
+    return source && child ? { kind: 'note', note: source } : undefined;
+  }
+  if (line === 'reciprocal-help') {
+    if (s.minute >= 2 * DAY || !openAsksFor(s, p.id, s.minute).some((a) => a.job === 'reap-agha'))
+      return undefined;
+    if (
+      !s.notes.some(
+        (n) =>
+          n.kind === 'weather' &&
+          n.at <= s.minute &&
+          n.text === 'Clouds are building over the ridge. The old men say it will rain in two days.',
+      )
+    )
+      return undefined;
+    const source = s.notes.findLast(
+      (n) =>
+        n.who === p.id &&
+        n.house === h.id &&
+        n.at <= s.minute &&
+        ['reply', 'voice'].includes(n.kind) &&
+        n.words === FOOD_QUESTION,
+    );
+    return source ? { kind: 'note', note: source } : undefined;
+  }
+  if (line === 'friendship') {
+    if (
+      h.id !== 'water-guest' ||
+      !h.looks.includes('He and Maryam are old friends.') ||
+      !p.social.relationships.some((r) => r.otherId === 'maryam' && r.roles.includes('friend'))
+    )
+      return undefined;
+  } else {
+    // Do not assign the description's coffeehouse behaviour to a newly named son.
+    if (
+      h.id !== 'tepe' ||
+      h.looks !==
+        'This house is up the slope. The son spends more time at the coffeehouse than working in the fields.' ||
+      !p.social.relationships.some(
+        (r) =>
+          r.roles.includes('child') &&
+          h.members.includes(r.otherId) &&
+          personOf(s, r.otherId)?.life.sex === 'male',
+      )
+    )
+      return undefined;
+  }
+  return { kind: 'house-description', house: h.id, text: h.looks };
+}
+
 /** Scope: one current question about an actual outward food/work concern after cutting.
  * This is a prospective request anchor, never an old completion timestamp. Full native
  * admission regenerates it at this input against the complete deterministic world.
@@ -73,6 +154,7 @@ export interface Exchange {
   ask?: string;
   existingWork?: Reply;
   cut?: CutRequest;
+  context?: ContextRequest;
   saidAt: number;
   words: string;
   speechNote: number;
@@ -102,7 +184,16 @@ export interface DialogueState {
 const active = (e: Exchange) => ['pending', 'heard', 'talking'].includes(e.status);
 const current = (s: ValleyState) => s.dialogue?.exchanges.findLast(active);
 function present(s: ValleyState, p: Person, house: string): boolean {
-  const location = p.activity?.affordance.placeId ?? s.dialogue?.place;
+  const exchange = current(s);
+  // HF clears a completed activity before requesting the next offers. This
+  // accepted contextual visit already proved this actor was at this house.
+  // Retain that location until an actual chosen activity supplies its next place.
+  // Zehra's older bookkeeping and all no-context continuations remain literal.
+  const contextPlace =
+    exchange?.context && exchange.person === p.id
+      ? (exchange.decisions.at(-1)?.offer.placeId ?? `house:${exchange.house}`)
+      : undefined;
+  const location = p.activity?.affordance.placeId ?? (p.id === 'zehra' ? s.dialogue?.place : contextPlace);
   return (
     !!p.body.alive &&
     p.activity?.mode !== 'sleep' &&
@@ -114,7 +205,7 @@ function attended(s: ValleyState, house: string, visit: number, at: number): boo
   const v = s.kahyaState.visit;
   return !!v && v.house === house && v.arrive === visit && v.arrive <= at && at < v.leave;
 }
-export function dialogueChoices(s: ValleyState): DialogueOrder[] {
+function zehraChoices(s: ValleyState): DialogueOrder[] {
   const v = s.kahyaState.visit,
     p = personOf(s, 'zehra');
   if (
@@ -164,8 +255,48 @@ export function dialogueChoices(s: ValleyState): DialogueOrder[] {
   if (source) choices.push({ ...base, prior: source.id, line: 'after-cut' });
   return choices;
 }
+export function dialogueChoices(s: ValleyState): DialogueOrder[] {
+  const choices = zehraChoices(s);
+  const v = s.kahyaState.visit;
+  if (
+    !s.dialogue ||
+    !v ||
+    current(s) ||
+    s.flags.ended ||
+    !s.kahya.body.alive ||
+    !attended(s, v.house, v.arrive, s.minute) ||
+    v.leave - s.minute < 5
+  )
+    return choices;
+  for (const line of Object.keys(CONTEXT_PEOPLE) as ContextLine[]) {
+    const source = contextSource(s, line);
+    if (
+      !source ||
+      s.dialogue.exchanges.some((e) => e.visit === v.arrive && e.house === v.house && e.line === line)
+    )
+      continue;
+    choices.push({
+      verb: 'dialogue',
+      turn: s.dialogue.exchanges.length,
+      house: v.house,
+      person: CONTEXT_PEOPLE[line],
+      visit: v.arrive,
+      prior: source.kind === 'note' ? source.note.id : 0,
+      line,
+    });
+  }
+  return choices;
+}
 export function dialogueWords(s: ValleyState, o: DialogueOrder): string {
   const prior = s.notes.find((n) => n.id === o.prior);
+  if (o.line === 'birth')
+    return `The birth notice says, “${prior?.text ?? ''}” Yusuf, what would you like me to understand before I ask for work?`;
+  if (o.line === 'friendship')
+    return 'Danyal, you and Maryam are old friends. May I ask about that friendship?';
+  if (o.line === 'son')
+    return 'About your son and the coffeehouse: What would you like me to understand before I ask for field work?';
+  if (o.line === 'reciprocal-help')
+    return `You asked, “${prior?.words ?? ''}” Could we discuss help before the rain and help afterwards, without agreeing to either yet?`;
   if (o.line === 'after-cut')
     return `The landowner’s barley is cut now. You asked, “${prior?.words ?? ''}” What did you want me to understand about your family’s food?`;
   return o.line === 'follow-up'
@@ -189,11 +320,19 @@ export function speakDialogue(s: ValleyState, o: DialogueOrder, inputIndex: numb
       c.line === o.line &&
       c.ask === o.ask,
   );
-  if (!choice || (o.line === 'after-cut' && (!Number.isSafeInteger(inputIndex) || inputIndex < 0)))
+  if (
+    !choice ||
+    ((o.line === 'after-cut' || contextual(o.line)) && (!Number.isSafeInteger(inputIndex) || inputIndex < 0))
+  )
     return false;
-  const prior = s.notes.find((n) => n.id === o.prior),
-    v = s.kahyaState.visit;
-  if (!prior?.words || !v || !s.dialogue) return false;
+  const source = contextual(o.line) ? contextSource(s, o.line) : undefined;
+  const prior =
+    source?.kind === 'house-description'
+      ? { id: 0, at: s.minute, words: source.text }
+      : s.notes.find((n) => n.id === o.prior);
+  const v = s.kahyaState.visit;
+  const priorWords = source?.kind === 'note' ? (source.note.words ?? source.note.text) : prior?.words;
+  if (!prior || !priorWords || !v || !s.dialogue) return false;
   const words = dialogueWords(s, o);
   const ask = s.asks.find((a) => a.id === o.ask);
   const e: Exchange = {
@@ -202,7 +341,12 @@ export function speakDialogue(s: ValleyState, o: DialogueOrder, inputIndex: numb
     person: o.person,
     visit: o.visit,
     leave: v.leave,
-    prior: { id: prior.id, at: prior.at, words: prior.words, ...(prior.ask ? { ask: prior.ask } : {}) },
+    prior: {
+      id: prior.id,
+      at: prior.at,
+      words: priorWords,
+      ...('ask' in prior && prior.ask ? { ask: prior.ask } : {}),
+    },
     line: o.line,
     ...(o.line === 'after-cut'
       ? {
@@ -213,7 +357,17 @@ export function speakDialogue(s: ValleyState, o: DialogueOrder, inputIndex: numb
             beat: cutBeat(s),
             standing: s.agha.standing,
             reaped: s.agha.reaped,
-            source: structuredClone(prior),
+            source: structuredClone(prior as Note),
+          },
+        }
+      : {}),
+    ...(source
+      ? {
+          context: {
+            kind: 'valley-context-request/1' as const,
+            input: inputIndex,
+            at: s.minute,
+            source: structuredClone(source),
           },
         }
       : {}),
@@ -232,7 +386,7 @@ export function speakDialogue(s: ValleyState, o: DialogueOrder, inputIndex: numb
     kind: 'story',
     house: o.house,
     who: KAHYA,
-    text: `You say to Zehra, “${words}” No answer yet.`,
+    text: `You say to ${personLabel(personOf(s, o.person) ?? { name: 'someone' }, houseOf(s, o.house))}, “${words}” No answer yet.`,
     weight: 2,
   });
   promote(s, o.person);
@@ -288,7 +442,7 @@ export function dialogueHear(s: ValleyState): void {
     at: p.now,
     kind: 'story',
     house: e.house,
-    text: 'Your question reached Zehra. Hearing is separate from choosing to speak. No answer yet.',
+    text: `Your question reached ${personLabel(p, houseOf(s, e.house))}. Hearing is separate from choosing to speak. No answer yet.`,
     weight: 1,
   });
 }
@@ -319,8 +473,8 @@ export function dialogueOffers(s: ValleyState, p: Person, at: number): Affordanc
   ];
 }
 export function captureDialogue(s: ValleyState, p: Person, offer: Affordance, record: DecisionRecord): void {
-  if (!s.dialogue || p.id !== 'zehra') return;
-  s.dialogue.place = offer.placeId;
+  if (!s.dialogue) return;
+  if (p.id === 'zehra') s.dialogue.place = offer.placeId;
   const e = current(s);
   if (!e || e.person !== p.id || !e.hearing || p.now < e.hearing.deliveredAt) return;
   e.decisions.push({ at: p.now, record: structuredClone(record), offer: structuredClone(offer) });
@@ -331,7 +485,7 @@ export function captureDialogue(s: ValleyState, p: Person, offer: Affordance, re
       kind: 'story',
       house: e.house,
       who: p.id,
-      text: 'Zehra sits to speak with you. The talk has not finished.',
+      text: `${personLabel(p, houseOf(s, e.house))} sits to speak with you. The talk has not finished.`,
       weight: 2,
     });
   } else if (e.status === 'heard') {
@@ -341,7 +495,7 @@ export function captureDialogue(s: ValleyState, p: Person, offer: Affordance, re
       at: p.now,
       kind: 'story',
       house: e.house,
-      text: 'Zehra has not chosen to answer this question. You may ask again while the visit permits.',
+      text: `${personLabel(p, houseOf(s, e.house))} has not chosen to answer this question. You may ask again while the visit permits.`,
       weight: 2,
     });
   }
@@ -379,13 +533,21 @@ export function resolveDialogue(
         kind: 'voice',
         house: e.house,
         who: p.id,
-        text: 'Zehra answers your question after sitting with you:',
+        text: `${personLabel(p, houseOf(s, e.house))} answers your question after sitting with you:`,
         words:
-          e.line === 'after-cut'
-            ? 'His barley is cut now. I was asking how my family would eat if I went to his field. Finishing his field does not answer that question. Sitting here with you is not a promise to work for you.'
-            : e.line === 'follow-up'
-              ? `When I said “${e.prior.words}”, that is what I wanted you to hear. I have given this time to answer you. It is not a promise to leave my work.`
-              : `I heard why you need hands before the rain. It is not a promise to leave my work. You have heard my answer about talking. My answer to the work request is separate.`,
+          e.line === 'birth'
+            ? 'You came about the child. Keep this visit separate from the landowner’s work. Sitting with you is not agreeing to leave my household.'
+            : e.line === 'friendship'
+              ? 'Maryam is my old friend. I do not speak for her. Ask her what she wants you to know.'
+              : e.line === 'son'
+                ? 'I have not told you why he is there. If you want field work, ask for it separately. This visit is not an agreement to send anyone.'
+                : e.line === 'reciprocal-help'
+                  ? 'You are asking for help now and talking of help later. What help, and when? We have agreed to neither. My answer to the field call is separate.'
+                  : e.line === 'after-cut'
+                    ? 'His barley is cut now. I was asking how my family would eat if I went to his field. Finishing his field does not answer that question. Sitting here with you is not a promise to work for you.'
+                    : e.line === 'follow-up'
+                      ? `When I said “${e.prior.words}”, that is what I wanted you to hear. I have given this time to answer you. It is not a promise to leave my work.`
+                      : `I heard why you need hands before the rain. It is not a promise to leave my work. You have heard my answer about talking. My answer to the work request is separate.`,
         weight: 3,
       });
       const answer = s.notes.find((n) => n.id === e.answerNote);
@@ -440,7 +602,19 @@ export function dialogueStatus(e: Exchange): string {
             : e.status === 'heard'
               ? 'Your question reached Zehra. No answer yet.'
               : 'This question ended without a completed answer.';
-  if (!e.ask) return state;
+  const named = e.context
+    ? state.replaceAll(
+        'Zehra',
+        e.person === 'yusuf'
+          ? 'Yusuf'
+          : e.person === 'danyal'
+            ? 'Danyal'
+            : e.person === 'serife'
+              ? 'The Tepe household member'
+              : 'Zehra',
+      )
+    : state;
+  if (!e.ask) return named;
   const r = e.work?.reply;
   return `${state} ${r ? `Her later work answer is ${r.verdict}: “${r.says}” This is not arrival evidence.` : e.existingWork ? `Her existing work answer was ${e.existingWork.verdict}: “${e.existingWork.says}” No new work answer yet.` : 'The work request is still pending.'}`;
 }
@@ -477,6 +651,7 @@ export function validateDialogueState(s: ValleyState): void {
     'ask',
     'existingWork',
     'cut',
+    'context',
     'saidAt',
     'words',
     'speechNote',
@@ -495,14 +670,14 @@ export function validateDialogueState(s: ValleyState): void {
       !e ||
       Object.keys(e).some((k) => !fields.includes(k)) ||
       e.turn !== i ||
-      e.person !== 'zehra' ||
+      (contextual(e.line) ? e.person !== CONTEXT_PEOPLE[e.line] : e.person !== 'zehra') ||
       !houseOf(s, e.house) ||
       !minute(e.saidAt) ||
       !minute(e.visit) ||
       !Number.isSafeInteger(e.leave) ||
       e.leave <= e.saidAt ||
       e.saidAt < e.visit ||
-      !['follow-up', 'work-need', 'after-cut'].includes(e.line) ||
+      !['follow-up', 'work-need', 'after-cut', ...Object.keys(CONTEXT_PEOPLE)].includes(e.line) ||
       ![
         'pending',
         'heard',
@@ -528,6 +703,51 @@ export function validateDialogueState(s: ValleyState): void {
       (e.endedAt !== undefined && !minute(e.endedAt))
     )
       fail();
+    if (contextual(e.line)) {
+      const c = e.context;
+      if (
+        !c ||
+        s.edition?.id !== PUBLIC_EDITION ||
+        Object.keys(c).some((k) => !['kind', 'input', 'at', 'source'].includes(k)) ||
+        c.kind !== 'valley-context-request/1' ||
+        !Number.isSafeInteger(c.input) ||
+        c.input < 0 ||
+        c.at !== e.saidAt ||
+        !c.source ||
+        e.ask !== undefined ||
+        e.cut !== undefined
+      )
+        fail();
+      if (c) {
+        if (c.source.kind === 'note') {
+          if (
+            Object.keys(c.source).some((k) => !['kind', 'note'].includes(k)) ||
+            !c.source.note ||
+            c.source.note.id !== e.prior.id ||
+            c.source.note.at !== e.prior.at ||
+            c.source.note.at > c.at ||
+            (c.source.note.words ?? c.source.note.text) !== e.prior.words ||
+            c.source.note.house !== e.house ||
+            (e.line === 'birth'
+              ? c.source.note.kind !== 'birth' || c.source.note.who !== 'zehra'
+              : e.line !== 'reciprocal-help' ||
+                c.source.note.who !== 'zehra' ||
+                c.source.note.words !== FOOD_QUESTION)
+          )
+            fail();
+        } else if (
+          c.source.kind !== 'house-description' ||
+          Object.keys(c.source).some((k) => !['kind', 'house', 'text'].includes(k)) ||
+          !['son', 'friendship'].includes(e.line) ||
+          c.source.house !== e.house ||
+          typeof c.source.text !== 'string' ||
+          c.source.text !== e.prior.words ||
+          e.prior.id !== 0 ||
+          e.prior.at !== e.saidAt
+        )
+          fail();
+      }
+    } else if (e.context !== undefined) fail();
     if (e.line === 'after-cut') {
       const c = e.cut;
       if (

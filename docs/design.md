@@ -392,15 +392,18 @@ Compatible original/October worlds attempt same-person carryover automatically.
 Person controls belong to the central shelf; this host mounts none. Diagnostic download,
 seed and import controls are collapsed in Debug beside Lab privacy. No vendor changes.
 
-This candidate ends at the independent director review gate before commit. Technical
-delivery and live verification remain required after CLEAR. Adam accepts feel and
+This public term shipped at `5090e93` from `43c0b54`; parent receipt
+`resume-valley-batch1-parent-receipt.json` verifies signed matching source/merge,
+green source/main CI40537776993/40538611837, normal lane195+1 and clean live release. Adam accepts feel and
 readiness on 2026-11-03. No panel, round or retest is part of this work.
 
 
 ## Current scene and household reply context — 2026-10-27
 
-This is a bounded source candidate. Remaining: director independent review, exact signed
-source and green CI, root merge, clean live release and cleanup. Adam accepts feel separately.
+This bounded presentation unit is delivered at `b7cd8f1` from `9bc4044`; parent receipt
+`resume-valley-scenes-parent-receipt.json` verifies matching source tree, signatures,
+exact source/main CI40591656261/40592604855, normal lane204+1 and clean live release.
+Qualified UI checks did not exercise owner native startup. Adam accepts feel separately.
 The notebook/Say/pace batch is already delivered at `0dfe3a4`; canonical `/file/` routing
 is already delivered at `f2afaf3`. Earlier dated candidate and deployment-hold paragraphs
 above describe their own batches. They do not undo those delivery receipts.
@@ -437,19 +440,12 @@ travel permission is created. These are engineering dispositions, not player acc
 
 ### Exact next scene work
 
-The next engineering unit is one explicit recorded Zehra follow-up tied to the current
-attended visit, an actual source-note id and the current completed-cut or birth event.
-Use `src/sim/dialogue.ts` for the authored source and answer; `src/sim/game.ts` for its
-public action; `src/ui/local-log.ts` for semantic admission; `src/ui/app.ts` for selection;
-`test/dialogue.test.ts` for one ordinary causal schedule and full/compact/1440-minute
-continuation; `test/ui.test.ts` for the same App path. Add fields only when the explicit
-new action is accepted, so every old no-new-input continuation stays exact. Do not
-silently change the current follow-up answer. Keep actual HF hearing, choice, timed
-activity and completion, with unavailable/withheld/interrupted outcomes. Target 2026-10-29.
-A naturally completed new answer is still unproved. No generic answer or forced meeting
-may substitute for it. F-1288/F-1309/F-1312 and GDI-1159/1178/1181/1192/1217/1220 remain
-open for those specific contextual exchanges. Yusuf/birth, Tepe/son and Danyal/Maryam
-remain distinct later units under GDI-1027/F-1155, not one conversation rewrite.
+The completed-cut Zehra route described below is delivered at `0a43e75`. Its original
+source note/time, actual request, voluntary HF completion and native authority remain
+separate. The current contextual-visit candidate below adds finite questions for other
+sources. No broader F-1288/F-1309/F-1312 or GDI-1159/1178/1181/1192/1217/1220 closure
+follows. GDI-1027/F-1155 retains all three original topics and its full conditional
+return. Local retests-1027b F-numbers are not central ledger identities.
 
 Named group identity does not give unnamed residents new identities. F-1139 remains
 open; choose roles from actual local people and retained outward sources, not fabricated
@@ -490,11 +486,13 @@ Do not enable public carryover before that contract exists. This is an engineeri
 not an owner-input deferral. File-only isolation and current archive capacity stay intact.
 
 
-## Explicit completed-cut Zehra follow-up candidate — 2026-10-27
+## Explicit completed-cut Zehra follow-up delivery — parent verified 2026-10-28
 
 This implements the completed-cut route of “Exact next scene work” above. It is a
-source candidate awaiting root's single independent review; no technical delivery or
-Adam/player acceptance is claimed. The older “naturally completed talk unproved” notes
+parent-verified delivery at `0a43e759ff845a0f5903902ba75c2a810ba01cd2` from `b8f06c5`,
+source CI40620884617/main CI40621352493, matching clean release. Adam/player acceptance
+is separate. Foreign merge-trailer and postmerge final-byte R4 review exceptions below
+remain historical facts. The older “naturally completed talk unproved” notes
 remain the evidence for those earlier batches, not for this new action.
 
 The deliberately chosen `dialogue` line `after-cut` is public wherever the existing
@@ -561,13 +559,13 @@ No whole ask set or game is complete. Root accepts the technical handback; Adam 
 feel separately. No next scene unit belongs to this candidate.
 
 
-## Weather and storm reading candidate — 2026-10-28
+## Weather and storm reading delivery — parent verified 2026-10-28
 
 F-1162 originally asks: “Make the ledger show the storm loss, and drop the rain warning
 once its date has passed.” Pavel's retests-1027b report adds the storm-day observation:
 “Rain is expected on 20 July” remained in the ledger and header, with no loss figure.
 His return also depends on a useful house visit and clock behavior. Preserve those
-conditions and the existing Deferred targets; this source candidate closes no whole row.
+conditions and the existing owner Deferred targets; this bounded delivery closes no whole row.
 
 The opening forecast stays conditional before20July. On20July and thereafter the
 header and seasonal ledger show only the current day's host weather, already used
@@ -582,8 +580,13 @@ would require a separately scoped saved fact; none is added in this reading unit
 
 This candidate changes no simulation, clock, call window, yield, resource, person,
 RNG, source/native authority, edition, pin, immutable dependency or faith rule.
-F-1585's24July explanation remains separate for2026-11-10. Review and delivery of
-this candidate remain targeted2026-11-03; Adam accepts feel separately. Synthetic
+F-1585's24July explanation remains separate for2026-11-10. This reading is delivered:
+source `4fb9bea3`, signed matching merge `30c0c079`, green exact source/main
+CI40635954387/40637680670, normal lane214 passed/1 existing skip, clean release.
+`resume-valley-weather-delivery-parent-receipt.json` retains live Chrome unavailability
+before tab creation and the allowed independent built-App/twelve byte-exact non-HTML
+resources/two canonical HTML reference-set fallback. HTML bytes were transformed, not
+claimed equal. Adam's feel target2026-11-03 stays separate. Synthetic
 local two-size Chromium checks, causal date/report controls and literal old raw/native
 continuations are builder evidence. They establish no player or physical-phone result.
 Private proof/READY prefix: `~/code/.lab-scratch/games-deferred/gd-resume-valley-weather-reading-v2`.
@@ -595,3 +598,100 @@ correction, missing merge trailer and postmerge final-byte R4 review remain reco
 exceptions. The earlier red open PR was not red main. No duplicate delivery is needed.
 Broader households, birth, Tepe/son, Danyal/Maryam, reciprocal help, portable physical
 and source contracts, and owner acceptance remain separate at their existing dates.
+
+
+## Contextual visit questions candidate and Deferred — 2026-10-28
+
+One uncommitted source unit adds four deliberately selected public questions, without
+a new edition or switch. `src/sim/dialogue.ts` owns their finite words and prospective
+`valley-context-request/1` anchor. The existing `dialogue` input carries only actor,
+visit, source reference and line; acceptance copies the source, input index and request
+minute. Full native loading regenerates the entire state from accepted inputs before
+installation. Compact native loading and local recovery replay the same inputs. Edited
+matching source copies are insufficient. Actor ownership and unsupported public-world
+checkpoint refusal remain unchanged.
+
+- Yusuf/birth: actual registry id `yusuf` in Çoban, both real parental references on a
+  child, and a retained actual `birth` Note by Zehra. The original whole Note, id and
+  minute are retained. The public seed7 birth note is id7 at3420 in the no-call control;
+  it is not inferred from the static opening pregnancy description. No new health,
+  delivery outcome or current food fact is authored.
+- Tepe/son: the existing public description mentions a son at the coffeehouse. The
+  question is addressed to actual adult `serife`, with an existing male child tie in
+  that household. Her incidental saved name stays unnamed on screen. The question
+  does not assign coffeehouse behaviour to a newly named resident or supply a reason.
+- Danyal/Maryam: actual `danyal`, his existing public old-friend description and actual
+  friend tie to `maryam`. No dialogue with Maryam, past event or private detail is
+  invented. A house description has no recorded original date. Its copied text and
+  current request time remain separate from an original dated public Note.
+- Reciprocal help: Zehra's exact retained “Who will feed my family while I cut his
+  barley?” source, the opening public forecast and her actual open harvest call are
+  required before20July. The player asks to discuss help without agreeing to terms.
+  The authored response asks what help and when. It grants no contract or reward.
+
+Each needs an attended current visit, the actual person present and awake, five
+minutes left, and no active question. The existing five-minute offer with effort0.05
+and small social advertisements competes normally. HF may attend and still choose
+sleep, food, work or rest. Nothing wakes, teleports or forces the actor. Only a matching
+completed HF activity may publish an answer. No generic understanding or future-help
+faculty is implemented. Host authored descriptions are not HF heard/effected speech.
+
+R1's first seed7 visits at450 (Tepe/Danyal),6240 (birth) and1110 (Zehra) retained
+zero new completed answers. Its archives and219+1 lane remain immutable historical
+evidence. Those negatives did not exhaust available engineering. R2's six fixed seed7
+call-all schedules tested Yusuf at6240/6330/6420, Tepe at6240/6330 and Danyal at6330.
+No seed or trait search, future state edit, score tuning or game retry was used.
+
+R2 found a causal host bug: HF `finish` clears the previous activity before the next
+offer enumeration. R1's new actors then lost their known current house, so no talk
+was offered. A focused public RED lacked the talk in the complete six-item decision
+record (the released record limit is eight). The minimal fix reads the current
+accepted contextual visit's location until an actual next chosen activity supplies a
+place. It adds no saved field, authority or game edition. Zehra's old location path
+and all no-context behavior stay literal. The corrected same schedule considers the
+unchanged effort0.05/belonging0.12/leisure0.06 offer. Yusuf still chooses rest or food;
+Tepe at6240 still chooses food. R1's source-identical negative histories are preserved,
+but missing-offer cases are not described as a considered talk refusal.
+
+The final positive is the new Tepe `son` line: call the lower hamlet at420, visit Tepe
+at6300, arrive6320, acknowledge the actual visible pending birth invitation with the
+public Decline control at6330, and ask at6330. This declines an invitation, not the
+birth fact. HF hears/attends at6330, chooses and starts the unchanged five-minute
+costed talk at6364, and completes at6369. The answer says that the account does not
+explain why the son is there and creates no agreement to send anyone. It supplies no
+new physical reason or permission. This is a synthetic builder source control, not a
+player round, panel, retest or owner acceptance. Danyal also completed in the bounded
+probe; the fully replayed and rendered positive claimed here is Tepe only.
+
+Actual local App `/file/` at360x690/1280x800 performs the visible invitation decline
+and question, then renders the completed new answer. Full/compact native files at
+pending6330, heard6360 and completed6390 regenerate every state value. Each continues
+exactly to7830, with forged source/actor/activation/answer/activity history refused
+before the held packet is changed. The five-minute activity6364–6369 lies between
+public30-minute steps6360/6390; its retained actual activity and events prove start
+and completion. No separate native running snapshot is claimed. All existing
+cancellation, closed-source, real withholding and continued-work controls remain.
+
+Remaining source inputs, reviewed next on2026-10-30:
+
+- Why the Tepe son is at the coffeehouse is absent from the current authored description
+  and outward history. Valley author must supply an explicit public event or bounded
+  authored reason before any reply explains it. Do not infer laziness from a location.
+- Maryam/Danyal past conversations or current wishes have no retained public record in
+  these sources. Valley author must supply an actual outward note before elaboration.
+  An existing friend tie does not supply a conversation or permission to speak for her.
+- Yusuf's or Zehra's current mother/child condition after the birth is unknown in the
+  retained birth notice. A later actual public note is required before a health reply.
+- Binding reciprocal help still needs authored goods/work quantities, deadlines,
+  resource ownership, cost and completion/refusal terms, separate voluntary choices,
+  and atomic real-resource receipts. The host owns this finite agreement design;
+  published HF offers/activities already provide competing choice. No missing generic
+  HF contract has been demonstrated, and a talk must not fabricate a debt or promise.
+- Roof work and grain-repayment terms remain separate. F-1583 requires an actual
+  retained Yusuf promise and explicit terms before any new debt; this unit records none.
+
+These exact residuals remain within the original broader asks. The source candidate
+awaits root's ONE independent review before commit and all normal technical delivery
+gates. The parent accepts the handback. Adam accepts feel/difficulty/readiness on
+2026-11-03; physical-phone, cold-player and authorized production-notebook acceptance
+remain separate. Original quoted requests above are retained without renumbering.
