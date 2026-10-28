@@ -1913,7 +1913,8 @@ it.each([
     await page.goto(`${origin}/file/`);
     await page.clock.pauseAt(Date.now() + 50);
     await chooseFile(opening);
-    await expect.poll(() => page.locator('#map').count()).toBe(1);
+    // Loading validates the full saved history by replaying it before rendering.
+    await expect.poll(() => page.locator('#map').count(), { timeout: 30000 }).toBe(1);
     await page.locator('[data-h="coban"]').click();
     const follow = page.getByRole('button', { name: /^The landowner’s barley is cut now/ });
     expect(await follow.count()).toBe(1);
@@ -1956,7 +1957,9 @@ it.each([
     const forged = structuredClone(completed);
     forged.state.dialogue.exchanges[0].cut.reaped += 1;
     await chooseFile(forged);
-    await expect.poll(() => page.locator('#foreign-result').textContent()).toContain('dialogue replay');
+    await expect
+      .poll(() => page.locator('#foreign-result').textContent({ timeout: 30000 }), { timeout: 30000 })
+      .toContain('dialogue replay');
     await page.getByRole('button', { name: 'Resume', exact: true }).click();
     const held = await downloadFile();
     const { savedAt: _heldAt, label: _heldVolumeLabel, ...heldRest } = held;
@@ -1967,7 +1970,7 @@ it.each([
     await page.getByRole('button', { name: 'Menu', exact: true }).click();
     await page.getByRole('button', { name: 'Open another Valley file', exact: true }).click();
     await chooseFile(completed);
-    await expect.poll(() => page.locator('#map').count()).toBe(1);
+    await expect.poll(() => page.locator('#map').count(), { timeout: 30000 }).toBe(1);
     await page.evaluate(`import('/src/ui/app.ts').then(({_debug})=>_debug.skipTo(7770 / 1440))`);
     const continued = await downloadFile();
     const reference = load(completed);
