@@ -57,9 +57,10 @@ export interface BrokeringState {
 const emit = (s: ValleyState, text: string) => note(s, { at: s.minute, kind: 'story', text, weight: 3 });
 
 import { interruptStewardRoutine, stewardBusy } from './steward.ts';
+import { deliveryTripReserved } from './terms.ts';
 
 const busy = (s: ValleyState) =>
-  stewardBusy(s) || !!(s.kahyaState.visit && s.kahyaState.visit.back > s.minute);
+  deliveryTripReserved(s) || stewardBusy(s) || !!(s.kahyaState.visit && s.kahyaState.visit.back > s.minute);
 export function brokerReady(s: ValleyState): boolean {
   return (
     introductionEligible(s) &&

@@ -1,3 +1,4 @@
+import { ageYears } from '@adam0white/human-framework';
 import { dialogueChoices, dialogueStatus, dialogueWords } from '../sim/dialogue.ts';
 import {
   allianceEdition,
@@ -8,6 +9,16 @@ import {
   rulesOf,
   type TermDecision,
 } from '../sim/edition.ts';
+import {
+  copyReason,
+  deliveryAway,
+  deliveryTripReserved,
+  grainWords,
+  HELP_WORDS,
+  helpOf,
+  helpTargets,
+  TERMS,
+} from '../sim/terms.ts';
 import { clockWords, grainPreview, grainReceipt, paceWords, skipBlock, travelWords } from './clarity.ts';
 import { validLocalLog } from './local-log.ts';
 import { musicEvent } from './music.ts';
@@ -951,7 +962,7 @@ function enter() {
 function pacingState(t: number, s: ValleyState) {
   return {
     night: partOfDay(s.minute) === 'night',
-    travelling: !!s.kahyaState.visit,
+    travelling: deliveryAway(s) || !!s.kahyaState.visit,
     reading: t < slowUntil || selected !== null || tab !== 'notes',
     waiting:
       s.knocks.some((k) => !k.answered && k.at <= s.minute && k.until > s.minute) ||
@@ -1533,6 +1544,9 @@ const growing = (season: string) => season === 'spring' || season === 'summer';
 
 function caption(s: ValleyState, _wx: string): string {
   const v = s.kahyaState.visit;
+  const help = helpOf(s);
+  if (deliveryAway(s) && help)
+    return `You: ${help.delivery?.phase === 'stranded' ? 'the earned-food cargo is stranded' : help.delivery?.phase === 'returning' ? 'walking back from the food delivery' : `carrying earned food to ${householdLabel(houseOf(s, help.house) ?? { name: help.house })}`}. No other trip can start yet.`;
   if (s.pass?.journey && !s.pass.journey.returned)
     return s.minute < s.pass.journey.arrive
       ? 'You are walking over the northern pass.'
@@ -1557,6 +1571,22 @@ function caption(s: ValleyState, _wx: string): string {
 function kahyaAt(s: ValleyState): [number, number] {
   const v = s.kahyaState.visit;
   const home: [number, number] = [600, 545];
+  const help = helpOf(s),
+    route = help?.delivery;
+  if (help && route && deliveryAway(s)) {
+    const house = houseOf(s, help.house),
+      a = s.kahya.activity;
+    if (house) {
+      const elapsed =
+        a?.affordanceId.startsWith('terms-delivery:') && a.action !== 'terms-carry-food'
+          ? Math.max(0, Math.min(s.kahya.now, a.endsAt) - a.startedAt)
+          : 0;
+      const out = route.out + (route.phase === 'outbound' ? elapsed : 0);
+      const back = route.back + (route.phase === 'returning' ? elapsed : 0);
+      const f = Math.max(0, Math.min(1, (out - back) / route.walk));
+      return [home[0] + (house.x + 8 - home[0]) * f, home[1] + (house.y + 6 - home[1]) * f];
+    }
+  }
   if (s.pass?.journey && !s.pass.journey.returned) return [520, 350];
   if (!v || v.back <= s.minute) return home;
   const hh = houseOf(s, v.house);
@@ -1740,7 +1770,7 @@ function drawSheet(force = false) {
   const visitPhase = visit
     ? `${visit.house}:${visit.arrive}:${s.minute < visit.arrive ? 'out' : s.minute < visit.leave ? 'here' : s.minute < visit.back ? 'return' : 'home'}:${s.reply?.visits.includes(`${visit.house}:${visit.arrive}`) ?? false}`
     : '';
-  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${JSON.stringify(s.asks.map((a) => a.replies))}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${visitPhase}|${s.dialogue ? JSON.stringify([s.dialogue, dialogueChoices(s)]) : ''}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}|${accepted().size}|${selected ? (zehraScene(s, selected)?.reason ?? '') : ''}|${setAside}|${s.reply?.visits.length ?? 0}|${selected === null || tab !== 'notes' ? (rainGuess(s) ?? '') : ''}|${confirmCall}|${sayOpen}|${notebookReceipt}`;
+  const key = `${s.notes.findLast((n) => n.at <= s.minute)?.id}:${s.notes.filter((n) => n.at <= s.minute).length}|${selected}|${tab}|${houseDetails}|${JSON.stringify(s.asks.map((a) => a.replies))}|${busy(s)}|${dayOfMinute(s.minute)}|${s.flags.verbs.join(',')}|${s.agha.granary >= 2}|${routePhase}|${visitPhase}|${s.dialogue ? JSON.stringify([s.dialogue, dialogueChoices(s)]) : ''}|${s.knocks.filter((k) => !k.answered && k.at <= s.minute && k.until > s.minute).length}|${accepted().size}|${selected ? (zehraScene(s, selected)?.reason ?? '') : ''}|${setAside}|${s.reply?.visits.length ?? 0}|${selected === null || tab !== 'notes' ? (rainGuess(s) ?? '') : ''}|${confirmCall}|${sayOpen}|${notebookReceipt}${s.receivedTerms ? JSON.stringify(s.receivedTerms) : ''}`;
   const travel = app.querySelector<HTMLElement>('#reading-travel');
   if (travel) travel.textContent = englishText(caption(s, ''));
   const receipt = app.querySelector<HTMLElement>('#action-receipt');
@@ -1940,7 +1970,8 @@ function knockCard(s: ValleyState, k: Knock): string {
   return `<div class="knock ink-in"><div>${esc(ask)}<span class="w hand" style="display:block">“${esc(k.words)}”</span></div><div class="row">${row.join('')}</div></div>`;
 }
 
-const busy = (s: ValleyState) => !!s.kahyaState.visit && s.kahyaState.visit.back > s.minute;
+const busy = (s: ValleyState) =>
+  deliveryTripReserved(s) || (!!s.kahyaState.visit && s.kahyaState.visit.back > s.minute);
 
 /** People who already have a Press button on screen: one per person, on their latest line. */
 const pressShown = new Set<string>();
@@ -2231,7 +2262,11 @@ function reader(s: ValleyState): string {
 }
 
 function noteLine(n: Note): string {
-  return `<div class="note${n.weight < 2 ? ' quiet' : ''}"><span class="t">${esc(partOfDay(n.at))}</span>${esc(n.text)}${n.words && !n.text.toLowerCase().includes(n.words.toLowerCase()) ? `<span class="w">“${esc(noteWords(n) ?? '')}”</span>` : ''}</div>`;
+  const keep =
+    g && !copyReason(g.valley, n.id)
+      ? btn('Keep these received words in the ledger', () => order({ verb: 'keep-words', note: n.id }))
+      : '';
+  return `${keep}<div class="note${n.weight < 2 ? ' quiet' : ''}"><span class="t">${esc(partOfDay(n.at))}</span>${esc(n.text)}${n.words && !n.text.toLowerCase().includes(n.words.toLowerCase()) ? `<span class="w">“${esc(noteWords(n) ?? '')}”</span>` : ''}</div>`;
 }
 
 function datedReply(s: ValleyState, n: Note): string {
@@ -2529,8 +2564,8 @@ function giftHint(s: ValleyState): string {
 }
 
 function visitHint(s: ValleyState): string {
-  return busy(s) && s.kahyaState.visit
-    ? 'You can visit again when you return.'
+  return busy(s)
+    ? 'You can visit again when your current journey ends.'
     : 'A visit takes time to walk and sit with the household.';
 }
 
@@ -2672,6 +2707,7 @@ function houseThumbs(s: ValleyState, hh: Household): string {
     );
   const visit = s.kahyaState.visit;
   out.push(sayingControls(s, hh));
+  out.push(helpProposalControls(s, hh.id));
   if (
     s.dialogue &&
     !s.reply &&
@@ -2883,7 +2919,7 @@ function otherOrders(s: ValleyState): string {
     const there = !!j?.seen && s.minute < j.leave && !j.returned;
     const position = !away ? 50 : there ? 290 : s.minute < (j?.arrive ?? 0) ? 140 : 200;
     out.push(
-      `<section aria-label="The pass route"><h3>Over the pass</h3><svg viewBox="0 0 340 90" role="img" aria-label="Residence, northern pass, Çam quarry in the adjacent valley" style="width:100%;max-width:480px"><path d="M50 50 L170 15 L290 50" fill="none" stroke="currentColor"/><circle cx="${position}" cy="45" r="6" fill="currentColor"/><text x="8" y="80" fill="currentColor">Residence</text><text x="145" y="12" fill="currentColor">Pass</text><text x="245" y="80" fill="currentColor">Çam quarry</text></svg><p>${away ? (there ? (roadTerms ? 'You are at the quarry. Stone is available only through the public road agreement below. A sack alone cannot buy a load. You can decline without paying.' : 'You are at the quarry. A sack can buy one stone load while you are here. Your return walk is still ahead.') : 'You are on the pass journey. The valley keeps working and eating. You cannot make another visit until you return.') : roadTerms ? 'Çam offers finite mill stone only through its public road agreement. Six carried grain reserves one load. Yusuf Usta must choose to complete twelve useful repair hours over six trips. Then you must travel back to collect within fourteen days. Each quarry journey takes two days and one provision. Failure releases the stone without refunding grain or time. You can do without the stone.' : 'Walk into the adjacent valley for dressed mill stone. Take provisions and a barter sack from the granary. A sack buys one load at the quarry if stock remains. You will be away for two days.'}</p>${btn('Walk to Çam quarry', () => send({ verb: 'pass', choice: 'depart' }), { disabled: away || !!(s.kahyaState.visit && s.kahyaState.visit.back > s.minute) || stewardBusy(s) || (s.stewardCare && !s.kahya.body.alive) || s.agha.granary < 7, hint: 'Pack provisions and a barter sack. That grain leaves the granary until you return or trade it.' })}${btn('Exchange a sack for stone', () => send({ verb: 'pass', choice: 'buy' }), { disabled: roadTerms || !there || !!j?.cargo || (j?.grain ?? 0) < 6 || s.pass.stock < 1, ...(roadTerms ? { hint: 'A sack alone cannot buy stone. Read the public road terms below before spending grain.' } : {}) })}${btn('Deliver the stone to the mill', () => send({ verb: 'pass', choice: 'deliver' }), { disabled: away || s.pass.stone < 1 || !s.agha.millOpen || s.agha.mill >= V.millHours, hint: 'Only stone carried home can supply a little of the mill work. The payment dates stay the same.' })}</section>`,
+      `<section aria-label="The pass route"><h3>Over the pass</h3><svg viewBox="0 0 340 90" role="img" aria-label="Residence, northern pass, Çam quarry in the adjacent valley" style="width:100%;max-width:480px"><path d="M50 50 L170 15 L290 50" fill="none" stroke="currentColor"/><circle cx="${position}" cy="45" r="6" fill="currentColor"/><text x="8" y="80" fill="currentColor">Residence</text><text x="145" y="12" fill="currentColor">Pass</text><text x="245" y="80" fill="currentColor">Çam quarry</text></svg><p>${away ? (there ? (roadTerms ? 'You are at the quarry. Stone is available only through the public road agreement below. A sack alone cannot buy a load. You can decline without paying.' : 'You are at the quarry. A sack can buy one stone load while you are here. Your return walk is still ahead.') : 'You are on the pass journey. The valley keeps working and eating. You cannot make another visit until you return.') : roadTerms ? 'Çam offers finite mill stone only through its public road agreement. Six carried grain reserves one load. Yusuf Usta must choose to complete twelve useful repair hours over six trips. Then you must travel back to collect within fourteen days. Each quarry journey takes two days and one provision. Failure releases the stone without refunding grain or time. You can do without the stone.' : 'Walk into the adjacent valley for dressed mill stone. Take provisions and a barter sack from the granary. A sack buys one load at the quarry if stock remains. You will be away for two days.'}</p>${btn('Walk to Çam quarry', () => send({ verb: 'pass', choice: 'depart' }), { disabled: away || deliveryTripReserved(s) || !!(s.kahyaState.visit && s.kahyaState.visit.back > s.minute) || stewardBusy(s) || (s.stewardCare && !s.kahya.body.alive) || s.agha.granary < 7, hint: 'Pack provisions and a barter sack. That grain leaves the granary until you return or trade it.' })}${btn('Exchange a sack for stone', () => send({ verb: 'pass', choice: 'buy' }), { disabled: roadTerms || !there || !!j?.cargo || (j?.grain ?? 0) < 6 || s.pass.stock < 1, ...(roadTerms ? { hint: 'A sack alone cannot buy stone. Read the public road terms below before spending grain.' } : {}) })}${btn('Deliver the stone to the mill', () => send({ verb: 'pass', choice: 'deliver' }), { disabled: away || s.pass.stone < 1 || !s.agha.millOpen || s.agha.mill >= V.millHours, hint: 'Only stone carried home can supply a little of the mill work. The payment dates stay the same.' })}</section>`,
     );
     out.push(
       `<section><h3>A family introduction</h3><p>${s.introduction?.status === 'met' ? 'The adults met with her father present. Nobody has agreed to marry.' : s.introduction?.status === 'missed' ? 'No supervised meeting took place. Nobody was promised in marriage.' : s.introduction ? 'Each adult and her father has been invited. Their work and rest may come first.' : 'Ask an unmarried adult from Kavak and an unmarried adult from Kuyucu to meet at Kuyucu with her father present. They choose whether to attend. Meeting is not a marriage agreement.'}</p>${btn('Arrange an introduction at Kuyucu', () => send({ verb: 'introduce' }), { disabled: !!s.introduction || !introductionEligible(s), hint: 'Only these existing eligible adults are invited. No visitor is assigned a spouse or guardian.' })}</section>`,
@@ -2985,6 +3021,7 @@ function ledger(s: ValleyState): string {
       ${loan}
       <tr><td>Years with too little grain paid</td><td class="n">${s.agha.missed}</td></tr>
     </table>
+    ${receivedTermsView(s)}
     ${s.flags.verbs.includes('take') ? `<h3 style="margin:8px 0 0">${sharesFresh(s) ? 'Grain payments this year' : 'Grain payments brought to the last rider'}</h3><table>${rows}</table>` : ''}
     <section class="storm-reports"><h3>Storm damage reports</h3>${
       stormReportWords(s)
@@ -3143,6 +3180,7 @@ function ending() {
       )
       .join('')}
     <p>${esc(letter)}</p>
+    ${s.receivedTerms ? receivedTermsView(s) : ''}
     <details class="closing-grain"><summary>See the tally</summary><p data-closing-grain></p></details>
     </div><footer class="ending-actions"><div class="row"><button data-feedback>Feedback</button><button data-ending-notebook>Earlier replies</button></div><button class="primary" data-go="new">Begin a new term</button>${mark()}${footer()}</footer>
   </div>`;
@@ -3226,3 +3264,45 @@ export const _debug = {
     }
   },
 };
+
+/** Public records: received words, an explicit new contract and old loans remain distinct. */
+function receivedTermsView(s: ValleyState): string {
+  const h = helpOf(s),
+    kept = s.receivedTerms?.keptWords ?? [];
+  const who = (id: string) => esc(personLabel(personOf(s, id) ?? { name: s.departed[id]?.name ?? id }));
+  const house = (id: string) => esc(householdLabel(houseOf(s, id) ?? { name: id }));
+  const amount = (n: number) => `${grainWords(n)} grain measures`;
+  const words = kept
+    .map(
+      (k) =>
+        `<article><p>${who(k.original.who ?? '')} at ${house(k.original.house ?? '')}. Source: ${esc(fullDateEnglish(dayOfMinute(k.original.at)))} at minute ${k.original.at}. Kept: ${esc(fullDateEnglish(dayOfMinute(k.copiedAt)))} at minute ${k.copiedAt}. Note ${k.original.id}.</p><blockquote>${esc(k.original.words ?? '')}</blockquote></article>`,
+    )
+    .join('');
+  const loans = (s.edition?.debts ?? [])
+    .map(
+      (d) =>
+        `<p>${house(d.from)} owes ${house(d.to)} ${amount(d.amount)}. ${d.paid ? 'Recorded as paid.' : 'Still outstanding.'}</p>`,
+    )
+    .join('');
+  const requests = (s.edition?.requests ?? [])
+    .filter((r) => ['neighbour-loan', 'repay-neighbour'].includes(r.action))
+    .map(
+      (r) =>
+        `<p>${esc(r.action === 'neighbour-loan' ? 'Loan carrying' : 'Repayment carrying')}: ${house(r.house)}${r.to ? ` to ${house(r.to)}` : ''}. Request status: ${esc(r.status)}. Asking or agreeing alone transfers no grain.</p>`,
+    )
+    .join('');
+  const contract = h
+    ? `<h3>Food for your own work</h3><p>${who(h.person)} at ${house(h.house)}. Response: ${esc(h.status)}. ${esc(h.workClosed ?? 'The work request is still open.')}</p><p>${esc(h.words)}</p>${h.answer && h.answer.at <= s.minute ? `<blockquote>${esc(h.answer.words ?? '')}</blockquote>` : '<p>No completed answer to these terms.</p>'}<p>${grainWords(h.minutes)} useful minutes recorded. Earned: ${amount(h.earned)}. Delivered: ${amount(h.delivered)}. Still owed: ${amount(Math.max(0, h.earned - h.delivered))}.</p><p>Held: ${amount(h.held)}. In cargo: ${amount(h.cargo)}. Returned unearned grain: ${amount(h.returned)}.</p><p>Work ends before 20 July. Carry food from 21 July, before 23 July starts. These are offered dates; the forecast does not guarantee the weather.</p><p>Delivery: ${esc(h.delivery?.phase ?? 'not requested')}. ${h.depositedAt !== undefined ? `Actual deposit at minute ${h.depositedAt}. ${h.depositedAt >= TERMS.deliveryDue ? 'The deposit was late.' : ''}` : s.minute >= TERMS.deliveryDue && h.earned > h.delivered ? 'The deadline passed. Earned grain is still owed.' : 'No actual deposit yet.'} ${esc(h.problem ?? '')}</p>${!h.workClosed && h.stopAt === undefined ? btn('End the remaining work request', () => order({ verb: 'help-end', contract: h.id })) : ''}${!h.delivery && h.held > 0 && h.earned > h.delivered ? btn(`Carry the earned food to ${householdLabel(houseOf(s, h.house) ?? { name: h.house })}`, () => order({ verb: 'help-deliver', contract: h.id }), { disabled: s.minute < TERMS.deliveryFrom || !h.workClosed || deliveryAway(s), hint: 'This requests real walking and carrying. It does not deliver grain immediately.' }) : ''}${deliveryAway(s) && h.delivery?.phase !== 'stranded' && s.kahya.body.alive && !h.delivery?.returnRequested ? btn('Return with the bundle', () => order({ verb: 'help-return', contract: h.id })) : ''}`
+    : '<p>No food-for-work agreement has been offered.</p>';
+  return `<section class="received-terms"><h2>Words and grain records</h2><h3>Words you kept</h3><p>Keeping received words creates no numeric debt. You can keep up to 64 named voice notes.</p>${kept.length >= 64 ? '<p>The kept-words book is full. No words were discarded.</p>' : ''}${words || '<p>No received words have been kept. Missing older words cannot be recovered here.</p>'}${contract}<h3>Neighbour loans</h3>${loans || '<p>No neighbour loan is recorded.</p>'}${requests}<p>Repayment depends on actual carrying and available grain. A request is not a repayment receipt.</p><h3>Landowner loan</h3><p>${s.agha.loan ? `${amount(s.agha.loan.owe)} ${s.agha.loan.paid ? 'was the recorded amount' : 'is owed'} under the landowner’s separate loan. ${s.agha.loan.arrived ? 'The loan arrived.' : 'The loan has not arrived.'} ${s.agha.loan.paid ? 'Recorded as paid.' : 'Not recorded as paid.'}` : 'No landowner loan is recorded.'}</p></section>`;
+}
+function helpProposalControls(s: ValleyState, house: string): string {
+  return helpTargets(s)
+    .filter((t) => t.house === house)
+    .map((t) => {
+      const p = personOf(s, t.person);
+      if (!p) return '';
+      return `<section><h3>Offer food for this person’s own work</h3><p>${esc(HELP_WORDS)}</p>${btn(`Offer these terms to ${personLabel(p, houseOf(s, t.house))} (${ageYears(p)} years old)`, () => order(t))}<p>This commits 0.3 grain measures from the granary. It asks only this adult. Hearing, assent and useful work remain separate.</p></section>`;
+    })
+    .join('');
+}

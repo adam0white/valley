@@ -695,3 +695,51 @@ awaits root's ONE independent review before commit and all normal technical deli
 gates. The parent accepts the handback. Adam accepts feel/difficulty/readiness on
 2026-11-03; physical-phone, cold-player and authorized production-notebook acceptance
 remain separate. Original quoted requests above are retained without renumbering.
+
+## Received words and finite food-for-work candidate — 2026-10-28
+
+This is new present game content chosen by the director, not recovered historical
+terms or owner acceptance. One public offer reserves0.3 grain measures for one adult's
+own voluntary useful reaping, at0.15/hour up to120 useful minutes. That rate reuses
+paid mill work. One attempt, the carrying hour and date windows are host conventions.
+The retained opening forecast is context, not guaranteed weather. Work must occur
+before20July. Actual steward delivery is available from21July, before23July starts.
+
+HF owns attention, voluntary completed assent, work and the steward's walk/carry/return
+activities. There is no food, trust or body reward for a question or assent. Useful
+partial crop work remains owed; unearned reserve returns. A cancelled trip must
+actually return its cargo. Late, undeliverable, dead and stranded outcomes keep unpaid
+liability visible. Actual lower-lane carriage includes20 minutes each way and60 minutes
+of carrying/deposit. The existing upper-lane distance is75 minutes. The actor may choose
+care or other work. No new person, forced household labour or forgiveness is authored.
+
+The explicit public delivery action adopts the steward's route intention through
+released HF `adoptGoal`/`advances`, using the existing conscientiousness value. Actual
+walk/carry/home completions advance it; an unpaid cancelled return abandons it through
+the public agenda API. It does not edit utilities, traits, bodies or RNG. The initial
+no-intention trace chose only care; that failure remains evidence, not a physical
+positive. This API integration is an implementation choice for root's exact review.
+
+`keep-words` deliberately preserves a complete actual delivered named voice Note, its
+original id/date/words and a separate copy time. The book holds at most64 entries;
+a further copy is rejected with a plain full-book message, without eviction or input.
+Note ids are checked against exactly one retained source, not presumed unique. Future,
+missing or trimmed words cannot be recovered. Received speech creates no numeric debt.
+The ledger shows kept words, explicit new work terms, existing neighbour debts/request
+statuses, and the landowner's separate loan. Positive fractions below display precision
+say less-than; they do not show zero.
+
+Only valid new public inputs add optional `receivedTerms`. No new title/query switch,
+HF/version/dependency change or default field is added. Without a help proposal, no
+new actor/world transition occurs. Whole full/native regeneration and accepted-input
+comparison remain admission authority. All historical continuation values stay literal.
+
+Source scope: GDI1178/source F1288 and GDI1181/source F1291 share this finite help
+unit but remain distinct FREE/CONT reports. GDR0025's neighbour loan already exists;
+this candidate exposes it without rebuilding it or claiming a natural full repayment
+positive. GDR0052/source-local retests F1583 gains explicit kept received words only.
+Aisha's separate named-cutters clause and all broader conversation/family asks remain
+qualified. Root's independent review, signed source, exact CI and delivery remain;
+Adam accepts feel on2026-11-03. No player/panel/retest/model/provider call is evidence.
+
+Received words and food/work terms have no reviewed continuing-person mapping in valley-cast/1. Native full source regeneration remains authority. Publishing either kind refuses before any envelope/shelf/source/head write, including an explicit alternative. The complete native game remains downloadable. Source/ownership/file-origin changes during publication awaits also refuse. This is a host-specific unsupported-dialect boundary, not a feature switch or a new HF faculty.

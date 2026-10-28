@@ -27,6 +27,15 @@ import type { CastStart } from './passport.ts';
 import { householdLabel, KAHYA, personLabel } from './people.ts';
 import { mixSeed, strHash } from './rng.ts';
 import {
+  activeHelpFor,
+  applyTerms,
+  deliveryTripReserved,
+  helpOf,
+  type TermsOrder,
+  termsVerb,
+  validateTermsState,
+} from './terms.ts';
+import {
   advanceTo,
   borrow,
   call,
@@ -58,6 +67,7 @@ import type { Saying } from './voices.ts';
 export const GAME_VERSION = '0.3.1';
 
 export type Input =
+  | (TermsOrder & { at: number })
   | (DialogueOrder & { at: number })
   | { at: number; verb: 'dialogue-cancel'; turn: number }
   | { at: number; verb: 'alliance'; choice: AllianceChoice }
@@ -112,6 +122,10 @@ export function act(g: Game, input: Order): boolean {
 
 function apply(g: Game, i: Input): boolean {
   const s = g.valley;
+  if (termsVerb(i.verb)) {
+    const { at: _at, ...o } = i;
+    return applyTerms(s, o as TermsOrder, g.inputs.length);
+  }
   switch (i.verb) {
     case 'dialogue': {
       const { at: _at, ...order } = i;
@@ -129,6 +143,7 @@ function apply(g: Game, i: Input): boolean {
     case 'alliance':
       return allianceChoice(s, i.choice);
     case 'pass':
+      if (deliveryTripReserved(s)) return false;
       return passChoice(s, i.choice);
     case 'introduce':
       return introduce(s);
@@ -141,6 +156,8 @@ function apply(g: Game, i: Input): boolean {
     case 'release-cast':
       return requestCastRelease(s, i.person);
     case 'call': {
+      const h = helpOf(s);
+      if (i.wage && h && activeHelpFor(s, h.person) && i.houses.includes(h.house)) return false;
       const a = call(s, i.job, i.houses, i.wage ? { wage: true } : {});
       if (!a) return false;
       const what =
@@ -201,6 +218,7 @@ function apply(g: Game, i: Input): boolean {
     case 'turn-away':
       return turnAway(s, i.knock);
   }
+  return false;
 }
 
 /** The sim always moves in these steps, in play and in replay alike, so a run replays exactly. */
@@ -642,11 +660,14 @@ function validateReplyState(s: ValleyState): void {
 }
 
 export function restoreState(json: ValleyState): ValleyState {
+  validateTermsState(json);
   if (
     json.edition?.id === PUBLIC_EDITION &&
     (!json.reply || !json.dialogue || !json.pass || !json.stewardCare)
   )
     throw new Error('Invalid Valley public edition state.');
+  if (json.receivedTerms !== undefined && json.edition?.id !== PUBLIC_EDITION)
+    throw new Error('Invalid received terms edition.');
   validateReplyState(json);
   validateDialogueState(json);
   const { people, kahya, ...rest } = json;

@@ -8,6 +8,7 @@ import {
   dialogueEdition,
   grainEdition,
   knownEdition,
+  PUBLIC_EDITION,
   passEdition,
   replyEdition,
 } from '../sim/edition.ts';
@@ -51,6 +52,33 @@ export function validLocalLog(value: unknown): boolean {
       return false;
     prior = input.at as number;
     switch (input.verb) {
+      case 'keep-words':
+      case 'help-offer':
+      case 'help-end':
+      case 'help-deliver':
+      case 'help-return': {
+        if (v.rules !== PUBLIC_EDITION) return false;
+        const keys =
+          input.verb === 'keep-words'
+            ? ['at', 'verb', 'note']
+            : input.verb === 'help-offer'
+              ? ['at', 'verb', 'person', 'house', 'ask', 'visit']
+              : ['at', 'verb', 'contract'];
+        if (Object.keys(input).length !== keys.length || Object.keys(input).some((k) => !keys.includes(k)))
+          return false;
+        if (
+          input.verb === 'keep-words'
+            ? !integer(input.note, Number.MAX_SAFE_INTEGER)
+            : input.verb === 'help-offer'
+              ? !name(input.person) ||
+                !name(input.house) ||
+                !name(input.ask) ||
+                !integer(input.visit, input.at as number)
+              : !name(input.contract)
+        )
+          return false;
+        break;
+      }
       case 'dialogue':
         // The new public line carries no caller-authored history or field facts.
         // Only deterministic acceptance creates its prospective request anchor.

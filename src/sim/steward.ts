@@ -7,6 +7,15 @@
  */
 import { type Affordance, begin, decide, finish, tick } from '@adam0white/human-framework';
 import { HOUR, minuteOfDay } from './calendar.ts';
+import {
+  captureTermsSteward,
+  deliveryAway,
+  deliveryLive,
+  resolveTermsSteward,
+  termsStewardOffers,
+  termsStewardPlace,
+  termsTick,
+} from './terms.ts';
 import type { ValleyState } from './valley.ts';
 export interface StewardCare {
   grain: number;
@@ -30,6 +39,8 @@ export function stewardTo(s: ValleyState, to: number) {
   const care = s.stewardCare;
   if (!care) return;
   while (p.now < to) {
+    termsTick(s, p.now);
+    const delivery = deliveryLive(s);
     const j = s.pass?.journey;
     const passWalking =
       j && !j.returned && !j.failed && (p.now < j.arrive || (p.now >= j.leave && p.now < j.back));
@@ -65,13 +76,15 @@ export function stewardTo(s: ValleyState, to: number) {
       });
     if (!p.activity && p.body.alive) {
       const mod = minuteOfDay(p.now);
-      const away = !!(s.kahyaState.visit && s.kahyaState.visit.back > p.now);
+      const away = deliveryAway(s) || !!(s.kahyaState.visit && s.kahyaState.visit.back > p.now);
       const food = away ? care.grain : care.grain + s.agha.granary;
-      const home = away
-        ? s.kahyaState.visit?.house === 'cam'
-          ? 'cam'
-          : `house:${s.kahyaState.visit?.house}`
-        : 'residence';
+      const home = delivery
+        ? termsStewardPlace(s)
+        : away
+          ? s.kahyaState.visit?.house === 'cam'
+            ? 'cam'
+            : `house:${s.kahyaState.visit?.house}`
+          : 'residence';
       const offers: Affordance[] = walking
         ? [
             {
@@ -100,16 +113,20 @@ export function stewardTo(s: ValleyState, to: number) {
                   },
                 ]
               : []),
-            {
-              id: 'care:drink',
-              action: 'drink',
-              label: 'drink water at the shelter',
-              duration: 30,
-              effort: 0,
-              placeId: home,
-              advertises: { water: 0.6 },
-              tags: ['drink'],
-            },
+            ...(!delivery || home === 'residence'
+              ? [
+                  {
+                    id: 'care:drink',
+                    action: 'drink',
+                    label: 'drink water at the shelter',
+                    duration: 30,
+                    effort: 0,
+                    placeId: home,
+                    advertises: { water: 0.6 },
+                    tags: ['drink'],
+                  },
+                ]
+              : []),
             ...(mod >= 22 * HOUR || mod < 6 * HOUR || p.body.sleepPressure > 0.7
               ? [
                   {
@@ -136,9 +153,13 @@ export function stewardTo(s: ValleyState, to: number) {
               tags: ['rest'],
             },
           ];
+      if (delivery) offers.push(...termsStewardOffers(s, p.now));
       const record = decide(p, offers);
       const offer = offers.find((a) => a.id === record.chosenAffordanceId);
-      if (offer) begin(p, offer, record);
+      if (offer) {
+        const activity = begin(p, offer, record);
+        if (activity) captureTermsSteward(s, offer, record);
+      }
       if (walking && !p.activity) {
         if (passWalking && j) j.failed = true;
         else care.travelFailed = true;
@@ -153,20 +174,24 @@ export function stewardTo(s: ValleyState, to: number) {
       if (a.affordanceId === 'care:eat') {
         const packed = Math.min(care.grain, 0.01);
         care.grain -= packed;
-        const away = !!(s.kahyaState.visit && s.kahyaState.visit.back > p.now);
+        const away = deliveryAway(s) || !!(s.kahyaState.visit && s.kahyaState.visit.back > p.now);
         const fromStore = away ? 0 : Math.min(Math.max(0, 0.01 - packed), s.agha.granary);
         s.agha.granary -= fromStore;
         food = packed + fromStore >= 0.01 - 1e-10 ? 0.6 : 0;
         care.eaten += packed + fromStore;
       }
-      finish(p, {
-        at: p.now,
-        affordanceId: a.affordanceId,
-        action: a.action,
-        status: 'completed',
-        needs:
-          a.affordanceId === 'care:eat' ? { food } : a.affordanceId === 'care:drink' ? { water: 0.6 } : {},
-      });
+      const termsOutcome = resolveTermsSteward(s, a, 'ended');
+      finish(
+        p,
+        termsOutcome ?? {
+          at: p.now,
+          affordanceId: a.affordanceId,
+          action: a.action,
+          status: 'completed',
+          needs:
+            a.affordanceId === 'care:eat' ? { food } : a.affordanceId === 'care:drink' ? { water: 0.6 } : {},
+        },
+      );
     }
   }
 }
