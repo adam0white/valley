@@ -1,5 +1,26 @@
 # Valley handoff
 
+## Received words and finite food-for-work candidate — 2026-10-28
+
+Remaining: root's ONE independent review of the exact combined candidate, then signed
+source/exact CI, integration/main CI and clean delivery. No author commit, push or
+deploy. Root accepts engineering handback; Adam accepts feel on2026-11-03.
+
+One unit combines durable explicit kept words (64-record cap), faithful existing loan
+records and one backed, independently assented food-for-own-work exchange. New content
+uses0.15 grain/hour, capped0.3 for120 useful minutes before20July; actual carried food
+is due from21July before23July starts. Forecast is context, not weather certainty.
+Partial useful work remains owed; physical crop/reserve/cargo/deposit/return are separate.
+No speech automatically becomes numeric debt, and no question grants a reward.
+
+No new input means no new state/Person/RNG path. New full files regenerate the complete
+world and accepted inputs before installation. The source-local proof and ledger
+addendum retain actual90-minute/0.225-grain public performance, useful HF deferrals,
+actual delivery/return, native continuation, cap/pruning bounds and all failed attempts.
+No natural completed decline-speech or full neighbour-repayment positive is claimed.
+See docs/design.md for source versus new-content conventions and exact closure limits.
+
+
 ## Contextual visit questions candidate — 2026-10-28
 
 Remaining: root's ONE independent review of the frozen source before commit, then
@@ -529,3 +550,5 @@ worker source freshness or player admission. Every direct test context retains a
 complete private inventory and closes only after an actual zero pending count;
 unknown/nonzero or backup failure holds the context indefinitely. Original failures
 and source-only limits remain in the private candidate receipt.
+
+The director's finite source-publication boundary now rejects all receivedTerms/new-input chapters before envelope/shelf/source/head writes. Complete public source replay also rejects stripped input/archive copies with retained changed Persons. Existing native download/reimport remains supported. Publication rechecks exact current game/source/ownership/file-origin metadata after awaits; no old finite passport is silently extended.

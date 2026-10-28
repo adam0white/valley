@@ -20,10 +20,11 @@ import {
   watchPersonaCheckpoint,
 } from '@adam0white/lab-client';
 import { ALLOCATION, localRole } from '../sim/cast.ts';
-import { localEdition, type RulesEdition, rulesOf } from '../sim/edition.ts';
-import { act, type Game, newGame, type SavedGame } from '../sim/game.ts';
+import { dialogueEdition, localEdition, type RulesEdition, rulesOf } from '../sim/edition.ts';
+import { act, type Game, load, newGame, type SavedGame, save } from '../sim/game.ts';
 import { calendarPassport, checkpointReceipt, HOST_RULES, prepareCastStart } from '../sim/passport.ts';
 import { foundValley } from '../sim/people.ts';
+import { termsVerb } from '../sim/terms.ts';
 export interface LocalCastReceipt {
   runId: string;
   fileOrigin: boolean;
@@ -231,12 +232,44 @@ export class CastSession {
       rules: HOST_RULES,
     };
   }
+  /** Valley owns this finite publication boundary, not HF or the generic shelf. The
+   * old passport has no mapping for this new host contract/kept archive. Native full
+   * source regeneration remains authority even if both new input/state copies vanish. */
+  private publicationGuard(g: Game): () => void {
+    const source = () => {
+      const { savedAt: _savedAt, ...run } = save(g);
+      return canonicalPersona({ run, metadata: this.metadata() });
+    };
+    if (dialogueEdition(rulesOf(g.valley))) load(save(g));
+    if (g.valley.receivedTerms || g.inputs.some((i) => termsVerb(i.verb)))
+      throw new Error(
+        'These received words and food/work terms have no reviewed continuing-person mapping. Download the complete native game instead.',
+      );
+    const captured = source();
+    const generation = this.generation;
+    return () => {
+      if (this.game !== g || this.generation !== generation || source() !== captured)
+        throw new Error('Source, ownership or file origin changed before publication. Keep the native game.');
+    };
+  }
   async queryRecording(_allow?: boolean): Promise<void> {
     this.lab.allowPersonaRecording(true);
     this.render();
   }
   async checkpoint(manual = false): Promise<void> {
     if (!this.shelf) return;
+    // Public native/source authority is checked even when the older edition gate
+    // will also refuse publication. Stripping both new copies is not a bypass.
+    if (this.game && dialogueEdition(rulesOf(this.game.valley))) {
+      try {
+        this.publicationGuard(this.game);
+      } catch (error) {
+        this.failedCheckpoint = true;
+        this.status = `The checkpoint was refused: ${error instanceof Error ? error.message : String(error)} Keep or download the native game.`;
+        this.render();
+        return;
+      }
+    }
     if (localEdition(this.game ? rulesOf(this.game.valley) : undefined)) {
       if (manual) {
         this.status =
@@ -250,7 +283,9 @@ export class CastSession {
     const generation = this.generation;
     const g = this.game;
     try {
+      this.publicationGuard(g);
       for (const c of ALLOCATION) {
+        const stillCurrent = this.publicationGuard(g);
         const id = localRole(c.castId);
         const parent = this.heads[c.castId];
         if ((this.fileOrigin || this.localOnly) && !parent) continue;
@@ -259,7 +294,9 @@ export class CastSession {
         if (dead && parent) {
           const terminal = await closePersonaBranch(parent, this.stamps(), dead.now);
           if (generation !== this.generation) break;
+          stillCurrent();
           await this.shelf.request({ action: 'put', envelope: terminal });
+          stillCurrent();
           if (generation !== this.generation) break;
           this.lab.setPersonaRecording(`valley-group-${crypto.randomUUID()}`);
           this.lab.allowPersonaRecording(true);
@@ -312,11 +349,13 @@ export class CastSession {
           throw new Error('Export the source archive before another checkpoint.');
         const authored = !parent && !g.cast?.inputs.length && !this.fileOrigin;
         if (generation !== this.generation) break;
+        stillCurrent();
         await this.shelf.request({
           action: 'put',
           envelope,
           authored,
         });
+        stillCurrent();
         if (generation !== this.generation) break;
         this.lab.setPersonaRecording(`valley-group-${crypto.randomUUID()}`);
         this.lab.allowPersonaRecording(true);
@@ -350,6 +389,7 @@ export class CastSession {
       const c = ALLOCATION.find((p) => p.castId === castId);
       if (!g || !c || !this.shelf.enabled)
         throw new Error('Open a game you have played and turn on continuing people in this browser first.');
+      const stillCurrent = this.publicationGuard(g);
       const raw = g.valley.castReleased?.[localRole(castId)];
       if (!raw?.body.alive || raw.activity)
         throw new Error(
@@ -392,7 +432,9 @@ export class CastSession {
         throw new Error('Export the source archive before another checkpoint.');
       await this.shelf.ready;
       if (generation !== this.generation || this.game !== g || this.runId !== runId) return;
+      stillCurrent();
       await this.shelf.request({ action: 'put', envelope, fork: true });
+      stillCurrent();
       if (generation !== this.generation || this.game !== g || this.runId !== runId) return;
       this.lab.setPersonaRecording(`valley-group-${crypto.randomUUID()}`);
       this.lab.allowPersonaRecording(true);

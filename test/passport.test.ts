@@ -354,6 +354,19 @@ it('refuses an unpaused source and cancels an alternative after its run generati
   await pending;
   expect(shelf.writes).toBe(0);
   expect(session.heads).toEqual({});
+  // Same generation, but file-origin/ownership changes across the source digest
+  // and shelf-ready awaits. No envelope or source journal may be written.
+  shelf.ready = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const changed = session.alternative('hf.cast.danyal.well');
+  session.fileOrigin = true;
+  finish(true);
+  await changed;
+  expect(shelf.writes).toBe(0);
+  expect(session.status).toContain('changed before publication');
+  expect(session.sources).toEqual({});
+  expect(session.heads).toEqual({});
 });
 
 it.each(['3.0.0', '2.22.0', '2.24.0', '99.0.0'])(

@@ -107,6 +107,22 @@ import { foundValley, type Household, householdLabel, KAHYA, makeKahya, personLa
 import { DRAW, hashUnit, mixSeed, strHash } from './rng.ts';
 import { type StewardCare, stewardTo } from './steward.ts';
 import {
+  activeHelpFor,
+  deliveryTripReserved,
+  helpWork,
+  type ReceivedTermsState,
+  recordHelpWork,
+  resolveTermsSpeech,
+  termsBoundary,
+  termsCapture,
+  termsHear,
+  termsOffers,
+  termsSuggestion,
+  termsTick,
+  workHours,
+  workSeen,
+} from './terms.ts';
+import {
   ASSENT,
   type CallStand,
   easeLaneWords,
@@ -295,6 +311,7 @@ export interface ValleyState {
   castReleased?: Record<string, Person>;
   castDeaths?: Record<string, Person>;
 
+  receivedTerms?: ReceivedTermsState;
   v: 1;
   seed: number;
   minute: number;
@@ -528,6 +545,8 @@ export function openAsksFor(s: ValleyState, pid: string, at: number): Ask[] {
 }
 
 function suggestionFor(s: ValleyState, p: Person, at: number): Suggestion | undefined {
+  const help = termsSuggestion(s, p, at);
+  if (help) return help;
   const intro = introductionSuggestion(s, p, at);
   const asks = openAsksFor(s, p.id, at);
   const a = asks[asks.length - 1];
@@ -570,6 +589,7 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
   // Bed is for the dark, or for someone who can no longer keep their eyes open; a tired day-worker rests instead.
   const sleepy = !light || p.body.sleepPressure > 0.65 || p.body.sleepDebt > 0.5 || p.body.health < 0.5;
   const out: Affordance[] = [
+    ...termsOffers(s, p, at),
     ...dialogueOffers(s, p, at),
     ...introductionOffers(s, p, at),
     ...brokerOffers(s, p, at),
@@ -727,7 +747,7 @@ export function offersFor(s: ValleyState, p: Person, at = p.now): Affordance[] {
   // Asked work.
   const asks = openAsksFor(s, p.id, at);
   for (const a of asks) {
-    if (a.job === 'reap-agha' && light && !weak && s.agha.standing > 0.5) {
+    if (a.job === 'reap-agha' && !activeHelpFor(s, p.id) && light && !weak && s.agha.standing > 0.5) {
       out.push({
         id: 'reap-agha',
         action: 'reap-agha',
@@ -967,6 +987,7 @@ export function makeWorld(s: ValleyState): World {
       return h ? scarcityOf(s, h) : 0;
     },
     beginOptions: (p, offer, record) => {
+      if (termsCapture(s, p, offer, record)) return undefined;
       captureDialogue(s, p, offer, record);
       if (!captureIntroduction(s, p, offer, record) && !captureTermReply(s, p, offer, record))
         captureReply(s, p, offer, record);
@@ -1317,6 +1338,8 @@ function replyWords(s: ValleyState, p: Person, ask: Ask, r: Reply): string {
 }
 
 function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ended' | 'interrupted'): Outcome {
+  const terms = resolveTermsSpeech(s, p, act, reason);
+  if (terms) return terms;
   const dialogue = resolveDialogue(s, p, act, reason);
   if (dialogue) return dialogue;
   const broker = resolveBroker(s, p, act, reason);
@@ -1332,7 +1355,9 @@ function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ende
   if (act.targetId !== undefined) base.targetId = act.targetId;
   const span = Math.max(1, act.endsAt - act.startedAt);
   const progress = reason === 'interrupted' ? Math.max(0, Math.min(1, (now - act.startedAt) / span)) : 1;
-  const hours = (span * progress) / 60;
+  const help = helpWork(s, p, act);
+  if (help && workSeen(help, act)) return base;
+  const hours = help ? workHours(help, act, now) : (span * progress) / 60;
   const h = houseOfPerson(s, p.id);
   if (reason === 'interrupted') base.status = 'interrupted';
   if (roleActions(p.id).includes(act.action))
@@ -1357,7 +1382,8 @@ function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ende
       return { ...base, needs: { competence: 0.05 * progress, safety: 0.05 * progress } };
     }
     case 'reap-agha': {
-      const amt = Math.min(s.agha.standing, reapAmount(s, p, hours, !!act.protest));
+      const potential = reapAmount(s, p, hours, !!act.protest);
+      const amt = Math.min(s.agha.standing, potential);
       s.agha.standing -= amt;
       s.agha.reaped += amt;
       if (amt > 0) {
@@ -1369,13 +1395,14 @@ function resolveActivity(s: ValleyState, p: Person, act: Activity, reason: 'ende
       let material = 0;
       if (ask) {
         ask.hours[p.id] = (ask.hours[p.id] ?? 0) + hours;
-        if (ask.wage && h) {
+        if (ask.wage && h && !help) {
           const wage = amt * V.wageShare;
           s.agha.reaped -= wage;
           h.store += wage;
           material = wage;
         }
       }
+      if (help) recordHelpWork(s, help, p, act, reason, potential, amt, hours);
       const out: Outcome = { ...base, material };
       if (act.protest) out.quality = 0.5;
       return out;
@@ -1612,7 +1639,8 @@ export function advanceTo(s: ValleyState, to: number): SimEvent[] {
   while (s.minute < to) {
     const day = dayOfMinute(s.minute);
     const midnight = (day + 1) * DAY;
-    const stepTo = Math.min(to, midnight);
+    const stepTo = termsBoundary(s, Math.min(to, midnight));
+    termsHear(s);
     dialogueHear(s);
     const c = communityOf(s);
     const suggestions: Record<string, Suggestion | readonly Suggestion[]> = {};
@@ -1633,8 +1661,10 @@ export function advanceTo(s: ValleyState, to: number): SimEvent[] {
     for (const e of ev) if (e.kind === 'died' || e.kind === 'finish') events.push(e);
     dialogueHear(s);
     dialogueTick(s, stepTo, ev);
+    termsTick(s, stepTo);
     kahyaTo(s, stepTo);
     s.minute = stepTo;
+    termsTick(s);
     afterStep(s, ev);
     passTick(s);
     introductionTick(s);
@@ -2440,7 +2470,7 @@ export function call(
 
 export function insist(s: ValleyState, askId: string, pid: string): boolean {
   const ask = s.asks.find((a) => a.id === askId);
-  if (!ask || ask.closed || ask.insisted.includes(pid)) return false;
+  if (!ask || ask.closed || ask.insisted.includes(pid) || activeHelpFor(s, pid)) return false;
   ask.insisted.push(pid);
   const ph = houseOfPerson(s, pid);
   if (ph) actOn(s, ph.id, `pressed ${personOf(s, pid)?.name ?? 'them'}`);
@@ -2842,7 +2872,7 @@ function houseSpeaks(
 /** Walk to a house and sit with them. Returns the minute the kahya is back, or undefined if busy. */
 export function visit(s: ValleyState, hid: string, why: Knock['what'] | 'call' = 'call'): number | undefined {
   const h = houseOf(s, hid);
-  if (!h) return undefined;
+  if (!h || deliveryTripReserved(s)) return undefined;
   const ks = s.kahyaState;
   if (ks.visit && ks.visit.back > s.minute) return undefined;
   const walk = h.hamlet === 'upper' ? 75 : 20;
@@ -3139,4 +3169,11 @@ export function sayingsAt(s: ValleyState, h: Household): Saying[] {
   )
     out.push('rain');
   return out;
+}
+
+/** Only a new public help-end input uses the existing interruption queue. */
+export function interruptHelpWorker(s: ValleyState, pid: string, at: number) {
+  const c = communityOf(s);
+  if (!c.interrupts[pid] || c.interrupts[pid].at > at)
+    c.interrupts[pid] = { at, reason: 'the steward ended the remaining help request' };
 }

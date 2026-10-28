@@ -68,7 +68,7 @@ export function mountLab(options: RunControls): void {
     <button type="button" data-feedback>Feedback <span aria-hidden="true">▸</span></button>
     <button type="button" data-fullscreen>Full screen</button>
     <button type="button" data-new${FOREIGN_FILE ? ' hidden disabled' : ''}>New game</button>${FOREIGN_FILE ? '<button type="button" data-file-download>Download this Valley file</button><button type="button" data-file-open>Open another Valley file</button><button type="button" data-file-close>Close file session</button>' : ''}<span data-new-confirm hidden>Replace your saved game? <button type="button" data-confirm-new>Start new game</button><button type="button" data-cancel-new>Cancel</button></span>
-    <a href="https://human.adamwhite.work/games/" target="_top">All games</a><a href="https://human.adamwhite.work/lab/people/" target="_top">People between games</a></div>
+    <a href="https://human.adamwhite.work/games/" target="_top">All games</a><a href="https://human.adamwhite.work/lab/people/" target="_top">People across games</a></div>
     <footer class="menu-footer"><label><input type="checkbox" data-events> Recording</label><div class="menu-privacy-debug"><a href="https://human.adamwhite.work/lab/privacy/" target="_blank" rel="noopener">Lab privacy</a><details class="menu-debug"><summary>Debug</summary><div><button type="button" data-download>Download this run</button><button type="button" data-diagnostics${FOREIGN_FILE ? ' hidden disabled' : ''}>Named seed</button><a href="/file/">Open a Valley file</a><p data-debug-error hidden></p></div></details></div><button type="button" class="primary" data-resume>Resume</button></footer>
   </dialog>
   <dialog class="feedback-panel" aria-labelledby="valley-feedback-title">

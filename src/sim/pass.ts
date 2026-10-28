@@ -8,6 +8,7 @@ import type { AllianceState } from './alliance.ts';
 import { DAY, HOUR } from './calendar.ts';
 import { allianceEdition, passEdition } from './edition.ts';
 import { interruptStewardRoutine, stewardBusy } from './steward.ts';
+import { deliveryTripReserved } from './terms.ts';
 import { hasOfficeCard, note, V, type ValleyState } from './valley.ts';
 
 export interface PassState {
@@ -28,7 +29,7 @@ export interface PassState {
   };
 }
 export function passChoice(s: ValleyState, choice: 'depart' | 'buy' | 'deliver'): boolean {
-  if (!passEdition(s.edition?.id) || s.flags.ended) return false;
+  if (!passEdition(s.edition?.id) || s.flags.ended || deliveryTripReserved(s)) return false;
   if (s.stewardCare && hasOfficeCard(s)) return false;
   const p = s.pass;
   if (!p) return false;
