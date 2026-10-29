@@ -1,6 +1,6 @@
 # Valley HF 4.8 port — 2026-10-28
 
-Remaining: implement the public term on one Run, adopt client0.5.5 after its released Valley bindings receipt, prove native and game-log replay, obtain the PR's single hosted review, merge with exact green CI and deploy clean source. Adam accepts game feel separately. Technical delivery ends at an exact merged-commit, HF4.8.0, dirty:false release with public browser controls.
+Remaining: implement the public term on one Run, use released client0.5.6/kit0.5.24 and its public per-person write gate, prove native and game-log replay, obtain the PR's single hosted review, merge with exact green CI and deploy clean source. Adam accepts game feel separately. Technical delivery ends at an exact merged-commit, HF4.8.0, dirty:false release with public browser controls.
 
 ## Decisions
 
@@ -14,13 +14,13 @@ Read views come from public inspect with an explicit perspective. Forecasts use 
 
 1. Inventory old HF calls, direct reads/writes, cast identity and save consumers.
 2. Replace authoring and runtime routes with the Run API. Keep all public actions and household choice. Replace direct actor mutation with authored opening state or supported inputs.
-3. Adopt released client0.5.5 Valley bindings. Use client identity/ownership checks, retained-v2 projections, explicit reference/calendar mappings and actual departure responsibilities. Keep continuing people distinct from fresh starts.
+3. Use released client0.5.6/kit0.5.24 Valley bindings and the public portableWriteBlockers gate. Use client identity/ownership checks, retained-v2 projections, explicit reference/calendar mappings and actual departure responsibilities. Keep continuing people distinct from fresh starts.
 4. Prove a normal action and headless control, voluntary refusal, active-work and pending-boundary restore, read-only preview, exact HF replay and complete playtest-export replay. Keep replay-hash guards.
 5. Run frozen install, focused controls and check:lane before every signed commit. Hosted CI runs the full suite; local game work never takes the suite lock.
 6. Open one PR. Request one hosted @codex review. Fix its findings in that PR. Merge without --delete-branch and include the Codex trailer. Require exact merged CI before npm run deploy.
 7. Verify live release identity and public UI, stop owned processes by exact PID, remove owned worktree and merged local/origin branch, report final worktree list.
 
-The earlier G2 receipt remains historical evidence for client0.5.4. Recheck the coordinator every20minutes for `G2-ROLES client 0.5.5 released`; do not call an unreleased dependency usable. No HF source changes are in this brief.
+The earlier G2 receipt remains historical evidence for client0.5.4. Recheck the coordinator every20minutes for current release and gate receipts; do not call an unreleased dependency usable. No HF source changes are in this brief.
 
 ## Measured implementation decisions
 
@@ -37,3 +37,5 @@ Frozen departure/death archives already live in the complete game envelope. Brow
 The public world uses HF daily numerical fidelity, persisted in the community envelope and repeated through pending settlements. All faculties remain on. A matched seed7 control through720 measured13.620s/5,100,761 native bytes in fine mode and8.485s/5,108,569 bytes in daily mode. Both recorded224 transactions,53 active actors and the actual Zehra reply at570.00005. These are bounded local samples. A separate fine-mode no-input day measured50.678s and9,184,489 native bytes. Neither sample proves whole-term latency or bounded semantic retention; full-term readiness remains open.
 
 Removed legacy controls: PersonSpec.enable (including fatigueStore and per-person review switches), the routineDay/routineFor closed-form actor update, and direct post-admission actor mutation. Review style/time and prompting vocabulary are authored opening state. Every HF faculty remains active; native Run archives replace kernel snapshot/restore continuation. The declaration-only historical structural names contain no executable legacy runtime and expose no enable option.
+
+Missing family-completion queries use a persisted host book of actual accepted family receipts. The recent256-completion cap does not discard required older consent. Receipt staging and rejection rollback cover this book; a cold legacy community may rebuild it once from its supplied native archive. Eligibility queries do not export and scan complete native history.

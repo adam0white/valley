@@ -1,6 +1,21 @@
+import { vi } from 'vitest';
+
+const counter = vi.hoisted(() => ({ exports: 0 }));
+vi.mock('@adam0white/human-framework', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@adam0white/human-framework')>();
+  return {
+    ...actual,
+    exportRun: (...args: Parameters<typeof actual.exportRun>) => {
+      counter.exports++;
+      return actual.exportRun(...args);
+    },
+  };
+});
+
 import * as HF from '@adam0white/human-framework';
 import { describe, expect, it } from 'vitest';
 import {
+  archiveCommunity,
   bridgeAt,
   bridgeInput,
   bridgeKinEvidence,
@@ -29,9 +44,11 @@ import {
   courtshipStage,
   createPerson,
   invalidatePersonReads,
+  personFromAuthoring,
   type Suggestion,
   spousesOf,
 } from '../src/sim/hf-person.ts';
+import { required } from './required.ts';
 
 function family() {
   const father = createPerson({
@@ -51,6 +68,61 @@ function family() {
   return { father, mother, c: createCommunity([father, mother]) };
 }
 describe('HF4 lifecycle receipts', () => {
+  it('does not export the native archive for repeated missing guardian lookups', () => {
+    const { father, mother, c } = family();
+    counter.exports = 0;
+    for (let i = 0; i < 3; i++) {
+      c.ingress += 1;
+      canMarry(father, mother, undefined, { guardian: 'consented' });
+    }
+    expect(counter.exports).toBe(0);
+  });
+  it('retains an actual guardian receipt after recent completions and cold restore', () => {
+    const guardian = createPerson({ id: 'omer', name: 'Omer', seed: 7, sex: 'male', bornAt: -30 * 525600 });
+    const c = createCommunity([guardian]);
+    let approval = true;
+    const world: World = {
+      now: () => 0,
+      affordancesFor: () => [
+        {
+          id: approval ? 'approve' : 'rest',
+          action: approval ? 'approve-match' : 'rest',
+          label: approval ? 'Approve' : 'Rest',
+          duration: 1,
+          effort: 0,
+          advertises: { leisure: 0.2, belonging: 0.2 },
+        },
+      ],
+      perceptsFor: () => [],
+      scarcityFor: () => 0,
+      beginOptions: () => undefined,
+      resolve: (_p, a, reason) => {
+        if (a.action === 'approve-match' && reason === 'ended') approval = false;
+        return {
+          at: a.endsAt,
+          action: a.action,
+          affordanceId: a.affordanceId,
+          status: reason === 'ended' ? 'completed' : 'interrupted',
+        };
+      },
+    };
+    for (let minute = 1; minute <= 270; minute++) stepCommunity(c, world, minute);
+    expect(c.completed?.length).toBe(256);
+    expect(c.completed?.some((r) => r.activity.action === 'approve-match')).toBe(false);
+    const state = archiveCommunity(c);
+    const approvalReceipt = state.familyCompleted?.find((r) => r.activity.action === 'approve-match');
+    expect(approvalReceipt?.evidenceId).toMatch(/^outcome:/);
+    const restoredPerson = personFromAuthoring(required(required(state.archive).initial.people[0]));
+    const restored = createCommunity([restoredPerson], JSON.parse(JSON.stringify(state)));
+    expect(restored.familyCompleted).toEqual(state.familyCompleted);
+    const legacy = JSON.parse(JSON.stringify(state));
+    delete legacy.familyCompleted;
+    const coldPerson = personFromAuthoring(legacy.archive.initial.people[0]);
+    const cold = createCommunity([coldPerson], legacy);
+    expect(cold.familyCompleted?.find((r) => r.activity.action === 'approve-match')?.evidenceId).toBe(
+      approvalReceipt?.evidenceId,
+    );
+  });
   it('keeps real alternatives through completed meetings, proposal, engagement and both confirmations', () => {
     const person = (id: string, sex: 'male' | 'female') =>
       createPerson({

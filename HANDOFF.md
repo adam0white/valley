@@ -1,6 +1,6 @@
 # HF4 port handoff — 2026-10-28
 
-Remaining: clear the G6/G7 runtime/archive workload gate and compatible shared-write client/kit dependency, then complete whole-game proofs, lane, the PR’s single hosted review, exact merged CI and clean deployment. Recheck dependencies2026-11-03. Candidate pins HF4.8.0/client0.5.5/kit0.5.23. G2 roles released; see [the receipt](docs/hf4-port-status.md) and [port plan](docs/hf4-port-plan.md). Old saves may be explicitly refused. Complete native and game-log replay remain required. Adam accepts feel separately. The previous HF3 release remains production until delivery.
+Remaining: clear the runtime/archive workload gate after the family-receipt fix, then complete whole-game proofs, lane, the PR’s single hosted review, exact merged CI and clean deployment. Recheck dependencies2026-11-03. Candidate pins HF4.8.0/client0.5.6/kit0.5.24. Current lane58/58/lint/types and build pass; source/runtime workload and hosted full CI remain release gates. G2 roles released; see [the receipt](docs/hf4-port-status.md) and [port plan](docs/hf4-port-plan.md). Old saves may be explicitly refused. Complete native and game-log replay remain required. Adam accepts feel separately. The previous HF3 release remains production until delivery.
 
 # Valley handoff
 

@@ -1,4 +1,5 @@
 import { exportRun, step as nativeStep, preview, replay } from '@adam0white/human-framework';
+import { type PersonaRequest, portableWriteBlockers, projectPortablePerson } from '@adam0white/lab-client';
 import { describe, expect, it } from 'vitest';
 import { CAST_IDS } from '../src/sim/cast.ts';
 import { act, fingerprint, newGame, save, step } from '../src/sim/game.ts';
@@ -15,6 +16,7 @@ import {
 } from '../src/sim/hf.ts';
 import { createPerson, personFromAuthoring, personRun, portableFromPerson } from '../src/sim/hf-person.ts';
 import { checkpointTransfer } from '../src/sim/passport.ts';
+import { CastSession, type Shelf } from '../src/ui/cast-session.ts';
 import { required } from './required.ts';
 
 function opening() {
@@ -209,6 +211,48 @@ it('does not publish a physical result when HF rejects its receipt', () => {
   expect(a.community.active.worker?.activity.action).toBe('reap');
 });
 
+it('does not publish a family completion when HF rejects its receipt', () => {
+  const a = opening();
+  const guardian = createPerson({ id: 'omer', name: 'Omer', seed: 7, sex: 'male', bornAt: -30 * 525600 });
+  const c = createCommunity([guardian]);
+  const familyWorld: World = {
+    ...a.world,
+    stage: undefined,
+    affordancesFor: () => [
+      {
+        id: 'approval',
+        action: 'approve-match',
+        label: 'Approve',
+        duration: 10,
+        effort: 0,
+        advertises: { belonging: 0.2, leisure: 0.2 },
+      },
+    ],
+  };
+  for (let minute = 1; minute <= 30 && !c.active.omer; minute++) stepCommunity(c, familyWorld, minute);
+  expect(c.active.omer?.activity.action).toBe('approve-match');
+  const endsAt = required(c.active.omer).activity.endsAt;
+  c.world = {
+    ...familyWorld,
+    stage: () => ({
+      world: {
+        ...familyWorld,
+        resolve: (_p, act) => ({
+          at: act.endsAt,
+          action: act.action,
+          affordanceId: act.affordanceId,
+          status: 'completed',
+          needs: { meaning: NaN },
+        }),
+      },
+      publish: () => {},
+    }),
+  };
+  expect(() => serve(c, endsAt * 60000)).toThrow();
+  expect(c.familyCompleted ?? []).toEqual([]);
+  expect(c.active.omer?.activity.action).toBe('approve-match');
+});
+
 it('discards staged conversation and lifecycle inputs when a resolver receipt is rejected', () => {
   const people = ['speaker', 'listener'].map((id) =>
     createPerson({ id, name: id, sex: 'female', seed: 1, bornAt: -30 * 525600 }),
@@ -390,6 +434,19 @@ it('releases five actual public visitors at accepted quiet boundaries and freeze
     const archive = exportRun(required(personRun(p)));
     const projection = portableFromPerson(p, required(CAST_IDS[id]), 'source-test');
     expect(projection.person.version).toBe(2);
+    const peers = portableWriteBlockers(required(CAST_IDS[id]), 'valley');
+    if (peers.length) {
+      expect(() =>
+        projectPortablePerson({
+          castId: required(CAST_IDS[id]),
+          game: 'valley',
+          engine: '4.8.0',
+          person: { id },
+          history: [],
+        }),
+      ).toThrow('read-only until');
+      expect(exportRun(required(personRun(p)))).toEqual(archive);
+    }
     const checkpoint = await checkpointTransfer(p, required(CAST_IDS[id]), {
       game: 'valley',
       build: 'test',
@@ -410,6 +467,48 @@ it('releases five actual public visitors at accepted quiet boundaries and freeze
     expect(personRun(p)).not.toBe(personRun(game.valley.kahya));
     expect(main.current.offers[id]?.offers).toEqual([]);
   }
+}, 120000);
+
+it('refuses shared checkpoint writes for actual released visitors', async () => {
+  const game = newGame(7, undefined, false, true, 'valley-public-2026-10');
+  const ids = ['maryam', 'yusuf-usta', 'meryem-visitor', 'samira', 'danyal'];
+  for (const person of ids) expect(act(game, { verb: 'release-cast', person })).toBe(true);
+  step(game, 480);
+  const hashes = new Map(
+    ids.map((id) => [
+      id,
+      exportRun(required(personRun(required(game.valley.castReleased?.[id])))).hashes.full,
+    ]),
+  );
+  let writes = 0;
+  const shelf: Shelf = {
+    ready: Promise.resolve(true),
+    enabled: true,
+    setEnabled() {},
+    async request<T>(_request: PersonaRequest): Promise<T> {
+      writes++;
+      return true as T;
+    },
+  };
+  const session = new CastSession(
+    {
+      setPersonaRecording() {},
+      allowPersonaRecording() {},
+      personaRecordingAllowed: false,
+      build: () => ({}),
+    },
+    shelf,
+  );
+  session.game = game;
+  const beforeHeads = structuredClone(session.heads);
+  await session.checkpoint(true);
+  expect(writes).toBe(0);
+  expect(session.heads).toEqual(beforeHeads);
+  expect(session.status).toContain('read-only until');
+  for (const id of ids)
+    expect(exportRun(required(personRun(required(game.valley.castReleased?.[id])))).hashes.full).toBe(
+      hashes.get(id),
+    );
 }, 120000);
 
 it('preserves authored pay, risk, skill, capacities, forecast and actual outcome evidence at the public boundary', () => {

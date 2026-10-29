@@ -1,14 +1,16 @@
-# Valley HF4 port status — 2026-10-28
+# Valley HF4 port status — 2026-10-29
 
-Remaining: clear the measured G6/G7 runtime/archive gate and obtain a compatible client/kit for the public shared-write gate, then finish whole-game proofs, lane, hosted review, exact merged CI and clean deployment. Candidate pins are HF4.8.0/client0.5.5/kit0.5.23. Production remains the earlier HF3 release until delivery. Adam accepts feel separately.
+Remaining: clear the runtime/archive gate after the family-receipt fix, then finish whole-game proofs, lane, hosted review, exact merged CI and clean deployment. Candidate pins are HF4.8.0/client0.5.6/kit0.5.24. Production remains the earlier HF3 release until delivery. Adam accepts feel separately.
 
 ## G2: role dependency closed on2026-10-28
 
 [Client0.5.5](https://github.com/adam0white/human-framework/releases/tag/lab-client-v0.5.5) and [kit0.5.23](https://github.com/adam0white/human-framework/releases/tag/lab-kit-v0.5.23) are released from PR57/cd9d689 with exact green merged CI. Valley downloaded both immutable artifacts and verified their SHA256 values before a lockfile-only and frozen install. Client SHA256: `0faa3e3ea003c297a6b06fcac6eeca1bddebdeaa8d5fb6746f06cf830775753f`. Kit SHA256: `658a33d03a707c2978381b2600d2c4ee811e3053411566f6de927c8e211acbff`. Roles now bind the six actual Valley IDs, including `yusuf-usta` and `meryem-visitor`. This closes the missing-role dependency; it does not certify a whole game journey.
 
-## Shared-write dependency
+## Released shared-write gate — 2026-10-29
 
-Client 0.5.6 supplies the public shared-write gate, but the released kit 0.5.23 peer range ends at client 0.5.5. Kit 0.5.24 is not released. The current strict-peer stack refuses nonempty arrival claims, checkpoints, terminal writes and alternatives; empty batch acknowledgment and local/file play remain available. Adopt the released compatible client and kit together, then use the client gate. Recheck by 2026-11-03.
+Client0.5.6 and kit0.5.24 are adopted with HF4.8.0. The kit's strict peer range explicitly includes0.5.6. Official SHA256 values match the downloaded artifacts: client `5a53bac1f0b5d236caed06d8a18c9089e0059b531eff1b9ae1b0e99162f72482`; kit `0754b7a7663d64cbab2b69e7a31a164d2a3178c82ff140682be2ceff49651b6a`. Both signed tags verify; the client's detached checksum signature also verifies. The kit has no detached checksum-signature asset. Lockfile-only and frozen install pass.
+
+The actual public portableWriteBlockers gate supplies named per-person refusals/skips before shared projection or arrival writes. Unverified peers keep that person read-only. The host covers ordinary checkpoints, terminal closure and alternatives; blocked nonempty arrivals preserve the entire previous game. Empty acknowledgments and local/files/reads remain available. No copied policy, peer override or fake live certification is used. This intentionally closed policy is not a missing-role dependency or proof that all peers are ready.
 
 ## Historical client0.5.4 refusal
 
@@ -56,3 +58,9 @@ The existing day-12 export control targets minute 17550 and runs under a 120-sec
 The relevant published needs are **G6 (step cost/archive)** and **G7 (cheaper larger daily step)** in human-framework docs/hf4-game-needs.md. G16 semantic retention is separate. Recheck the released runtime and compatible client/kit on **2026-11-03**. A complete881-day public term and exact day-12 export replay remain unproved. Do not shorten the term, drop people/faculties, raise the test deadline, or deploy this candidate as a complete port. No HF source was edited.
 
 Short current-pin native replay, full/compact restore, independent input reconstruction, corruption refusal and continued-state equality pass. The receipt regression also proves that a rejected resolver receipt discards its staged conversation and lifecycle inputs while preserving prior deferred inputs, active work and the unpublished host world. These bounded proofs do not close the workload gate.
+
+Correction2026-10-29: a later source audit found that a missing family-completion lookup still calls public exportRun and scans full history after frame changes, including repeated guardian eligibility queries before an approval exists. The profile's HF self-time does not establish a framework-only cause: this host call triggers cold HF export work. It now uses a staged/persisted book of actual accepted family receipts. The post-fix workload result below records the remaining gate; the earlier profile still does not establish a framework-only cause.
+
+After the persisted family-receipt fix, the same seed406153184/day12 daily workload again reached the120-second bound: minute1440 at23.677s/11,134,499nativebytes; minute2880 at104.443s/21,897,901bytes/one accepted input. No concurrent Valley tests or package installation ran; all recorded source hashes stayed equal. Other repositories shared the machine. The workload used client0.5.5 before the compatible pair was published; HF4.8/core source are unchanged by the subsequent client/kit adoption. This is a source-bound prefix, not an isolated before/after speed ratio, day-12 fingerprint or881-day-term result. The host cold-export regression is closed (three missing queries: three exports before, zero after); remaining workload/archive readiness still needs the G6/G7 gate.
+
+Final current-pair check:lane passes58tests/12files plus lint/types in170.09s, with two local workers and unchanged120s test deadlines. Build passes. Native replay and its pinned hash remain exact. Actual five-visitor release/day1, SDK projector refusal with unchanged frozen source, and a separate actual manual checkpoint/no-write control pass. A real accepted-HF-death component verifies terminal gating with a stubbed whole-game publication guard; it is not a complete played Valley death result. Automatic blocked checkpoints perform zero whole-game replay validations; manual source refusal remains covered.

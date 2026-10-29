@@ -66,18 +66,22 @@ function submit(c: Community, payload: Lifecycle, minutes: number): void {
   bridgeDefer(c, 'lifecycle.received', payload, minutes);
 }
 
-const receiptCache = new WeakMap<HF.Run, { key: string; receipts: Completion[] }>();
 function frameKey(c: Community, time: number): string {
   return `${Math.round(time * MS)}:${c.ingress}:${c.next}:${c.revision ?? 0}`;
 }
-function receipts(c: Community): Completion[] {
-  const retained = ((c.staging ?? c) as Community & { completed?: Completion[] }).completed ?? [];
-  if (!c.run) return retained;
-  const key = frameKey(c, c.people[0]?.now ?? c.ingress / MS);
-  const cached = receiptCache.get(c.run);
-  if (cached?.key === key) return cached.receipts;
-  const archive = HF.exportRun(c.run),
-    offers = new Map<string, HF.DeepReadonly<HF.Offer>>(),
+export const FAMILY_ACTIONS = new Set([
+  'court',
+  'attend-introduction',
+  'propose',
+  'accept-proposal',
+  'decline-proposal',
+  'approve-match',
+  'withhold-match',
+  'witness-marriage',
+]);
+/** Rebuild legacy host receipts once from the supplied archive. */
+export function familyReceiptsFromArchive(archive: HF.DeepReadonly<HF.RunArchive>): Completion[] {
+  const offers = new Map<string, HF.DeepReadonly<HF.Offer>>(),
     activities = new Map<string, HF.DeepReadonly<HF.Offer>>();
   const projected: Completion[] = [];
   for (const transaction of archive.history) {
@@ -88,19 +92,7 @@ function receipts(c: Community): Completion[] {
       if (input.kind === 'action.resolved' && input.payload.outcome?.status === 'completed') {
         const out = input.payload.outcome,
           offer = activities.get(input.payload.activityId);
-        if (
-          offer &&
-          [
-            'court',
-            'attend-introduction',
-            'propose',
-            'accept-proposal',
-            'decline-proposal',
-            'approve-match',
-            'withhold-match',
-            'witness-marriage',
-          ].includes(offer.actionId)
-        )
+        if (offer && FAMILY_ACTIONS.has(offer.actionId))
           projected.push({
             person: input.payload.person,
             evidenceId: out.evidenceId,
@@ -123,10 +115,7 @@ function receipts(c: Community): Completion[] {
           if (offer) activities.set(request.activityId, offer);
         }
   }
-  const seen = new Set(projected.map((r) => r.evidenceId));
-  const result = [...projected, ...retained.filter((r) => !seen.has(r.evidenceId))];
-  receiptCache.set(c.run, { key, receipts: result });
-  return result;
+  return projected;
 }
 function completed(c: Community, person: string, action: string, other?: string): Completion | undefined {
   const matches = (r: Completion) =>
@@ -134,7 +123,7 @@ function completed(c: Community, person: string, action: string, other?: string)
     r.activity.action === action &&
     (other === undefined || r.activity.targetId === other || r.activity.affordance.with?.includes(other));
   const recent = (c.staging ?? c).completed?.findLast(matches);
-  return recent ?? receipts(c).findLast(matches);
+  return recent ?? (c.staging ?? c).familyCompleted?.findLast(matches);
 }
 export function marry(
   a: Person,

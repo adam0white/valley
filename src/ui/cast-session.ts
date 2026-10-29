@@ -12,12 +12,14 @@ import {
   createPersona,
   initialPersonaLife,
   type Lab,
+  type LifeBatchPreparation,
   PERSONA_ORIGINS,
   type PersonaEnvelope,
   type PersonaLife,
   type PersonaRequest,
   personaChannel,
   portablePersonRole,
+  portableWriteBlockers,
   validatePersona,
   watchPersonaCheckpoint,
 } from '@adam0white/lab-client';
@@ -56,11 +58,11 @@ export interface Shelf {
   setEnabled(value: boolean): void;
   request<T>(request: PersonaRequest): Promise<T>;
 }
-// Client 0.5.5 cannot certify the shared-write capability introduced in 0.5.6.
-const sharedWriteRefusal =
-  'This version cannot move continuing people between games. Keep or download this game.';
-function requireSharedWriteCapability(): void {
-  throw new Error(sharedWriteRefusal);
+function writeBlocker(castId: string): string | undefined {
+  const peers = portableWriteBlockers(castId, 'valley');
+  return peers.length
+    ? `${canonicalCast(castId).name}: read-only until ${peers.join(', ')} supports safe shared writes.`
+    : undefined;
 }
 export class CastSession {
   generation = 0;
@@ -121,9 +123,17 @@ export class CastSession {
         setEnabled(value) {
           shelf.setEnabled(value);
         },
-        request<T>(request: PersonaRequest): Promise<T> {
-          if (request.action === 'putBatch' && request.envelopes?.length) requireSharedWriteCapability();
-          return shelf.request<T>(request);
+        async request<T>(request: PersonaRequest): Promise<T> {
+          const result = await shelf.request<T>(request);
+          if (request.action === 'prepareBatch') {
+            const batch = result as LifeBatchPreparation;
+            const reasons = [
+              ...batch.inputs.map((entry) => writeBlocker(entry.parent.castId)).filter(Boolean),
+              ...batch.blocked.map((entry) => `${canonicalCast(entry.castId).name}: ${entry.reason}`),
+            ];
+            if (reasons.length) throw new Error(`${reasons.join(' ')} Keep the current game.`);
+          }
+          return result;
         },
       };
       const chapter = await claimCastChapterBatch(
@@ -336,16 +346,22 @@ export class CastSession {
     const generation = this.generation;
     const g = this.game;
     try {
-      requireSharedWriteCapability();
-      this.publicationGuard(g);
+      const blocked: string[] = [];
       for (const c of ALLOCATION) {
-        const stillCurrent = this.publicationGuard(g);
         const id = localRole(c.castId);
         const parent = this.heads[c.castId];
         if ((this.fileOrigin || this.localOnly) && !parent) continue;
         const dead = g.valley.castDeaths?.[id];
         if (parent?.terminal) continue;
+        if ((dead && parent) || g.valley.castReleased?.[id]) {
+          const reason = writeBlocker(c.castId);
+          if (reason) {
+            blocked.push(reason);
+            continue;
+          }
+        }
         if (dead && parent) {
+          const stillCurrent = this.publicationGuard(g);
           const terminal = await closePersonaBranch(parent, this.stamps(), Math.round(dead.now * 60000));
           const native = nativeSource(dead);
           await validateTerminalSource(native, terminal);
@@ -370,6 +386,7 @@ export class CastSession {
           (parent.transfer.checkpoint as { at?: number } | undefined)?.at === Math.round(raw.now * 60000)
         )
           continue;
+        const stillCurrent = this.publicationGuard(g);
         const prepared = await checkpointTransfer(
           raw,
           c.castId,
@@ -422,6 +439,7 @@ export class CastSession {
         this.saveLocal?.();
         await this.queryRecording();
       }
+      if (blocked.length) this.status = `${blocked.join(' ')} Keep or download this game.`;
     } catch (error) {
       if (generation !== this.generation) return;
       this.failedCheckpoint = true;
@@ -443,7 +461,8 @@ export class CastSession {
       const c = ALLOCATION.find((p) => p.castId === castId);
       if (!g || !c || !this.shelf.enabled)
         throw new Error('Open a game you have played and turn on continuing people in this browser first.');
-      requireSharedWriteCapability();
+      const reason = writeBlocker(castId);
+      if (reason) throw new Error(reason);
       const stillCurrent = this.publicationGuard(g);
       const raw = g.valley.castReleased?.[localRole(castId)];
       if (!raw?.body.alive || raw.activity)

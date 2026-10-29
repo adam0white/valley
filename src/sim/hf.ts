@@ -1,6 +1,6 @@
 /** Valley's HF4 host boundary. This module translates minutes once. HF owns all actor changes. */
 import * as HF from '@adam0white/human-framework';
-import { initialKin, MUSLIM_CUSTOM_DATA } from './hf-lifecycle.ts';
+import { FAMILY_ACTIONS, familyReceiptsFromArchive, initialKin, MUSLIM_CUSTOM_DATA } from './hf-lifecycle.ts';
 import type {
   Activity,
   Affordance,
@@ -51,6 +51,7 @@ export interface CommunityState {
   seed?: number;
   glimpses?: Array<{ observer: string; target: string; at: number; clarity: number }>;
   completed?: Array<{ person: string; activity: Activity; evidenceId: string; endedAt: number }>;
+  familyCompleted?: Array<{ person: string; activity: Activity; evidenceId: string; endedAt: number }>;
   archive?: HF.DeepReadonly<HF.RunArchive>;
   ingress: number;
   next: number;
@@ -292,6 +293,11 @@ export function createCommunity(people: Person[], state?: CommunityState): Commu
     suggestions: { ...state?.suggestions },
     seed: state?.seed ?? 1,
     completed: structuredClone(state?.completed ?? []),
+    ...(state?.familyCompleted
+      ? { familyCompleted: structuredClone(state.familyCompleted) }
+      : state?.archive
+        ? { familyCompleted: familyReceiptsFromArchive(state.archive) }
+        : {}),
     people,
     interrupts: { ...state?.interrupts },
     ingress: state?.ingress ?? -1,
@@ -337,6 +343,7 @@ export function archiveCommunity(c: Community): CommunityState {
     suggestions: { ...c.suggestions },
     seed: c.seed,
     completed: structuredClone(c.completed),
+    ...(c.familyCompleted?.length ? { familyCompleted: structuredClone(c.familyCompleted) } : {}),
     interrupts: { ...c.interrupts },
     archive: c.run ? HF.exportRun(c.run) : undefined,
     ingress: c.ingress,
@@ -582,6 +589,10 @@ function receipt(c: Community, r: HF.DeepReadonly<HF.HostRequest>): HF.Input {
   if (pendingCompletion) {
     c.completed ??= [];
     c.completed.push(pendingCompletion);
+    if (FAMILY_ACTIONS.has(a.activity.action)) {
+      c.familyCompleted ??= [];
+      c.familyCompleted.push(pendingCompletion);
+    }
   }
   const out = c.world?.resolve(p, a.activity, r.stage === 'interrupt' ? 'interrupted' : 'ended') ?? {
     at: r.boundaryAt / MS,
@@ -616,7 +627,10 @@ function receipt(c: Community, r: HF.DeepReadonly<HF.HostRequest>): HF.Input {
     c.places[p.id] = place;
   }
   delete c.active[p.id];
-  if (pendingCompletion && out.status !== 'completed') c.completed?.pop();
+  if (pendingCompletion && out.status !== 'completed') {
+    c.completed?.pop();
+    if (FAMILY_ACTIONS.has(a.activity.action)) c.familyCompleted?.pop();
+  }
   if ((c.completed?.length ?? 0) > 256) c.completed?.shift();
   const needs = out.needs ?? {};
   const { food, water, relief: _relief, rest: _rest, sleep: _sleep, ...psychological } = needs;
@@ -727,6 +741,7 @@ export function serve(c: Community, until: number, inputs: HF.Input[] = []): HF.
       c.active = candidate.active;
       c.places = candidate.places;
       c.completed = candidate.completed;
+      c.familyCompleted = candidate.familyCompleted;
       c.deferred = candidate.deferred;
       c.next = candidate.next;
       c.revision = candidate.revision;
@@ -793,6 +808,7 @@ export function serve(c: Community, until: number, inputs: HF.Input[] = []): HF.
       active: structuredClone(c.active),
       places: { ...c.places },
       completed: structuredClone(c.completed),
+      familyCompleted: structuredClone(c.familyCompleted),
       deferred: structuredClone(c.deferred ?? []),
       world: stagedWorld?.world ?? c.world,
       revision: c.revision ?? 0,

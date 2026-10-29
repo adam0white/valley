@@ -1,4 +1,4 @@
-import { createPerson, createRun, inspect } from '@adam0white/human-framework';
+import { createPerson, createRun, exportRun, inspect } from '@adam0white/human-framework';
 import {
   acceptPersona,
   acceptPersonaBatch,
@@ -15,6 +15,7 @@ import { ALLOCATION } from '../src/sim/cast.ts';
 import { PUBLIC_EDITION } from '../src/sim/edition.ts';
 import { CastSession, type Shelf } from '../src/ui/cast-session.ts';
 import { authoredPerson, exampleSpec, MINUTE, need, START } from './hf-fixture.ts';
+import { required } from './required.ts';
 
 async function source() {
   const cast = canonicalCast('hf.cast.yusuf.well');
@@ -87,6 +88,10 @@ function shelfFor(parent: PersonaEnvelope, conflict = false) {
           inputs: [preparePersonaLife(parent, 0)],
           blocked: [],
         } as T;
+      if (request.action === 'put') {
+        writes++;
+        throw new Error('Unexpected shared write');
+      }
       if (request.action === 'putBatch') {
         writes++;
         if (conflict) throw new Error('The source head changed.');
@@ -103,23 +108,75 @@ it('refuses nonempty arrival writes without replacing the current game', async (
   const fixture = shelfFor(parent);
   const session = new CastSession(lab(), fixture.shelf);
   const previous = await session.fresh(6, true, PUBLIC_EDITION);
-  await expect(session.fresh(7, false, PUBLIC_EDITION)).rejects.toThrow('cannot move continuing people');
+  await expect(session.fresh(7, false, PUBLIC_EDITION)).rejects.toThrow('Yusuf: read-only until');
   expect(fixture.writes()).toBe(0);
   expect(session.game).toBe(previous);
   expect(fixture.state().heads[parent.castId]).toBe(parent.revision);
 });
 
-it('refuses checkpoint, terminal and alternative shared writes', async () => {
+it('refuses alternative shared writes for the named blocked person', async () => {
   const parent = await source();
   const fixture = shelfFor(parent);
   const session = new CastSession(lab(), fixture.shelf);
   await session.fresh(7, true, PUBLIC_EDITION);
   session.heads[parent.castId] = parent;
-  await session.checkpoint(true);
-  expect(session.status).toContain('cannot move continuing people');
   await session.alternative(parent.castId);
-  expect(session.status).toContain('cannot move continuing people');
+  expect(session.status).toContain('Yusuf: read-only until');
   expect(fixture.writes()).toBe(0);
+});
+
+it('blocks the terminal write for a genuinely deceased HF person', async () => {
+  const { bridgeAt, bridgeInput, createCommunity, createPerson, serve } = await import('../src/sim/hf.ts');
+  const { frozenPerson, personRun } = await import('../src/sim/hf-person.ts');
+  const { newGame } = await import('../src/sim/game.ts');
+  const dead = createPerson({ id: 'yusuf', name: 'Yusuf', seed: 1, now: 0, bornAt: -10000000, sex: 'male' });
+  const listener = createPerson({
+    id: 'listener',
+    name: 'Listener',
+    seed: 2,
+    now: 0,
+    bornAt: -10000000,
+    sex: 'female',
+  });
+  const community = createCommunity([dead, listener]);
+  const stamp = bridgeAt(community, 60);
+  serve(community, stamp, [
+    bridgeInput(
+      community,
+      'lifecycle.received',
+      {
+        type: 'death',
+        person: { kind: 'actor', id: dead.id },
+        basis: { evidence: { kind: 'evidence', id: 'death-at-60' }, worldRevision: community.revision ?? 0 },
+      },
+      stamp,
+    ),
+  ]);
+  expect(dead.body.alive).toBe(false);
+  const frozen = frozenPerson(dead);
+  const archive = exportRun(required(personRun(frozen)));
+  const parent = await source();
+  const fixture = shelfFor(parent);
+  const session = new CastSession(lab(), fixture.shelf);
+  const game = newGame(7, undefined, false, true, PUBLIC_EDITION);
+  game.valley.castDeaths = { yusuf: frozen };
+  session.game = game;
+  session.heads[parent.castId] = parent;
+  // This component fixture is not a replayable Valley death; isolate the write gate.
+  let validations = 0;
+  (session as unknown as { publicationGuard: () => () => void }).publicationGuard = () => {
+    validations++;
+    return () => {};
+  };
+  await session.checkpoint();
+  expect(validations).toBe(0);
+  await session.checkpoint(true);
+  expect(validations).toBe(1);
+  expect(session.status).toContain('Yusuf: read-only until');
+  expect(fixture.writes()).toBe(0);
+  expect(session.heads[parent.castId]).toEqual(parent);
+  expect(session.heads[parent.castId]?.terminal).toBeUndefined();
+  expect(exportRun(required(personRun(frozen)))).toEqual(archive);
 });
 
 it('allows an empty arrival acknowledgment', async () => {
