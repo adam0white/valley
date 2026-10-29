@@ -743,3 +743,14 @@ qualified. Root's independent review, signed source, exact CI and delivery remai
 Adam accepts feel on2026-11-03. No player/panel/retest/model/provider call is evidence.
 
 Received words and food/work terms have no reviewed continuing-person mapping in valley-cast/1. Native full source regeneration remains authority. Publishing either kind refuses before any envelope/shelf/source/head write, including an explicit alternative. The complete native game remains downloadable. Source/ownership/file-origin changes during publication awaits also refuse. This is a host-specific unsupported-dialect boundary, not a feature switch or a new HF faculty.
+
+
+## HF4 runtime and archive budget — 2026-10-29
+
+Valley stays on HF **3.0.0**. The HF4 port is not delivered. The original public workload keeps all 58 people, the recorded owner-input schedule, the 881-day term, and its unchanged 120-second day-12 gate. Published HF 4.9 failed that gate before the first fingerprint assertion. Its completed day-one control took 25,834.17 ms, or 229,677.82 ms per elapsed game year per initially authored person: about 3.6 times the day-12 allowance. The earlier harness printed 53 people; retained native archives establish 58, and the normalized rate is corrected.
+
+The HF 4.10 candidate journal changes recurring writes, but does not make the term fit. At minute 2,880 it retained a 328,231-byte opening plus 5,505,903 bytes of chunks; complete HF native history was 10,953,398 bytes. New chunk exports took 7.70, 179.55 and 584.21 ms over different checkpoint spans. Cold journal recovery took 122,513.67 ms, then matched complete native JSON and HF hash and continued exactly for 30 minutes. All inputs remain; the cursor exists only in memory, so reopening replays the complete prefix. Sampled history growth is about 2.75 MB per game day. This is not an 881-day measurement, a flat total autosave cost, a successful published 4.10 port or bounded semantic retention.
+
+The coordinator stopped further tuning. Recheck Valley and Child on **2026-11-24**. The next proposed lever is a daily clock for people outside the player's view, with all faculties retained; its first measured keep/refuse experiment is dated **2026-11-03** in the HF roadmap. No actor, faculty, horizon or deadline was cut to claim success.
+
+The unmerged native-port and journal-storage candidate is preserved at `f23237582689945a0a50aeb811b524d8481d01de` plus the complete `~/code/.lab-scratch/stale-patches/valley-g7-perf.diff`, `.untracked.tar.gz`, `.bundle` and `.inventory.json`. G7's raw evidence and profiles remain under `~/code/.lab-scratch/codex/g7-perf-proof/`. This PR records the blocker on the current HF3 tree; it does not deploy the preserved port.
