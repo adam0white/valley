@@ -6,6 +6,9 @@
  * No new actor, norm, private preference edit, compatibility display or missing guardian
  * interpretation. Research: released partnering SCOPE; research/marriage-sources.md1–6/10.
  */
+
+import { DAY, HOUR } from './calendar.ts';
+import { allianceEdition } from './edition.ts';
 import {
   type Activity,
   type Affordance,
@@ -16,12 +19,11 @@ import {
   marry,
   type Outcome,
   type Person,
+  prepareKinScope,
   proposalOffers,
   proposeOffer,
   type Suggestion,
-} from '@adam0white/human-framework';
-import { DAY, HOUR } from './calendar.ts';
-import { allianceEdition } from './edition.ts';
+} from './hf.ts';
 import {
   INTRO_CUSTOM,
   INTRO_IDS,
@@ -51,6 +53,7 @@ export interface BrokeringState {
   invitations: IntroductionState[];
   decisions: { at: number; person: string; action: string; round: number }[];
   ceremony: Record<string, { start: number; end: number; action: string }>;
+  pendingEngagement?: { at: number };
   giftEscrow: number;
   gift?: { person: string; grain: number; at: number };
 }
@@ -191,7 +194,10 @@ export function brokerOffers(s: ValleyState, p: Person, at: number): Affordance[
       },
     ];
   if (b.phase === 'proposal' && p.id === 'ali') {
-    const offer = proposeOffer(p, woman, { guardian: 'consented', lookup: (pid) => personOf(s, pid) });
+    const offer = proposeOffer(p, woman, {
+      guardian: 'consented',
+      lookup: (pid: string) => personOf(s, pid),
+    });
     // A supervised message is carried at this visit, not a joint activity before assent.
     delete offer.with;
     return [{ ...offer, id: `${id}propose`, duration: 2 * HOUR, placeId: 'house:kuyucu' }];
@@ -202,7 +208,7 @@ export function brokerOffers(s: ValleyState, p: Person, at: number): Affordance[
   ) {
     return proposalOffers(p, p.id === 'ali' ? woman : man, {
       guardian: 'consented',
-      lookup: (pid) => personOf(s, pid),
+      lookup: (pid: string) => personOf(s, pid),
     }).map((offer, index) => ({
       ...offer,
       id: `${id}${index ? 'decline' : 'accept'}`,
@@ -285,8 +291,7 @@ export function resolveBroker(
     a.startedAt < b.from ||
     reason !== 'ended' ||
     a.endsAt > p.now ||
-    p.now > b.until ||
-    !introductionEligible(s)
+    p.now > b.until
   )
     return out;
   b.decisions.push({ at: p.now, person: p.id, action: a.action, round: b.round });
@@ -317,24 +322,7 @@ export function resolveBroker(
     a.action === 'accept-proposal' &&
     b.guardian?.stance === 'approved'
   ) {
-    const man = personOf(s, 'ali');
-    const woman = personOf(s, 'esma');
-    if (
-      man &&
-      woman &&
-      canMarry(man, woman, INTRO_CUSTOM, {
-        at: p.now,
-        guardian: 'consented',
-        lookup: (pid) => personOf(s, pid),
-      }).ok
-    ) {
-      betroth(man, woman, Math.max(man.now, woman.now, p.now));
-      b.phase = 'engaged';
-      emit(
-        s,
-        'The proposal was accepted after her father’s recorded approval. The adults are engaged. A later family ceremony still needs their separate confirmation. They have not married.',
-      );
-    }
+    b.pendingEngagement = { at: p.now };
   } else if (
     b.phase === 'ceremony' &&
     ((['ali', 'esma'].includes(p.id) && a.action === 'accept-proposal') ||
@@ -346,6 +334,23 @@ export function resolveBroker(
 }
 export function brokerTick(s: ValleyState) {
   const b = s.brokering;
+  if (b?.pendingEngagement) {
+    const man = personOf(s, 'ali'),
+      woman = personOf(s, 'esma');
+    if (man && woman) {
+      prepareKinScope(man, woman);
+      if (canMarry(man, woman, INTRO_CUSTOM, { at: man.now, guardian: 'consented' }).ok) {
+        betroth(man, woman, Math.max(man.now, woman.now));
+        b.phase = 'engaged';
+        emit(
+          s,
+          'The proposal was accepted after her father’s recorded approval. The adults are engaged. A later family ceremony still needs their separate confirmation. They have not married.',
+        );
+      }
+    }
+    delete b.pendingEngagement;
+  }
+
   if (
     b?.phase === 'courting' &&
     s.introduction?.status === 'met' &&
@@ -381,7 +386,7 @@ export function brokerTick(s: ValleyState) {
         woman &&
         marry(man, woman, Math.max(s.minute, man.now, woman.now), INTRO_CUSTOM, {
           guardian: 'consented',
-          lookup: (pid) => personOf(s, pid),
+          lookup: (pid: string) => personOf(s, pid),
         }).ok
       ) {
         b.gift = { person: woman.id, grain: b.giftEscrow, at: s.minute };

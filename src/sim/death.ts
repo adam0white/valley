@@ -1,6 +1,6 @@
-import { createCommunity, type Person, tellDeath } from '@adam0white/human-framework';
+import { type Person, tellDeath } from './hf.ts';
 
-/** Deliver news at each listener's own clock, including residents advanced by routines. */
+/** Deliver news at the Run clock without constructing a second community. */
 export function tellValleyDeath(people: Person[], dead: Person, at: number): void {
-  tellDeath(createCommunity(people), dead, at, { late: 'now' });
+  tellDeath({ people }, dead, at, { late: 'now' });
 }

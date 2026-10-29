@@ -4,9 +4,10 @@
  * local repair earn collection before fourteen days. Travel/work compete with real life.
  * Failure releases the reserved stock, never the consumed grain or labor. No new cast.
  */
-import type { Activity, Affordance, Outcome, Person, Suggestion } from '@adam0white/human-framework';
+
 import { DAY, daylight, dayOfMinute, doyOf, HOUR, minuteOfDay } from './calendar.ts';
 import { allianceEdition } from './edition.ts';
+import type { Activity, Affordance, Outcome, Person, Suggestion } from './hf.ts';
 import { KAHYA } from './people.ts';
 import { hasOfficeCard, note, personOf, promote, type ValleyState } from './valley.ts';
 

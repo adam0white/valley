@@ -3,6 +3,8 @@
  * Costs are engineering assumptions: mill 0.15 grain/hour, sacks six, levy buyout twelve.
  * No private biography, inferred confession or new framework faculty is used here.
  */
+
+import { DAY, daylight, dayOfMinute, doyOf, HOUR, minuteOfDay, seasonOf, yearOf } from './calendar.ts';
 import {
   type Activity,
   type Affordance,
@@ -10,10 +12,8 @@ import {
   type DecisionRecord,
   type Outcome,
   type Person,
-  recall,
   type Suggestion,
-} from '@adam0white/human-framework';
-import { DAY, daylight, dayOfMinute, doyOf, HOUR, minuteOfDay, seasonOf, yearOf } from './calendar.ts';
+} from './hf.ts';
 import { householdLabel, KAHYA, personLabel } from './people.ts';
 import {
   give,
@@ -400,8 +400,11 @@ export function termDay(s: ValleyState, day: number) {
     if ((e.reserve ?? 0) > 0) {
       const witnessHouse = s.households.find((h) => s.kahyaState.acts?.[h.id]?.length && head(s, h.id));
       const witness = witnessHouse && head(s, witnessHouse.id);
-      const memory = witness && recall(witness, { actorId: KAHYA, limit: 1 })[0];
-      const testimony = witness && memory ? `${personLabel(witness)} recalls: ${memory.summary}. ` : '';
+      const deed = witnessHouse && s.kahyaState.acts?.[witnessHouse.id]?.at(-1);
+      const testimony =
+        witness && deed
+          ? `${personLabel(witness)} names an entry from the household record: ${deed.what}. `
+          : '';
       const acts = Object.values(s.kahyaState.acts ?? {})
         .flat()
         .slice(-3)

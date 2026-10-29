@@ -1,17 +1,19 @@
 /** Valley owns this closed Zehra scene and its authored words. HF owns attention,
  * voluntary choice, the body and timed activity. No free-text understanding or bargain is claimed. */
+
+import { DAY, dateEnglish, dayOfMinute, yearOf } from './calendar.ts';
+import { DIALOGUE_EDITION, PUBLIC_EDITION } from './edition.ts';
 import {
   type Activity,
   type Affordance,
   type DecisionRecord,
+  lastPlace,
   type Outcome,
   type Percept,
   type Person,
   perceive,
   type SimEvent,
-} from '@adam0white/human-framework';
-import { DAY, dateEnglish, dayOfMinute, yearOf } from './calendar.ts';
-import { DIALOGUE_EDITION, PUBLIC_EDITION } from './edition.ts';
+} from './hf.ts';
 import { KAHYA, personLabel } from './people.ts';
 import {
   houseOf,
@@ -51,11 +53,9 @@ function contextSource(s: ValleyState, line: ContextLine): ContextRequest['sourc
     const source = s.notes.findLast(
       (n) => n.kind === 'birth' && n.house === h.id && n.who === 'zehra' && n.at <= s.minute,
     );
-    // The actual child must retain both parental references; the prose alone is not kinship authority.
+    // A completed host birth receipt names both actual parents. A public note alone does not.
     const child = s.people.find(
-      (c) =>
-        c.social.relationships.some((r) => r.otherId === 'zehra' && r.roles.includes('parent')) &&
-        c.social.relationships.some((r) => r.otherId === p.id && r.roles.includes('parent')),
+      (c) => s.births?.[c.id]?.mother === 'zehra' && s.births[c.id]?.father === p.id,
     );
     return source && child ? { kind: 'note', note: source } : undefined;
   }
@@ -203,7 +203,14 @@ function present(s: ValleyState, p: Person, house: string): boolean {
 }
 function attended(s: ValleyState, house: string, visit: number, at: number): boolean {
   const v = s.kahyaState.visit;
-  return !!v && v.house === house && v.arrive === visit && v.arrive <= at && at < v.leave;
+  return (
+    !!v &&
+    v.house === house &&
+    v.arrive === visit &&
+    v.arrive <= at &&
+    at < v.leave &&
+    (!s.stewardCare || lastPlace(s.kahya) === `house:${house}`)
+  );
 }
 function zehraChoices(s: ValleyState): DialogueOrder[] {
   const v = s.kahyaState.visit,
@@ -629,7 +636,13 @@ export function validateDialogueState(s: ValleyState): void {
   const fail = () => {
     throw new Error('Invalid Valley dialogue state.');
   };
-  const minute = (n: unknown) => Number.isSafeInteger(n) && (n as number) >= 0 && (n as number) <= s.minute;
+  const minute = (n: unknown) =>
+    typeof n === 'number' &&
+    Number.isFinite(n) &&
+    Number.isSafeInteger(Math.round(n * 60000)) &&
+    Math.abs(n * 60000 - Math.round(n * 60000)) < 0.00001 &&
+    n >= 0 &&
+    n <= Math.max(s.minute, s.community.ingress / 60000);
   if (
     !d ||
     d.id !== DIALOGUE_EDITION ||
@@ -674,7 +687,8 @@ export function validateDialogueState(s: ValleyState): void {
       !houseOf(s, e.house) ||
       !minute(e.saidAt) ||
       !minute(e.visit) ||
-      !Number.isSafeInteger(e.leave) ||
+      !Number.isSafeInteger(Math.round(e.leave * 60000)) ||
+      Math.abs(e.leave * 60000 - Math.round(e.leave * 60000)) >= 0.00001 ||
       e.leave <= e.saidAt ||
       e.saidAt < e.visit ||
       !['follow-up', 'work-need', 'after-cut', ...Object.keys(CONTEXT_PEOPLE)].includes(e.line) ||
@@ -782,11 +796,12 @@ export function validateDialogueState(s: ValleyState): void {
       e.hearing &&
       (!minute(e.hearing.deliveredAt) ||
         e.hearing.deliveredAt < e.saidAt ||
-        e.hearing.percept.at !== e.hearing.deliveredAt ||
+        !minute(e.hearing.percept.at) ||
+        e.hearing.percept.at > e.hearing.deliveredAt ||
         e.hearing.percept.summary !== e.words ||
         !Array.isArray(e.hearing.attended) ||
         !Array.isArray(e.hearing.memoryTimes) ||
-        e.hearing.memoryTimes.some((t) => t !== e.hearing?.deliveredAt))
+        e.hearing.memoryTimes.some((t) => t !== e.hearing?.percept.at))
     )
       fail();
     if (

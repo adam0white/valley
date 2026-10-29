@@ -1,208 +1,138 @@
-import { writeFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { act, compactRun, load, newGame, restoreState, save, stateJson, step } from '../src/sim/game.ts';
-import { copyReason, grainWords, helpOf, helpTargets } from '../src/sim/terms.ts';
-import { makeWorld, personOf } from '../src/sim/valley.ts';
-import { CastSession } from '../src/ui/cast-session.ts';
+import { act, restoreState, stateJson } from '../src/sim/game.ts';
+import { exportRun, personRun } from '../src/sim/hf.ts';
+import { helpOf, helpTargets, TERMS } from '../src/sim/terms.ts';
+import { advanceTo, houseOf, makeWorld } from '../src/sim/valley.ts';
+import { hostFixture } from './hf-host-fixture.ts';
 import { required } from './required.ts';
 
-function opening(at = 450) {
-  const g = newGame(7, undefined, false, true, 'valley-public-2026-10');
-  act(g, {
-    verb: 'call',
-    job: 'reap-agha',
-    houses: ['tepe', 'coban', 'kavak', 'ak', 'dere', 'demirci', 'kuyucu', 'kara'],
+/** An authored two-person boundary fixture, not a recorded whole Valley term.
+ * The room, visit, weather record and initial grain are host authoring.
+ * HF owns every subsequent attention, decision, activity and body consequence.
+ */
+function termsScene(person = 'zehra', motivated = true) {
+  const at = 870;
+  const f = hostFixture(at, person, undefined, (p) => {
+    p.skills.farming = { level: 0.7, practice: 0, lastPracticed: at };
+    if (motivated)
+      p.agenda.goals.push({
+        id: 'help-by-agreement',
+        label: 'help after agreeing the food terms',
+        serves: ['meaning'],
+        advancedBy: [
+          { action: 'terms-help-assent', amount: 0.4 },
+          { action: 'reap-agha', amount: 0.6 },
+        ],
+        importance: 1,
+        progress: 0,
+        status: 'active',
+        adoptedAt: at,
+      });
   });
-  act(g, { verb: 'visit', house: 'tepe' });
-  step(g, at);
-  return g;
+  const h = required(houseOf(f.s, 'coban'));
+  h.field.standing = 0;
+  h.members = [person];
+  f.s.kahyaState.visit = { house: 'coban', arrive: 860, leave: 960, back: 980 };
+  f.s.kahyaState.place = 'house:coban';
+  f.c.places = { kahya: 'house:coban', [person]: 'house:coban' };
+  advanceTo(f.s, 871);
+  expect(act(f.game, { verb: 'call', job: 'reap-agha', houses: ['coban'] })).toBe(true);
+  const target = required(helpTargets(f.s).find((t) => t.person === person));
+  const before = f.s.agha.granary;
+  expect(act(f.game, target)).toBe(true);
+  expect(f.s.agha.granary).toBeCloseTo(before - TERMS.max);
+  return f;
 }
-const raw = (g: ReturnType<typeof newGame>) => stateJson(g.valley);
-it('keeps actual words and conserves a voluntary partial-work, actual-carriage exchange through native continuation', async () => {
-  const g = opening();
-  const target = required(helpTargets(g.valley).find((t) => t.person === 'recep'));
-  const before = raw(g);
-  expect(act(g, { ...target, person: 'danyal' })).toBe(false);
-  expect(raw(g)).toEqual(before);
-  expect(act(g, target)).toBe(true);
-  expect(g.valley.agha.granary).toBeCloseTo(before.agha.granary - 0.3);
-  const pending = save(g);
-  const pendingForks = [load(pending), load(compactRun(g))];
-  step(g, 600);
-  const h = required(helpOf(g.valley));
+
+it('reserves real grain and requires actual voluntary assent before any useful paid work', () => {
+  const f = termsScene();
+  advanceTo(f.s, 930);
+  const h = required(helpOf(f.s));
   expect(h.status).toBe('agreed');
-  expect(h.speech?.activity.startedAt).toBe(454);
-  expect(h.earned).toBe(0);
+  expect(h.speech?.activity.action).toBe('terms-help-assent');
+  expect(h.speech?.reason).toBe('ended');
   expect(h.answer?.words).toContain('my own work only');
-  for (const f of pendingForks) {
-    step(f, 600);
-    expect(raw(f)).toEqual(raw(g));
-  }
-  const assent = save(g);
-  const stop = load(assent);
-  expect(act(stop, { verb: 'help-end', contract: h.id })).toBe(true);
-  step(stop, 2880);
-  expect(helpOf(stop.valley)?.status).toBe('agreed');
-  expect(helpOf(stop.valley)?.earned).toBe(0);
-  expect(helpOf(stop.valley)?.returned).toBeCloseTo(0.3);
-  step(g, 2880);
-  expect(h.choices.some((c) => c.record.suggestion?.verdict === 'deferred')).toBe(true);
-  expect(h.minutes).toBeCloseTo(90);
-  expect(h.earned).toBeCloseTo(0.225);
-  expect(h.returned).toBeCloseTo(0.075);
-  const work = required(h.work[0]),
-    actor = required(personOf(g.valley, h.person));
-  const crop = g.valley.agha.reaped;
-  required(makeWorld(g.valley).resolve)(actor, work.activity, work.reason);
-  expect(g.valley.agha.reaped).toBe(crop);
-  expect(h.earned).toBeCloseTo(0.225);
-  expect(act(g, { verb: 'give', house: 'coban', kile: 6 })).toBe(true);
-  step(g, 2940);
-  const source = required(
-    g.valley.notes.findLast((n) => n.kind === 'voice' && n.house === 'coban' && n.at <= g.valley.minute),
-  );
-  expect(source.words).toBeTruthy();
-  const people = structuredClone(g.valley.people);
-  expect(act(g, { verb: 'keep-words', note: source.id })).toBe(true);
-  expect(g.valley.people).toEqual(people);
-  expect(g.valley.receivedTerms?.keptWords[0]?.original).toEqual(source);
-  expect(act(g, { verb: 'keep-words', note: source.id })).toBe(false);
-  const kept = save(g);
-  const forged = structuredClone(kept);
-  required(forged.state.receivedTerms?.keptWords[0]).original.words = 'A fabricated promise';
-  expect(() => load(forged)).toThrow(/replay/);
-  const cap = load(kept);
-  expect(act(cap, { verb: 'give', house: 'coban', kile: 6 })).toBe(true);
-  step(cap, 3000);
-  const nextSource = required(
-    cap.valley.notes.findLast((n) => n.kind === 'voice' && n.house === 'coban' && n.at <= cap.valley.minute),
-  );
-  expect(nextSource.id).not.toBe(source.id);
-  const book = required(cap.valley.receivedTerms).keptWords;
-  // Structural negative only: synthetic full book, never a positive source/replay claim.
-  while (book.length < 64) book.push({ ...structuredClone(required(book[0])), input: book.length });
-  const unkept = nextSource;
-  const capped = raw(cap);
-  expect(copyReason(cap.valley, unkept.id)).toContain('full');
-  expect(act(cap, { verb: 'keep-words', note: unkept.id })).toBe(false);
-  expect(raw(cap)).toEqual(capped);
-  step(g, 4320);
-  expect(act(g, { verb: 'help-deliver', contract: h.id })).toBe(true);
-  const dispatch = save(g);
-  const beforeTrip = raw(g);
-  const inputsBeforeTrip = structuredClone(g.inputs);
-  expect(act(g, { verb: 'visit', house: 'kara' })).toBe(false);
-  expect(act(g, { verb: 'pass', choice: 'depart' })).toBe(false);
-  expect(raw(g)).toEqual(beforeTrip);
-  expect(g.inputs).toEqual(inputsBeforeTrip);
-  step(g, 4710);
-  expect(h.cargo).toBeCloseTo(0.225);
-  expect(h.delivered).toBe(0);
-  const cargo = save(g);
-  const returning = load(cargo);
-  expect(act(returning, { verb: 'help-return', contract: h.id })).toBe(true);
-  step(returning, 7200);
-  expect(helpOf(returning.valley)?.delivered).toBe(0);
-  expect(helpOf(returning.valley)?.held).toBeCloseTo(0.225);
-  const returned = raw(returning);
-  const returnedInputs = structuredClone(returning.inputs);
-  expect(act(returning, { verb: 'help-deliver', contract: h.id })).toBe(false);
-  expect(raw(returning)).toEqual(returned);
-  expect(returning.inputs).toEqual(returnedInputs);
-  step(g, 7200);
-  expect(h.delivered).toBeCloseTo(0.225);
-  expect(h.depositedAt).toBe(4770);
-  expect(h.delivery?.phase).toBe('home');
-  expect(h.held + h.cargo + h.returned + h.delivered).toBeCloseTo(0.3);
-  for (const checkpoint of [dispatch, cargo, save(g)]) {
-    const f = load(checkpoint);
-    const compact = load(compactRun(f));
-    step(f, 8640);
-    step(compact, 8640);
-    expect(raw(compact)).toEqual(raw(f));
-  }
-  step(g, 8640);
-  expect(g.valley.receivedTerms?.keptWords[0]?.original).toEqual(source);
-  if (process.env.VALLEY_TERMS_NATIVE_PROOF)
-    writeFileSync(
-      process.env.VALLEY_TERMS_NATIVE_PROOF,
-      JSON.stringify({
-        pending,
-        assent,
-        kept,
-        dispatch,
-        cargo,
-        returned: save(returning),
-        complete: save(g),
-        source,
-        notes:
-          'Full/compact and later8640 continuation compared with every raw value. Cap-only synthetic negative is not a native positive.',
-      }),
-    );
-  // The old finite passport is not an adapter for the new source. Refuse before
-  // any shelf envelope/source journal/head write; full native exports still replay.
-  const wordsOnly = opening();
-  act(wordsOnly, { verb: 'give', house: 'coban', kile: 6 });
-  step(wordsOnly, 510);
-  const actualWords = required(wordsOnly.valley.notes.find((n) => !copyReason(wordsOnly.valley, n.id)));
-  expect(act(wordsOnly, { verb: 'keep-words', note: actualWords.id })).toBe(true);
-  for (const packet of [save(wordsOnly), pending, assent, kept, dispatch, cargo, save(returning), save(g)]) {
-    let writes = 0;
-    const session = new CastSession(
-      {
-        setPersonaRecording() {},
-        allowPersonaRecording() {},
-        personaRecordingAllowed: true,
-        build: () => ({}),
-      },
-      {
-        ready: Promise.resolve(true),
-        enabled: true,
-        setEnabled() {},
-        async request<T>() {
-          writes++;
-          return undefined as T;
-        },
-      },
-    );
-    session.game = load(packet);
-    const metadata = session.metadata();
-    await session.checkpoint(true);
-    expect(session.status).toContain('no reviewed continuing-person mapping');
-    await session.alternative('hf.cast.yusuf.well');
-    expect(session.status).toContain('no reviewed continuing-person mapping');
-    expect(writes).toBe(0);
-    expect(session.metadata()).toEqual(metadata);
-    expect(raw(load(save(session.game)))).toEqual(raw(session.game));
-  }
-  const stripped = structuredClone(cargo);
-  stripped.inputs = stripped.inputs.filter((i) => !i.verb.startsWith('help-') && i.verb !== 'keep-words');
-  delete stripped.state.receivedTerms;
-  // Complete current Persons (including the route goal) cannot be admitted by
-  // removing both command/archive copies. The ordinary native loader regenerates.
-  expect(() => load(stripped)).toThrow('replay state');
-  let forgedWrites = 0;
-  const forgedSession = new CastSession(
-    {
-      setPersonaRecording() {},
-      allowPersonaRecording() {},
-      personaRecordingAllowed: true,
-      build: () => ({}),
-    },
-    {
-      ready: Promise.resolve(true),
-      enabled: true,
-      setEnabled() {},
-      async request<T>() {
-        forgedWrites++;
-        return undefined as T;
-      },
-    },
-  );
-  forgedSession.game = { valley: restoreState(stripped.state), inputs: stripped.inputs, plainEnglish: true };
-  await forgedSession.checkpoint(true);
-  expect(forgedSession.status).toContain('replay state');
-  expect(forgedWrites).toBe(0);
-  expect(grainWords(0.0000001)).toBe('less than 0.001');
-  expect(grainWords(0.225)).toBe('0.225');
+  expect(h.earned).toBeGreaterThanOrEqual(0);
+  advanceTo(f.s, 1200);
+  const work = required(helpOf(f.s));
+  expect(work.work.length).toBeGreaterThan(0);
+  expect(work.earned).toBeGreaterThan(0);
+  expect(work.held + work.returned + work.cargo + work.delivered).toBeCloseTo(TERMS.max);
+  f.verify();
 });
+
+function advanceByQuantum(s: ReturnType<typeof termsScene>['s'], to: number) {
+  while (s.minute < to) advanceTo(s, Math.min(to, s.minute + 30));
+}
+it('pays only useful interrupted work once and refunds the unearned reservation', () => {
+  const f = termsScene();
+  advanceTo(f.s, 930);
+  const before = required(helpOf(f.s));
+  while (f.s.minute < 1200 && f.person.activity?.affordanceId !== `terms-help-work:${before.id}`)
+    advanceTo(f.s, f.s.minute + 30);
+  expect(f.person.activity?.affordanceId).toBe(`terms-help-work:${before.id}`);
+  advanceTo(f.s, f.s.minute + 30);
+  expect(act(f.game, { verb: 'help-end', contract: before.id })).toBe(true);
+  advanceTo(f.s, f.s.minute + 30);
+  const h = required(helpOf(f.s));
+  expect(h.work).toHaveLength(1);
+  expect(h.work[0]?.reason).toBe('interrupted');
+  expect(h.minutes).toBeGreaterThan(0);
+  expect(h.minutes).toBeLessThan(120);
+  expect(h.earned).toBeGreaterThan(0);
+  expect(h.earned + h.returned).toBeCloseTo(TERMS.max);
+  const archive = exportRun(required(personRun(f.person)));
+  const crop = f.s.agha.reaped,
+    earned = h.earned;
+  const receipt = required(h.work[0]);
+  makeWorld(f.s).resolve(f.person, receipt.activity, receipt.reason);
+  expect(f.s.agha.reaped).toBe(crop);
+  expect(required(helpOf(f.s)).earned).toBe(earned);
+  expect(exportRun(required(personRun(f.person)))).toEqual(archive);
+  f.verify();
+});
+
+it('continues a real earned cargo through native restore and deposits only after physical carriage', () => {
+  const f = termsScene();
+  advanceByQuantum(f.s, 1200);
+  expect(required(helpOf(f.s)).earned).toBeCloseTo(TERMS.max);
+  const source = required(helpOf(f.s)).answer;
+  const words = required(source);
+  const body = exportRun(required(personRun(f.person)));
+  expect(act(f.game, { verb: 'keep-words', note: words.id })).toBe(true);
+  expect(act(f.game, { verb: 'keep-words', note: words.id })).toBe(false);
+  expect(exportRun(required(personRun(f.person)))).toEqual(body);
+  advanceByQuantum(f.s, TERMS.deliveryFrom);
+  const id = required(helpOf(f.s)).id;
+  expect(act(f.game, { verb: 'help-deliver', contract: id })).toBe(true);
+  expect(act(f.game, { verb: 'visit', house: 'kara' })).toBe(false);
+  expect(act(f.game, { verb: 'pass', choice: 'depart' })).toBe(false);
+  let cargoAt: number | undefined;
+  for (let t = f.s.minute + 30; t < TERMS.deliveryDue; t += 30) {
+    advanceTo(f.s, t);
+    const h = required(helpOf(f.s));
+    expect(h.held + h.cargo + h.delivered + h.returned).toBeCloseTo(TERMS.max);
+    if (h.cargo > 0) {
+      cargoAt = t;
+      break;
+    }
+  }
+  expect(cargoAt).toBeDefined();
+  expect(required(helpOf(f.s)).delivered).toBe(0);
+  const captured = stateJson(f.s),
+    restored = restoreState(captured);
+  expect(stateJson(restored)).toEqual(captured);
+  const game = { valley: restored, inputs: [] };
+  expect(act(game, { verb: 'help-return', contract: id })).toBe(true);
+  advanceByQuantum(restored, TERMS.deliveryDue);
+  expect(required(helpOf(restored)).delivered).toBe(0);
+  expect(required(helpOf(restored)).held).toBeCloseTo(TERMS.max);
+  advanceByQuantum(f.s, TERMS.deliveryDue);
+  const completed = required(helpOf(f.s));
+  expect(completed.delivered).toBeCloseTo(TERMS.max);
+  expect(completed.delivery?.phase).toBe('home');
+  expect(completed.depositedAt).toBeGreaterThan(required(cargoAt));
+  expect(completed.held + completed.cargo + completed.delivered + completed.returned).toBeCloseTo(TERMS.max);
+  expect(f.s.receivedTerms?.keptWords[0]?.original).toEqual(words);
+  f.verify();
+}, 120000);

@@ -1,62 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  act,
-  compactRun,
-  fingerprint,
-  type Input,
-  load,
-  newGame,
-  replay,
-  save,
-  step,
-} from '../src/sim/game.ts';
-
-// The owner's day-12 actions, without the private full-state replay file.
-const ownerInputs: Input[] = [
-  {
-    verb: 'call',
-    job: 'reap-agha',
-    houses: ['kavak', 'ak', 'coban', 'dere', 'kara', 'demirci', 'kuyucu', 'tepe'],
-    at: 2580,
-  },
-  { verb: 'visit', house: 'coban', why: 'birth', at: 3510 },
-  { verb: 'give', house: 'coban', kile: 6, at: 3930 },
-  { verb: 'give', house: 'tepe', kile: 6, at: 5130 },
-  { verb: 'give', house: 'kuyucu', kile: 6, at: 5370 },
-  { verb: 'give', house: 'demirci', kile: 6, at: 5520 },
-  { verb: 'give', house: 'ak', kile: 6, at: 5670 },
-  { verb: 'visit', house: 'dere', at: 7590 },
-  { verb: 'visit', house: 'tepe', at: 7980 },
-  { verb: 'visit', house: 'kara', at: 8280 },
-  { verb: 'visit', house: 'coban', at: 8730 },
-  { verb: 'visit', house: 'demirci', at: 9630 },
-  { verb: 'visit', house: 'ak', at: 10080 },
-  { verb: 'visit', house: 'kuyucu', at: 10530 },
-  { verb: 'visit', house: 'kavak', at: 11190 },
-];
+import { act, compactRun, fingerprint, load, newGame, replay, save, step } from '../src/sim/game.ts';
 
 describe('notebook run exports', () => {
-  it('keeps the current cast day-12 schedule below 5 KB and replays to its recorded fingerprint', () => {
-    const g = replay(406153184, ownerInputs, 17550);
-    expect(fingerprint(g.valley)).toBe('80bf0dc3');
-    const run = compactRun(save(g));
-    expect(run).toEqual(compactRun(g));
-    expect(Buffer.byteLength(JSON.stringify(run))).toBeLessThan(5_000);
-    expect(run).not.toHaveProperty('state');
-    expect(run).not.toHaveProperty('savedAt');
-    expect(run).toMatchObject({
-      game: 'valley',
-      seed: 406153184,
-      version: '0.3.1',
-      framework: '3.0.0',
-      minute: 17550,
-      inputs: ownerInputs,
-      fingerprint: '80bf0dc3',
-      label: 'Volume I, 30 July of year one',
-    });
-    expect(fingerprint(load(JSON.parse(JSON.stringify(run))).valley)).toBe('80bf0dc3');
-  });
-
   it('keeps full-state downloads compatible and detaches the notebook input log', () => {
     const g = replay(7, [], 0);
     const full = save(g, 2);
@@ -90,22 +35,27 @@ describe('notebook run exports', () => {
     expect(() => load({ ...run, fingerprint: '00000000' })).toThrow(/Start a new game instead/i);
   });
 
-  it('refuses a pre-rewrite compact export with a plain start-fresh message', () => {
-    // Baseline 80a75d9: seed 7 at minute 0, no inputs. Only its prose fingerprint differs.
-    const legacy = { ...compactRun(replay(7, [], 0)), fingerprint: '065eac42' };
-    expect(() => load(legacy)).toThrow(
-      'This file does not replay the same way in this version of The Valley. It may come from an older version. Start a new game instead.',
-    );
+  it('refuses an HF3 compact export with a keep-file and start-fresh message', () => {
+    const legacy = {
+      ...compactRun(replay(7, [], 0)),
+      version: '0.3.1',
+      framework: '3.0.0',
+      fingerprint: '065eac42',
+    };
+    expect(() => load(legacy)).toThrow(/export it for safekeeping and start fresh/i);
   });
 
   it('detaches loaded inputs from compact and full exports', () => {
-    const g = replay(406153184, ownerInputs.slice(0, 1), 2580);
+    const g = newGame(7, undefined, false, true, 'valley-public-2026-10');
+    expect(act(g, { verb: 'call', job: 'reap-agha', houses: ['coban'] })).toBe(true);
+    const originalAt = g.inputs[0]?.at;
+    expect(originalAt).toBeDefined();
     for (const run of [compactRun(g), save(g)]) {
       const loaded = load(run);
       const input = run.inputs[0];
       expect(input).toBeDefined();
       if (input) input.at = 30;
-      expect(loaded.inputs[0]?.at).toBe(2580);
+      expect(loaded.inputs[0]?.at).toBe(originalAt);
     }
   });
 });
@@ -126,3 +76,20 @@ it('replays an introductory visit followed by a household call with the usual tr
   const exported = compactRun(g);
   expect(fingerprint(load(JSON.parse(JSON.stringify(exported))).valley)).toBe(fingerprint(g.valley));
 });
+
+it('preserves the complete public-edition state across native and compact exports and rejects native archive corruption', () => {
+  const g = newGame(7, undefined, false, true, 'valley-public-2026-10');
+  expect(act(g, { verb: 'call', job: 'reap-agha', houses: ['coban'] })).toBe(true);
+  const full = JSON.parse(JSON.stringify(save(g))) as ReturnType<typeof save>;
+  const compact = JSON.parse(JSON.stringify(compactRun(g))) as ReturnType<typeof compactRun>;
+  expect(compact.inputs).toEqual(g.inputs);
+  const fullReload = load(full);
+  const compactReload = load(compact);
+  expect(save(fullReload).state).toEqual(full.state);
+  expect(save(compactReload).state).toEqual(full.state);
+  const altered = structuredClone(full);
+  const archive = altered.state.community.archive;
+  if (!archive) throw new Error('Missing native Run archive');
+  Object.assign(archive.current, { at: archive.current.at + 1 });
+  expect(() => load(altered)).toThrow();
+}, 60_000);

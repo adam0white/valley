@@ -4,6 +4,9 @@
  * minds. The lower hamlet is written by hand so that its stories are reliable (incidental household roles and the
  * canonical builder whose wife is near her time); the upper hamlet is rolled from the seed.
  */
+
+import { DAY } from './calendar.ts';
+import { canonicalOpening } from './cast.ts';
 import {
   createPerson,
   MINUTES_PER_YEAR,
@@ -13,9 +16,7 @@ import {
   type PersonSpec,
   promise,
   seedTie,
-} from '@adam0white/human-framework';
-import { DAY } from './calendar.ts';
-import { canonicalOpening } from './cast.ts';
+} from './hf.ts';
 import { hashUnit, mixSeed } from './rng.ts';
 
 /** Lodging names shown to the player; saved household names remain unchanged. */
@@ -131,7 +132,7 @@ export function makePerson(w: Who, seed: number, now: number, household: string)
     skills: { farming: w.age >= 14 ? 0.45 + 0.3 * Math.min(1, (w.age - 14) / 20) : 0.1, ...w.skills },
     voices: [{ voiceId: KAHYA, trust: w.trust ?? 0.45 }],
     retention: { trace: 0, chronicleDays: 31 },
-    enable: w.age >= 14 ? { fatigueStore: true, review: { style: 'accounting', at: 21 * 60 + 30 } } : {},
+    review: { style: w.age >= 14 ? 'accounting' : 'none', at: 21 * 60 + 30 },
   };
   if (w.body) spec.body = w.body;
   const p = createPerson(spec);
@@ -786,6 +787,5 @@ export function makeKahya(seed: number, now: number): Person {
     sex: 'male',
     traits: { conscientiousness: 0.6 },
     retention: { trace: 0, chronicleDays: 31 },
-    enable: { fatigueStore: true },
   });
 }

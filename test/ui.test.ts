@@ -2,8 +2,9 @@ import type { ChildProcess } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { type Browser, chromium, type Page } from 'playwright-core';
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import { dialogueChoices } from '../src/sim/dialogue.ts';
 import type { RulesEdition } from '../src/sim/edition.ts';
-import { compactRun, type Input, newGame, save, step } from '../src/sim/game.ts';
+import { act, compactRun, type Input, newGame, save, step } from '../src/sim/game.ts';
 import { startBrowserServer, visibleText } from './browser-server.ts';
 
 let server: ChildProcess;
@@ -39,7 +40,7 @@ async function open(
         'valley-log-v1',
         JSON.stringify({
           game: 'valley',
-          version: '0.3.1',
+          version: '0.4.0',
           seed,
           inputs,
           minute,
@@ -58,6 +59,12 @@ async function open(
   expect(await page.locator('#map').count()).toBe(1);
   await page.clock.runFor(50);
 }
+// Observed public input tape: the steward explicitly insists; the later talk remains voluntary.
+const HF4_ZEHRA_OPENING: Input[] = [
+  { at: 420, verb: 'call', job: 'reap-agha', houses: ['coban'] },
+  { at: 480, verb: 'insist', ask: 'a1-420', pid: 'zehra' },
+  { at: 750, verb: 'visit', house: 'coban' },
+];
 const state = (page: Page) =>
   page.evaluate<{ minute: number; inputs: string }>(
     `import('/src/ui/app.ts').then(({ _debug }) => ({ minute: _debug.game().valley.minute, inputs: JSON.stringify(_debug.game().inputs) }))`,
@@ -857,16 +864,16 @@ it.each([
   }
 });
 
-it('keeps a saved narration choice through local resume and log writes', async () => {
+it('keeps saved narration metadata through local resume and log writes', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
-    await open(page, 1440, 7, [], false);
+    await open(page, 450, 7, [], false);
     const choice = () =>
-      page.evaluate(`import('/src/ui/app.ts').then(({ _debug }) => {
-      const g = _debug.game();
-      return { initial: g.plainEnglish, actors: [...g.valley.people, g.valley.kahya].every(p => p.lexicon?.plainEnglish === false) };
-    })`);
-    expect(await choice()).toEqual({ initial: false, actors: true });
+      page.evaluate(`Promise.all([import('/src/ui/app.ts'),import('/src/sim/game.ts')]).then(([{_debug},{save}])=>{
+        const g=_debug.game(),saved=save(g);
+        return {initial:g.plainEnglish,saved:saved.plainEnglish,framework:saved.framework};
+      })`);
+    expect(await choice()).toEqual({ initial: false, saved: false, framework: '4.8.0' });
     await page.evaluate(
       `import('/src/ui/app.ts').then(({ _debug }) => _debug.order({ verb: 'visit', house: 'coban' }))`,
     );
@@ -876,13 +883,13 @@ it('keeps a saved narration choice through local resume and log writes', async (
     await page.reload();
     await page.getByRole('button', { name: 'Resume', exact: true }).click();
     for (let i = 0; i < 100 && !(await page.locator('#map').count()); i++) await page.clock.runFor(50);
-    expect(await choice()).toEqual({ initial: false, actors: true });
+    expect(await choice()).toEqual({ initial: false, saved: false, framework: '4.8.0' });
   } finally {
     await page.close();
   }
 });
 
-it('refuses a legacy local log without a pinned narration choice', async () => {
+it('refuses an older-edition local log without replacing its bytes', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await page.goto(origin);
@@ -1186,7 +1193,7 @@ it('keeps the pending grain disclosure after a blocked Visit click', async () =>
   }
 });
 
-it('offers the public term and preserves two actual old Zehra scene lines in the existing reading panel', async () => {
+it('offers the public term and preserves two actual Zehra scene lines in the existing reading panel', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await page.goto(`${origin}/?lab=1`);
@@ -1204,20 +1211,10 @@ it('offers the public term and preserves two actual old Zehra scene lines in the
       pageHeight: (document.querySelector('.title-page') as HTMLElement).scrollHeight,
     }));
     expect(geometry.rect.bottom <= 690 && geometry.rect.right <= 360, JSON.stringify(geometry)).toBe(true);
-    await open(
-      page,
-      1110,
-      7,
-      [
-        { at: 420, verb: 'call', job: 'reap-agha', houses: ['coban'] },
-        { at: 1080, verb: 'visit', house: 'coban' },
-      ],
-      true,
-      'valley-dialogue-2026-10',
-    );
+    await open(page, 810, 7, HF4_ZEHRA_OPENING, true, 'valley-public-2026-10');
     await page.getByRole('button', { name: 'the Çoban house', exact: true }).click();
     const follow = page.getByRole('button', {
-      name: 'You said, “Who will feed my family while I cut his barley?” What would you like me to know about that?',
+      name: 'You said, “I did it your way once.” What would you like me to know about that?',
       exact: true,
     });
     expect(await follow.count()).toBe(1);
@@ -1251,174 +1248,135 @@ it('offers the public term and preserves two actual old Zehra scene lines in the
   }
 });
 
-it.each<{ name: string; minute: number; inputs: Input[] }>([
-  {
-    name: 'pending',
-    minute: 1110,
-    inputs: [
-      { verb: 'call', job: 'reap-agha', houses: ['coban'], at: 420 },
-      { verb: 'visit', house: 'coban', at: 1080 },
-      {
-        verb: 'dialogue',
-        turn: 0,
-        house: 'coban',
-        person: 'zehra',
-        visit: 1100,
-        prior: 5,
-        line: 'follow-up',
-        at: 1110,
-      },
-    ],
-  },
-  {
-    name: 'withheld',
-    minute: 1140,
-    inputs: [
-      { verb: 'call', job: 'reap-agha', houses: ['coban'], at: 420 },
-      { verb: 'visit', house: 'coban', at: 1080 },
-      {
-        verb: 'dialogue',
-        turn: 0,
-        house: 'coban',
-        person: 'zehra',
-        visit: 1100,
-        prior: 5,
-        line: 'follow-up',
-        at: 1110,
-      },
-    ],
-  },
-  {
-    name: 'cancelled',
-    minute: 1230,
-    inputs: [
-      { verb: 'call', job: 'reap-agha', houses: ['coban'], at: 420 },
-      { verb: 'visit', house: 'coban', at: 1080 },
-      {
-        verb: 'dialogue',
-        turn: 0,
-        house: 'coban',
-        person: 'zehra',
-        visit: 1100,
-        prior: 5,
-        line: 'work-need',
-        ask: 'a1-420',
-        at: 1110,
-      },
-      { verb: 'dialogue-cancel', turn: 0, at: 1110 },
-    ],
-  },
-])('replays authoritative dialogue recovery ($name)', async ({ name, minute, inputs }) => {
-  const page = await browser.newPage();
-  // Reconstruct every expected field from the same public accepted input prefix.
-  const replay = newGame(7, undefined, false, true, 'valley-dialogue-2026-10');
-  step(replay, minute, inputs);
-  expect(replay.inputs).toEqual(inputs);
-  const expected = save(replay);
-  try {
-    await page.clock.install();
-    await page.goto(origin);
-    await page.clock.pauseAt(Date.now() + 500);
-    const inventory = await page.evaluate(async () => ({
-      databases: await indexedDB.databases(),
-      storageKeys: Object.keys(localStorage),
-      caches: await caches.keys(),
-      serviceWorkers: (await navigator.serviceWorker.getRegistrations()).map((r) => r.scope),
-    }));
-    console.log('Dialogue recovery fresh-context inventory', name, inventory);
-    for (const forged of name === 'withheld' ? [true, false] : [false]) {
-      await page.evaluate(
-        async ({ expected, inputs, minute, forged }) => {
-          const db = await new Promise<IDBDatabase>((resolve, reject) => {
-            const r = indexedDB.open('valley', 1);
-            r.onupgradeneeded = () => r.result.createObjectStore('volumes');
-            r.onsuccess = () => resolve(r.result);
-            r.onerror = () => reject(r.error);
-          });
-          // Inventory the fresh test context before writing its exact task-owned records.
-          const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
-            const r = db.transaction('volumes').objectStore('volumes').getAllKeys();
-            r.onsuccess = () => resolve(r.result);
-            r.onerror = () => reject(r.error);
-          });
-          if (keys.some((key) => key !== 'current')) throw new Error('Unexpected recovery key');
-          // The forged wire payload deliberately violates native receipt types.
-          const state = JSON.parse(JSON.stringify(expected.state));
-          if (forged) {
-            const e = state.dialogue.exchanges[0];
-            e.status = 'completed';
-            e.endedAt = 1119;
-            e.activity = { startedAt: 1114, endsAt: 1119 };
-            e.answerNote = 1;
-            e.answer = { at: 1119, words: 'FORGED completed answer' };
-            e.work = { reply: { verdict: 'accepted', says: 'FORGED work answer' } };
-          }
-          const json = JSON.stringify(state);
-          const digest = [
-            ...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(json))),
-          ]
-            .map((n) => n.toString(16).padStart(2, '0'))
-            .join('');
-          const gz = await new Response(
-            new Blob([json]).stream().pipeThrough(new CompressionStream('gzip')),
-          ).blob();
-          const runId = 'dialogue-recovery-test';
-          localStorage.setItem(
-            'valley-log-v1',
-            JSON.stringify({
-              game: 'valley',
-              version: '0.3.1',
-              seed: 7,
-              rules: expected.rules,
-              inputs,
-              minute,
-              volume: 0,
-              plainEnglish: true,
-              continuity: { runId },
-            }),
-          );
-          await new Promise<void>((resolve, reject) => {
-            const tx = db.transaction('volumes', 'readwrite');
-            tx.objectStore('volumes').put(
-              {
+it.each(['pending', 'continued', 'cancelled'] as const)(
+  'replays authoritative dialogue recovery (%s)',
+  async (name) => {
+    // Derive the request from the actual attended HF4 scene, including its exact native clock.
+    const replay = newGame(7, undefined, false, true, 'valley-public-2026-10');
+    step(replay, 810, HF4_ZEHRA_OPENING);
+    expect(replay.inputs).toEqual(HF4_ZEHRA_OPENING);
+    const choice = dialogueChoices(replay.valley).find(
+      (c) => c.line === (name === 'cancelled' ? 'work-need' : 'follow-up'),
+    );
+    if (!choice) throw new Error('The actual public Zehra scene is unavailable');
+    expect(act(replay, choice)).toBe(true);
+    if (name === 'cancelled') expect(act(replay, { verb: 'dialogue-cancel', turn: choice.turn })).toBe(true);
+    if (name !== 'pending') step(replay, name === 'continued' ? 840 : 930);
+    const minute = replay.valley.minute,
+      inputs = replay.inputs;
+    const page = await browser.newPage();
+    const expected = save(replay);
+    try {
+      await page.clock.install();
+      await page.goto(origin);
+      await page.clock.pauseAt(Date.now() + 500);
+      const inventory = await page.evaluate(async () => ({
+        databases: await indexedDB.databases(),
+        storageKeys: Object.keys(localStorage),
+        caches: await caches.keys(),
+        serviceWorkers: (await navigator.serviceWorker.getRegistrations()).map((r) => r.scope),
+      }));
+      console.log('Dialogue recovery fresh-context inventory', name, inventory);
+      for (const forged of name === 'continued' ? [true, false] : [false]) {
+        await page.evaluate(
+          async ({ expectedJson, inputs, minute, forged }) => {
+            const expected = JSON.parse(expectedJson) as import('../src/sim/game.ts').SavedGame;
+            const db = await new Promise<IDBDatabase>((resolve, reject) => {
+              const r = indexedDB.open('valley', 1);
+              r.onupgradeneeded = () => r.result.createObjectStore('volumes');
+              r.onsuccess = () => resolve(r.result);
+              r.onerror = () => reject(r.error);
+            });
+            // Inventory the fresh test context before writing its exact task-owned records.
+            const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+              const r = db.transaction('volumes').objectStore('volumes').getAllKeys();
+              r.onsuccess = () => resolve(r.result);
+              r.onerror = () => reject(r.error);
+            });
+            if (keys.some((key) => key !== 'current')) throw new Error('Unexpected recovery key');
+            // The forged wire payload deliberately violates native receipt types.
+            const state = JSON.parse(JSON.stringify(expected.state));
+            if (forged) {
+              const e = state.dialogue.exchanges[0];
+              e.status = 'completed';
+              const requestedAt = expected.inputs.findLast((i) => i.verb === 'dialogue')?.at ?? minute;
+              e.endedAt = requestedAt + 9;
+              e.activity = { startedAt: requestedAt + 4, endsAt: requestedAt + 9 };
+              e.answerNote = 1;
+              e.answer = { at: requestedAt + 9, words: 'FORGED completed answer' };
+              e.work = { reply: { verdict: 'accepted', says: 'FORGED work answer' } };
+            }
+            const json = JSON.stringify(state);
+            const digest = [
+              ...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(json))),
+            ]
+              .map((n) => n.toString(16).padStart(2, '0'))
+              .join('');
+            const gz = await new Response(
+              new Blob([json]).stream().pipeThrough(new CompressionStream('gzip')),
+            ).blob();
+            const runId = 'dialogue-recovery-test';
+            localStorage.setItem(
+              'valley-log-v1',
+              JSON.stringify({
+                game: 'valley',
+                version: '0.4.0',
                 seed: 7,
                 rules: expected.rules,
-                k: inputs.length,
-                inputLog: JSON.stringify(inputs),
+                inputs,
                 minute,
-                runId,
-                digest,
-                gz,
-              },
-              'current',
+                volume: 0,
+                plainEnglish: true,
+                continuity: { runId },
+              }),
             );
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-          });
-          db.close();
-        },
-        { expected, inputs, minute, forged },
-      );
-      await page.reload();
-      await page.getByRole('button', { name: 'Resume', exact: true }).click();
-      for (let i = 0; i < 100 && !(await page.locator('#map').count()); i++) await page.clock.runFor(50);
-      const actual = await page.evaluate(`import('/src/ui/app.ts').then(async ({_debug}) => {
+            await new Promise<void>((resolve, reject) => {
+              const tx = db.transaction('volumes', 'readwrite');
+              tx.objectStore('volumes').put(
+                {
+                  seed: 7,
+                  rules: expected.rules,
+                  k: inputs.length,
+                  inputLog: JSON.stringify(inputs),
+                  minute,
+                  runId,
+                  digest,
+                  gz,
+                },
+                'current',
+              );
+              tx.oncomplete = () => resolve();
+              tx.onerror = () => reject(tx.error);
+            });
+            db.close();
+          },
+          { expectedJson: JSON.stringify(expected), inputs, minute, forged },
+        );
+        await page.reload();
+        await page.getByRole('button', { name: 'Resume', exact: true }).click();
+        for (let i = 0; i < 100 && !(await page.locator('#map').count()); i++) await page.clock.runFor(50);
+        expect(
+          await page.locator('#map').count(),
+          (await visibleText(page.locator('body'))).slice(0, 2000),
+        ).toBe(1);
+        const actual = await page.evaluate(`import('/src/ui/app.ts').then(async ({_debug}) => {
           const { stateJson, newGame, step } = await import('/src/sim/game.ts');
           const current = _debug.game();
-          const replay = newGame(7, undefined, false, true, 'valley-dialogue-2026-10');
+          const replay = newGame(7, undefined, false, true, 'valley-public-2026-10');
           step(replay, current.valley.minute, current.inputs);
           return { state: stateJson(current.valley), inputs: current.inputs, replay: stateJson(replay.valley) };
         })`);
-      const result = actual as { state: unknown; inputs: unknown; replay: unknown };
-      expect(result.state).toEqual(result.replay);
-      expect(JSON.stringify({ state: result.state, inputs: result.inputs })).toBe(
-        JSON.stringify({ state: expected.state, inputs }),
-      );
+        const result = actual as { state: unknown; inputs: unknown; replay: unknown };
+        expect(result.state).toEqual(result.replay);
+        expect(JSON.stringify({ state: result.state, inputs: result.inputs })).toBe(
+          JSON.stringify({ state: expected.state, inputs }),
+        );
+      }
+    } finally {
+      await page.close();
     }
-  } finally {
-    await page.close();
-  }
-});
+  },
+);
 
 it('opens a foreign file without reading or replacing occupied native storage or constructing the Shelf', async () => {
   const page = await browser.newPage();
@@ -1502,7 +1460,8 @@ it('opens a foreign file without reading or replacing occupied native storage or
     expect(exported.cast).toEqual(file.cast);
     expect(exported.inputs).toEqual(file.inputs);
     expect(exported.castHeads).toEqual(file.castHeads ?? {});
-    expect(exported.castSources).toEqual(file.castSources ?? {});
+    expect(exported.castSourceRefs).toEqual(file.castSourceRefs ?? {});
+    expect(exported.castSources).toBeUndefined();
     expect(exported.rules).toBe(file.rules);
     console.log(`FOREIGN_PUBLIC_EXPORT_PEOPLE=${exported.state.people.length}`);
     if (process.env.VALLEY_PUBLIC_PROOF_DIR)
@@ -1722,19 +1681,9 @@ it('keeps the public phone notebook readable and exposes Say, its dated response
 it('shows an engine-produced Zehra pending question in the public notebook without promising an answer', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
-    await open(
-      page,
-      1110,
-      7,
-      [
-        { at: 420, verb: 'call', job: 'reap-agha', houses: ['coban'] },
-        { at: 1080, verb: 'visit', house: 'coban' },
-      ],
-      true,
-      'valley-public-2026-10',
-    );
+    await open(page, 810, 7, HF4_ZEHRA_OPENING, true, 'valley-public-2026-10');
     await page.locator('[data-h="coban"]').click();
-    await page.getByRole('button', { name: /^You said, “Who will feed my family/ }).click();
+    await page.getByRole('button', { name: /^You said, “I did it your way once/ }).click();
     const exchange = await page.evaluate<{ status: string; answerNote?: number }>(
       `import('/src/ui/app.ts').then(({_debug})=>_debug.game().valley.dialogue.exchanges.at(-1))`,
     );
@@ -1793,30 +1742,12 @@ it('keeps the actual Zehra gate and household identity through a cancelled quest
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await page.route('**/api/**', (route) => route.abort());
-    await open(
-      page,
-      1110,
-      7,
-      [
-        {
-          at: 420,
-          verb: 'call',
-          job: 'reap-agha',
-          houses: newGame(7, undefined, false, true, 'valley-public-2026-10')
-            .valley.households.filter((h) => h.hamlet === 'lower')
-            .map((h) => h.id),
-        },
-        { at: 1080, verb: 'visit', house: 'coban' },
-      ],
-      true,
-      'valley-public-2026-10',
-    );
-    expect(await page.locator('.reply-count').textContent()).toContain('have not answered');
+    await open(page, 810, 7, HF4_ZEHRA_OPENING, true, 'valley-public-2026-10');
     await page.locator('[data-h="coban"]').click();
-    expect(await page.locator('.scene-context').textContent()).toContain('Who will feed my family');
+    expect(await page.locator('.scene-context').textContent()).toContain('I did it your way once');
     expect(await page.locator('.scene-context').textContent()).toContain('She may choose not to answer');
     expect(await page.getByRole('button', { name: /^Let the Çoban house finish first/ }).count()).toBe(1);
-    const question = page.getByRole('button', { name: /^You said, “Who will feed my family/ });
+    const question = page.getByRole('button', { name: /^You said, “I did it your way once/ });
     await question.click();
     await page.getByRole('button', { name: 'End this question', exact: true }).click();
     await page.getByRole('button', { name: 'Send grain', exact: true }).click();
@@ -1936,6 +1867,7 @@ it.each([
       savedAt: _at,
       castHeads: _heads,
       castSources: _sources,
+      castSourceRefs: _sourceRefs,
       label: _volumeLabel,
       ...wire
     } = completed;

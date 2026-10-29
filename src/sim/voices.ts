@@ -1,17 +1,17 @@
 /**
  * What a house says to the kahya, in the moment, when he does something to it: sits with them, sends grain, sends
  * the reeve's men, eases their share. One named person answers, in a voice drawn from their character, about what
- * is true for that house now: the jars, a birth or a death this season, and the strongest thing they remember the
- * kahya doing (read from HF memory without recalling, so reading changes nothing). Lines are composed from small
+ * is true for that house now: the jars, a birth or a death this season, and the host's current visit record.
+ * HF supplies current traits and held trust. No private memory is reconstructed. Lines are composed from small
  * parts and a line is not said twice in one hamlet within a season.
  *
  * Covers: the visit, the gift, the seizure, easing. Does not cover: replies to asks (valley.ts `replyWords`), the
  * elders at the end (game.ts), conversation the player steers (deferred).
  */
-import { ageYears, type Episode, type Person } from '@adam0white/human-framework';
+
 import { DAY } from './calendar.ts';
+import { ageYears, type Person } from './hf.ts';
 import type { Household } from './people.ts';
-import { KAHYA } from './people.ts';
 import { DRAW, hashUnit, strHash } from './rng.ts';
 
 /** How a person talks: a register read from their traits. */
@@ -24,10 +24,6 @@ export function registerOf(p: Person): Register {
   if (t.openness > 0.62) return 'wry';
   return 'plain';
 }
-
-/** The kahya's own deed as the person remembers it, in the second person. */
-export const youDid = (summary: string) =>
-  summary.replace(/^the kahya’s /, 'your ').replace(/^the kahya /, 'you ');
 
 export interface VoiceContext {
   seed: number;
@@ -213,24 +209,7 @@ const LEFT = [
   'You’ll have heard {gone} left. There is work in the city, they say.',
 ];
 
-const GOOD = [
-  'We remember that {deed}. We have not forgotten.',
-  '{Spouse} still talks about how {deed}.',
-  'You helped us when {deed}.',
-];
-const BAD = [
-  'I haven’t forgotten that {deed}.',
-  'We remember that {deed}. You should know that.',
-  'It was hard, when {deed}.',
-];
-const OFFICE = [
-  'The last steward took our ox. You have his job now.',
-  'The last one smiled like that too, and then he took the ox.',
-];
-const FIRST = [
-  'No steward has sat in this house before.',
-  'You’re the first of them to come to the door without wanting something. Or are you?',
-];
+const FIRST = ['You have come to our door. What do you need?'];
 
 function pick(ctx: VoiceContext, p: Person, key: string, pool: Pool, k: number): string {
   const n = pool.length;
@@ -247,21 +226,6 @@ function pick(ctx: VoiceContext, p: Person, key: string, pool: Pool, k: number):
   }
   // Every line in the pool was said this season: say nothing rather than repeat (the caller copes with '').
   return '';
-}
-
-/** The most salient thing this person remembers the kahya doing (pure read of HF memory, no recall). */
-function strongestDeed(p: Person, now: number): Episode | undefined {
-  let best: Episode | undefined;
-  let score = 0;
-  for (const e of p.memory.episodes) {
-    if (e.actorId !== KAHYA || now - e.at > 240 * DAY) continue;
-    const sc = Math.abs(e.valence) * e.salience;
-    if (sc > score) {
-      score = sc;
-      best = e;
-    }
-  }
-  return score > 0.15 ? best : undefined;
 }
 
 /** "my wife" or "my husband", as the speaker would say it. */
@@ -316,16 +280,7 @@ export function visitWords(
   else if (ctx.left) parts.push(pick(ctx, p, 'left', LEFT, 1).replace('{gone}', ctx.left));
   const jars = JARS.find((j) => ctx.bread >= j.min) ?? JARS[3];
   if (jars && !ctx.died) parts.push(pick(ctx, p, `jars${jars.min}`, jars.lines, 2));
-  const deed = strongestDeed(p, ctx.minute);
-  if (deed && deed.at >= 0)
-    parts.push(
-      pick(ctx, p, deed.valence > 0 ? 'good' : 'bad', deed.valence > 0 ? GOOD : BAD, 3).replace(
-        '{deed}',
-        youDid(deed.summary),
-      ),
-    );
-  else if (deed && deed.at < 0) parts.push(pick(ctx, p, 'office', OFFICE, 3));
-  else if (firstTime) parts.push(pick(ctx, p, 'first', FIRST, 3));
+  if (firstTime) parts.push(pick(ctx, p, 'first', FIRST, 3));
   return spoken(p, parts.filter(Boolean).slice(0, 3).join(' '));
 }
 

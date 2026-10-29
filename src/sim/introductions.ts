@@ -6,6 +6,9 @@
  * Research: released partnering SCOPE; research/marriage-sources.md §§1–6,10.
  * No new actor, altered norm, compatibility display, proposal or marriage is created.
  */
+
+import { DAY, daylight, dayOfMinute, doyOf, HOUR, minuteOfDay } from './calendar.ts';
+import { passEdition } from './edition.ts';
 import {
   type Activity,
   type Affordance,
@@ -20,9 +23,7 @@ import {
   type Person,
   type Suggestion,
   spousesOf,
-} from '@adam0white/human-framework';
-import { DAY, daylight, dayOfMinute, doyOf, HOUR, minuteOfDay } from './calendar.ts';
-import { passEdition } from './edition.ts';
+} from './hf.ts';
 import { KAHYA } from './people.ts';
 import { note, openAsksFor, personOf, promote, type ValleyState } from './valley.ts';
 
@@ -52,7 +53,7 @@ export function introductionEligible(s: ValleyState): boolean {
     !g.social.relationships.some((r) => r.otherId === b.id && r.roles.includes('child'))
   )
     return false;
-  return canMarry(a, b, INTRO_CUSTOM, { at: s.minute, lookup: (id) => personOf(s, id) }).ok;
+  return canMarry(a, b, INTRO_CUSTOM, { at: s.minute, lookup: (id: string) => personOf(s, id) }).ok;
 }
 export function introduce(s: ValleyState): boolean {
   if (!passEdition(s.edition?.id) || s.flags.ended || s.introduction || !introductionEligible(s))

@@ -1,209 +1,86 @@
-/** Explicit Valley receiver for published site-cast/1 (Well/Watch) and this host's own
- * valley-cast/1. Zero-duration clock translation preserves age/calendar; no lived travel,
- * healing, family consent, skill qualification or source private memories are inferred.
+/** Supported portable identities retain their source and their receiving ownership claim.
+ * The complete input and mapping are replay data. HF validates mapped references and
+ * calendar meanings when the authored actor is installed in the Run.
  */
 import {
-  admitCalendarPersona,
-  ENGINE_VERSION,
-  isContinuingCommitment,
-  MINUTES_PER_YEAR,
-  type NormDefinition,
-  type Person,
-  projectCalendarPersona,
-  restore,
-  snapshot,
-  validateCalendarPersona,
+  exportRun,
+  inspect,
+  type PersonAuthoring,
+  type PortableAdmission,
+  type RunArchive,
+  replay,
+  type SourcedNorm,
 } from '@adam0white/human-framework';
 import {
+  admitPortablePerson,
   canonicalCast,
   canonicalPersona,
+  claimPortablePerson,
+  createPersona,
   type LifePreparation,
   lifeAdmission,
   type PersonaEnvelope,
+  portablePersonOwner,
+  portablePersonRole,
   preparePersonaLife,
+  validatePortablePerson,
 } from '@adam0white/lab-client';
-import { ALLOCATION, CAST_IDS, localRole } from './cast.ts';
+import { ALLOCATION, localRole } from './cast.ts';
+import { authoringOf, type Person, personRun, portableFromPerson } from './hf.ts';
 import { SITE_CAST_NORMS } from './transport-norms.ts';
-export const HOST_RULES = 'valley-cast-3';
-export const VALLEY_DUES: NormDefinition = {
+
+export const HOST_RULES = 'valley-cast-4';
+export const VALLEY_DUES: SourcedNorm = {
   id: 'dues',
   label: 'The valley household’s agreed share',
   standing: 'obligatory',
   sources: [
     { kind: 'assumption', ref: 'Valley household share; each person understands the agreement locally' },
   ],
+  provenance: { kind: 'authored-world', author: 'valley', ruleId: 'dues', edition: HOST_RULES },
+  exemptions: [],
 };
 export const TRUSTED_NORMS = [...SITE_CAST_NORMS, VALLEY_DUES];
-const identity = (xs: string[]) => Object.fromEntries(xs.map((id) => [id, id]));
-export function calendarPassport(p: Person, version = 'valley-calendar/1') {
-  const retained = p.agenda.commitments.filter((c) => isContinuingCommitment(p.agenda, c));
-  const owed = p.agenda.owed ?? [];
-  return projectCalendarPersona(p, {
-    version,
-    skills: identity(Object.keys(p.skills)),
-    calendar: {
-      version: 'hf-persona-calendar-map/1',
-      offset: 0,
-      references: {
-        commitments: identity([
-          ...retained.flatMap((c) => [c.id, ...(c.makeUpOf ? [c.makeUpOf] : [])]),
-          ...owed.flatMap((d) => [d.ofId, ...(d.scheduledAs ? [d.scheduledAs] : [])]),
-        ]),
-        chains: identity(retained.flatMap((c) => (c.chain ? [c.chain] : []))),
-        actions: identity([
-          ...retained.flatMap((c) => [...c.actions, ...(c.violatedBy ?? [])]),
-          ...owed.flatMap((d) => [...d.actions, ...(d.violatedBy ?? [])]),
-        ]),
-        entities: identity(
-          retained.flatMap((c) => [c.toId, c.targetId].filter((x): x is string => x !== undefined)),
-        ),
-        norms: identity(TRUSTED_NORMS.map((n) => n.id)),
-      },
-      sourceNorms: TRUSTED_NORMS,
-    },
-  });
-}
-export async function checkpointReceipt(raw: Person) {
-  const sha256 = Array.from(
-    new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPersona(raw)))),
-    (b) => b.toString(16).padStart(2, '0'),
-  ).join('');
-  return { schema: raw.schema, sourceMinute: raw.now, rng: structuredClone(raw.rng), sha256 };
-}
-const SITE_ROLES: Record<string, Record<string, string>> = {
-  well: {
-    maryam: 'hf.cast.maryam.well',
-    yusuf: 'hf.cast.yusuf.well',
-    samira: 'hf.cast.samira.well',
-    danyal: 'hf.cast.danyal.well',
-  },
-  watch: { samira: 'hf.cast.samira.well', danyal: 'hf.cast.danyal.well', meryem: 'hf.cast.meryem.warren' },
-};
-const ACTIONS = new Set([
-  'sleep',
-  'rest',
-  'eat',
-  'drink',
-  'pray',
-  'christian-prayer',
-  'reap',
-  'sow',
-  'reap-agha',
-  'build-mill',
-  'bring-share',
-  'cook',
-  'store-check',
-  'build',
-  'flock-care',
-  'gather-grain',
-  'observe-route',
-  'draw-water',
-  'survey',
-  'household-work',
-  'digging-advice',
-]);
+
+/** A retained source carries its own full calendar and reference IDs. Identity
+ * mappings are checked against the receiving Run's definitions by createPerson.
+ * Unknown IDs or mismatched norms refuse admission rather than being dropped.
+ */
 export function admitCast(
   opening: Person,
   input: LifePreparation,
-): { person: Person; limitations: string[] } {
+): { person: PersonAuthoring; limitations: string[] } {
   const parent = input.parent;
-  if (!['2.17.0', '2.21.0', ENGINE_VERSION].includes(parent.source.engine))
-    throw new Error('Unsupported source engine dialect.');
-  const role = localRole(parent.castId);
-  const publicPerson = canonicalCast(parent.castId);
-  if (opening.id !== role || parent.castRevision !== publicPerson.revision || parent.terminal)
-    throw new Error('Unsupported cast identity/revision or closed branch.');
+  const role = portablePersonRole(parent, 'valley');
+  if (role !== localRole(parent.castId) || opening.id !== role)
+    throw new Error('Portable source does not match the Valley role.');
   if (canonicalPersona(preparePersonaLife(parent, input.clockMs).life) !== canonicalPersona(input.life))
     throw new Error('Pinned life differs from its source/clock.');
-  const dialect = parent.transfer.castPassport;
-  if (dialect === 'site-cast/1') {
-    if (SITE_ROLES[parent.source.game]?.[String(parent.transfer.sourceRole)] !== parent.castId)
-      throw new Error('Unsupported site source role.');
-  } else if (dialect === 'valley-cast/1') {
-    if (parent.source.game !== 'valley' || CAST_IDS[String(parent.transfer.sourceRole)] !== parent.castId)
-      throw new Error('Unsupported Valley source role.');
-  } else throw new Error('Unsupported passport dialect; public profiles are not portable history.');
-  const portable = validateCalendarPersona(parent.transfer.person);
-  const mapping = dialect === 'site-cast/1' ? 'site-cast-calendar/1' : 'valley-calendar/1';
-  if (portable.person.mappingVersion !== mapping || portable.person.source.id !== parent.transfer.sourceRole)
-    throw new Error('Passport mapping/role conflict.');
-  const receipt = parent.transfer.checkpoint as
-    | { schema?: unknown; sourceMinute?: unknown; rng?: unknown; sha256?: unknown }
-    | undefined;
-  if (
-    !receipt ||
-    Object.keys(receipt).sort().join(',') !== 'rng,schema,sha256,sourceMinute' ||
-    receipt.schema !== portable.person.source.schema ||
-    receipt.sourceMinute !== portable.person.source.now ||
-    canonicalPersona(receipt.rng) !== canonicalPersona(portable.person.rng) ||
-    typeof receipt.sha256 !== 'string' ||
-    !/^[a-f0-9]{64}$/.test(receipt.sha256)
-  )
-    throw new Error('Missing full source checkpoint receipt.');
-  const norms = portable.calendar.norms.map((n) => {
-    const known = TRUSTED_NORMS.find((x) => x.id === n.id);
-    if (!known || canonicalPersona(known) !== canonicalPersona(n))
-      throw new Error('Unsupported source norm meaning.');
-    return known;
-  });
-  if (
-    portable.calendar.owed.length ||
-    portable.calendar.lapse ||
-    portable.calendar.commitments.some(
-      (c) =>
-        c.kind !== 'worship' ||
-        !['salah', 'daily-prayer'].includes(c.normId ?? '') ||
-        c.actions.some((a) => !['pray', 'christian-prayer'].includes(a)),
-    )
-  )
-    throw new Error(
-      'A source care, work or owed duty has no equivalent handover here. Keep the source chapter; no obligation is waived.',
-    );
-  const actions = [
-    ...portable.calendar.commitments.flatMap((c) => [...c.actions, ...(c.violatedBy ?? [])]),
-    ...portable.calendar.owed.flatMap((d) => [...d.actions, ...(d.violatedBy ?? [])]),
-  ];
-  if (actions.some((a) => !ACTIONS.has(a)))
-    throw new Error('A source duty has no implemented Valley action. Keep that chapter or export it.');
-  const shifted = structuredClone(portable);
-  const offset = opening.now - portable.person.source.now;
-  shifted.calendar.offset = offset;
-  for (const c of shifted.calendar.commitments) {
-    c.from += offset;
-    c.until += offset;
-    if (c.recurUntil !== undefined) c.recurUntil += offset;
-    if (c.exempt) c.exempt.at += offset;
-  }
-  for (const d of shifted.calendar.owed) {
-    d.at += offset;
-    if (d.lapseSince !== undefined) d.lapseSince += offset;
-  }
-  if (shifted.calendar.lapse) shifted.calendar.lapse.since += offset;
-  const target = restore(snapshot(opening));
-  target.body.fitness = portable.person.health.fitness;
-  const age = portable.person.source.now - portable.person.life.bornAt;
-  if (age < publicPerson.age * MINUTES_PER_YEAR || age > (publicPerson.age + 200) * MINUTES_PER_YEAR)
-    throw new Error('Unsupported age provenance.');
-  target.life.bornAt = portable.person.life.bornAt + offset;
-  const omitted = Object.keys(shifted.person.skills).filter((id) => !Object.hasOwn(target.skills, id));
-  for (const id of omitted) delete shifted.person.skills[id];
-  if (omitted.length)
-    shifted.person.limitations.push(`Source archive retains unmapped skills: ${omitted.join(', ')}`);
-  // Only the unplayed authored calendar is replaced. HF still verifies family/bonds and clinical body.
-  target.agenda.commitments = [];
-  delete target.agenda.owed;
-  delete target.agenda.lapse;
-  const result = admitCalendarPersona(shifted, target, {
-    mappingVersion: mapping,
-    sourceId: portable.person.source.id,
-    targetId: role,
-    targetNorms: norms,
-  });
-  return { person: result.person, limitations: result.report.limitations };
+  const portable = validatePortablePerson(parent.transfer.portable);
+  if (portable.version !== 2)
+    throw new Error('This chapter requires retained portable history. Keep the source chapter or export it.');
+  const authored = structuredClone(authoringOf(opening));
+  // HF owns the source memory and commitments. Avoid competing authored history.
+  authored.biography = [];
+  authored.state.beliefs = [];
+  authored.state.expectations = [];
+  authored.state.sourceTrust = [];
+  authored.state.heldNorms = [];
+  authored.state.agenda.commitments = [];
+  authored.state.agenda.owed = [];
+  authored.state.agenda.goals = [];
+  authored.state.agenda.precommitments = [];
+  const mapping: PortableAdmission['mapping'] = {
+    offsetMs: opening.now * 60000 - portable.retained.at,
+    references: [],
+  };
+  const person = admitPortablePerson(parent, 'valley', authored, mapping);
+  return { person, limitations: ['Source runtime and RNG remain in the source archive.'] };
 }
+
 export interface CastStart {
   version: typeof HOST_RULES;
-  people: Record<string, Person>;
+  people: Record<string, PersonAuthoring>;
   inputs: LifePreparation[];
   claims: PersonaEnvelope[];
   limitations: Record<string, string[]>;
@@ -215,17 +92,16 @@ export function prepareCastStart(
 ): CastStart {
   if (inputs.length > 6 || new Set(inputs.map((i) => i.parent.castId)).size !== inputs.length)
     throw new Error('Invalid cast batch.');
-  const people: Record<string, Person> = {};
+  const people: Record<string, PersonAuthoring> = {};
   const limitations: Record<string, string[]> = {};
   for (const c of ALLOCATION) {
-    const role = localRole(c.castId);
-    const opening = openings.find((p) => p.id === role);
+    const opening = openings.find((p) => p.id === localRole(c.castId));
     if (!opening) throw new Error('Missing opening actor.');
     const input = inputs.find((i) => i.parent.castId === c.castId);
     const result = input
       ? admitCast(opening, input)
-      : { person: restore(snapshot(opening)), limitations: [] };
-    people[c.castId] = snapshot(result.person);
+      : { person: structuredClone(authoringOf(opening)), limitations: [] };
+    people[c.castId] = result.person;
     limitations[c.castId] = result.limitations;
   }
   for (const input of inputs)
@@ -248,9 +124,9 @@ export function validateCastStart(openings: Person[], header: CastStart, preflig
       !claim ||
       claim.parentRevision !== input.parent.revision ||
       claim.branchId !== input.parent.branchId ||
-      claim.source.game !== 'valley' ||
-      claim.source.rules !== HOST_RULES ||
-      canonicalPersona(claim.transfer) !== canonicalPersona({ ...input.parent.transfer, life: input.life })
+      canonicalPersona(claim.source) !== canonicalPersona(input.parent.source) ||
+      canonicalPersona(claim.transfer) !==
+        canonicalPersona({ ...claimPortablePerson(input.parent, 'valley'), life: input.life })
     )
       throw new Error('Claim differs from its pinned parent and life.');
   }
@@ -261,4 +137,159 @@ export function validateCastStart(openings: Person[], header: CastStart, preflig
 }
 export function lifeFacts(input: LifePreparation) {
   return lifeAdmission(input, 'valley');
+}
+
+/** A checkpoint is derived from the live Run's public portable inspection. HF
+ * projects the actual actor and retains the initial portable history. The client
+ * validates the resulting source role, cast identity, and prior ownership. The
+ * full native archive is retained separately by the host as source evidence.
+ */
+export interface NativeCastSource {
+  actorId: string;
+  archive: RunArchive;
+}
+
+export async function checkpointTransfer(
+  p: Person,
+  castId: string,
+  source: PersonaEnvelope['source'],
+  previous?: PersonaEnvelope,
+  hostObligations: string[] = [],
+): Promise<{ transfer: Record<string, unknown>; source: NativeCastSource }> {
+  if (source.game !== 'valley' || hostObligations.length)
+    throw new Error('This person has unfinished host responsibilities or an incompatible source.');
+  if (previous) {
+    if (previous.castId !== castId) throw new Error('Portable identity differs from its prior chapter.');
+    const owner = portablePersonOwner(previous);
+    if (owner && owner !== 'valley') throw new Error('This person still belongs to another chapter.');
+  }
+  const run = personRun(p);
+  if (!run) throw new Error('A current Run is required for a portable checkpoint.');
+  const cast = canonicalCast(castId);
+  const projected = portableFromPerson(p, castId, cast.revision).person;
+  const portable = validatePortablePerson(projected);
+  const native: NativeCastSource = { actorId: p.id, archive: structuredClone(exportRun(run)) as RunArchive };
+  if (previous?.transfer.portableClaim) {
+    const initial = native.archive.initial.people.find((actor) => actor.id === p.id)?.portable?.person;
+    if (!initial || canonicalPersona(initial) !== canonicalPersona(previous.transfer.portable))
+      throw new Error('The Run does not contain the claimed source history.');
+  }
+  const checkpoint = await checkpointReceipt(native);
+  const transfer = { castPassport: 'hf-portable-person/2', portable, checkpoint };
+  const candidate = await createPersona({
+    format: 'hf-persona/1',
+    castId,
+    castRevision: cast.revision,
+    branchId: previous?.branchId ?? 'valley-source-check',
+    parentRevision: previous?.revision ?? null,
+    source,
+    transfer,
+    limitations: [],
+  });
+  if (portablePersonRole(candidate, 'valley') !== p.id)
+    throw new Error('Portable source role differs from this actor.');
+  return { transfer, source: native };
+}
+
+/** Replay the full native source before using its checkpoint as evidence. */
+export async function checkpointReceipt(source: NativeCastSource | Person) {
+  const native: NativeCastSource =
+    'archive' in source
+      ? source
+      : (() => {
+          const run = personRun(source);
+          if (!run) throw new Error('A current Run is required for a checkpoint.');
+          return { actorId: source.id, archive: structuredClone(exportRun(run)) as RunArchive };
+        })();
+  const result = replay(native.archive);
+  if (
+    !result.ok ||
+    !result.value.verified ||
+    result.value.fullHash !== native.archive.hashes.full ||
+    !native.archive.initial.people.some((p) => p.id === native.actorId)
+  )
+    throw new Error('Native source Run does not replay.');
+  const sha256 = Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPersona(native.archive))),
+    ),
+    (b) => b.toString(16).padStart(2, '0'),
+  ).join('');
+  return { actorId: native.actorId, at: native.archive.current.at, fullHash: result.value.fullHash, sha256 };
+}
+
+export async function validateCheckpointSource(
+  source: NativeCastSource,
+  envelope: PersonaEnvelope,
+): Promise<void> {
+  const receipt = await checkpointReceipt(source);
+  if (canonicalPersona(receipt) !== canonicalPersona(envelope.transfer.checkpoint))
+    throw new Error('Checkpoint differs from its native source.');
+  const replayed = replay(source.archive);
+  if (!replayed.ok) throw new Error('Native source Run does not replay.');
+  const result = inspect(replayed.value.run, {
+    perspective: { kind: 'host' },
+    people: [source.actorId],
+    select: ['persona'],
+    portable: { person: source.actorId, castId: envelope.castId, castRevision: envelope.castRevision },
+  });
+  if (!result.ok) throw new Error(result.error.message);
+  const part = result.value.people[0]?.parts.find((p) => p.select === 'persona');
+  if (
+    !part ||
+    canonicalPersona(validatePortablePerson(part.value)) !== canonicalPersona(envelope.transfer.portable) ||
+    portablePersonRole(envelope, 'valley') !== source.actorId
+  )
+    throw new Error('Portable checkpoint differs from its native source.');
+}
+
+/** A terminal source is evidence only after full Run replay and public inspection. */
+export async function validateTerminalSource(
+  source: NativeCastSource,
+  envelope: PersonaEnvelope,
+): Promise<void> {
+  const receipt = await checkpointReceipt(source);
+  const checked = replay(source.archive);
+  if (
+    !checked.ok ||
+    !envelope.terminal ||
+    envelope.terminal.kind !== 'dead' ||
+    envelope.terminal.at !== receipt.at ||
+    source.actorId !== localRole(envelope.castId)
+  )
+    throw new Error('Terminal receipt differs from its native source.');
+  const view = inspect(checked.value.run, {
+    perspective: { kind: 'host' },
+    people: [source.actorId],
+    select: ['summary'],
+  });
+  if (!view.ok) throw new Error(view.error.message);
+  const person = view.value.people[0];
+  if (person?.kind !== 'host') throw new Error('Terminal source has no host view.');
+  const summary = person.parts.find((part) => part.select === 'summary');
+  if (summary?.select !== 'summary' || summary.value.alive)
+    throw new Error('Terminal source does not establish death.');
+}
+
+/** Both snapshots must replay and share the complete initial Run, including its
+ * pinned portable source. A later checkpoint cannot silently switch chapters. */
+export async function validateCheckpointLineage(
+  current: NativeCastSource,
+  prior: NativeCastSource,
+  castId: string,
+): Promise<void> {
+  await checkpointReceipt(current);
+  await checkpointReceipt(prior);
+  const role = localRole(castId);
+  if (
+    current.actorId !== role ||
+    prior.actorId !== role ||
+    current.archive.hashes.initial !== prior.archive.hashes.initial ||
+    canonicalPersona(current.archive.initial) !== canonicalPersona(prior.archive.initial) ||
+    current.archive.current.at < prior.archive.current.at ||
+    prior.archive.history.length > current.archive.history.length ||
+    canonicalPersona(current.archive.history.slice(0, prior.archive.history.length)) !==
+      canonicalPersona(prior.archive.history)
+  )
+    throw new Error('Checkpoint is not a continuation of its native source Run.');
 }

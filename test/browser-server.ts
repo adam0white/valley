@@ -13,7 +13,7 @@ export async function startBrowserServer(cacheName: string): Promise<{
       `import { createServer } from 'vite';
       const server = await createServer({
         cacheDir: ${JSON.stringify(`node_modules/.vite-${cacheName}`)},
-        server: { host: '127.0.0.1', port: 0, strictPort: true },
+        server: { host: '127.0.0.1', port: 0, strictPort: true, hmr: false },
       });
       await server.listen();
       console.log('VALLEY_TEST_ORIGIN=' + server.resolvedUrls.local[0]);`,

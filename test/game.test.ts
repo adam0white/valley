@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { dialogueChoices } from '../src/sim/dialogue.ts';
-import { DIALOGUE_EDITION } from '../src/sim/edition.ts';
+import { PUBLIC_EDITION } from '../src/sim/edition.ts';
 import { act, compactRun, load, newGame, restoreState, save, step } from '../src/sim/game.ts';
 import { required } from './required.ts';
 
@@ -32,12 +32,15 @@ it('keeps all five older configurations closed to dialogue commands', () => {
   }
 });
 it('validates a detached dialogue native file and bound recovery before installing it', () => {
-  const g = newGame(7, undefined, false, true, DIALOGUE_EDITION);
+  const g = newGame(7, undefined, false, true, PUBLIC_EDITION);
   act(g, { verb: 'call', job: 'reap-agha', houses: ['coban'] });
-  step(g, 1080);
-  act(g, { verb: 'visit', house: 'coban' });
-  step(g, 1110);
-  act(g, required(dialogueChoices(g.valley)[0]));
+  // This public control uses a real delayed reply and attended visit.
+  step(g, 480);
+  expect(act(g, { verb: 'insist', ask: 'a1-420', pid: 'zehra' })).toBe(true);
+  step(g, 750);
+  expect(act(g, { verb: 'visit', house: 'coban' })).toBe(true);
+  step(g, 810);
+  expect(act(g, required(dialogueChoices(g.valley)[0]))).toBe(true);
   const full = save(g);
   expect(() => load(full)).not.toThrow();
   const invalid = structuredClone(full);
@@ -46,14 +49,14 @@ it('validates a detached dialogue native file and bound recovery before installi
   expect(() => load(invalid)).toThrow(/dialogue/i);
   const forged = structuredClone(full);
   required(required(forged.state.dialogue).exchanges[0]).words = 'invented';
-  expect(() => load(forged)).toThrow(/dialogue/i);
+  expect(() => load(forged)).toThrow(/complete replay state/i);
   const extra = structuredClone(full);
-  extra.inputs.push({ ...required(extra.inputs.at(-1)), at: 1110 });
-  expect(() => load(extra)).toThrow(/dialogue/i);
+  extra.inputs.push({ ...required(extra.inputs.at(-1)), at: 810 });
+  expect(() => load(extra)).toThrow(/complete replay state/i);
   const missing = structuredClone(full);
   delete missing.state.dialogue;
   expect(() => load(missing)).toThrow(/dialogue/i);
   const mixed = structuredClone(full);
   mixed.state.edition = { id: 'valley-2026-10' };
-  expect(() => restoreState(mixed.state)).toThrow(/dialogue/i);
+  expect(() => restoreState(mixed.state)).toThrow(/reply edition state/i);
 });

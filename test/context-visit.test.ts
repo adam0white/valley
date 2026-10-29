@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { dialogueChoices, dialogueWords } from '../src/sim/dialogue.ts';
 import { act, compactRun, load, newGame, save, step } from '../src/sim/game.ts';
+import { exportRun, personRun } from '../src/sim/hf.ts';
 import { required } from './required.ts';
 
 function scene(house: string, at = 450) {
@@ -10,6 +11,7 @@ function scene(house: string, at = 450) {
   step(g, at);
   return g;
 }
+const actors = (g: ReturnType<typeof newGame>) => exportRun(required(personRun(g.valley.kahya)));
 function native(g: ReturnType<typeof newGame>) {
   const { savedAt: _at, ...rest } = save(g);
   return rest;
@@ -23,9 +25,9 @@ it('binds contextual questions to actual people and public sources during an att
     const g = scene(house, at);
     const choice = required(dialogueChoices(g.valley).find((c) => String(c.line) === line));
     expect(choice.person).toBe(person);
-    const before = structuredClone(g.valley.people);
+    const before = actors(g);
     expect(act(g, choice)).toBe(true);
-    expect(g.valley.people).toEqual(before);
+    expect(actors(g)).toEqual(before);
     const exchange = required(g.valley.dialogue?.exchanges.at(-1));
     expect(exchange).toHaveProperty('context.input', 1);
     expect(exchange).toHaveProperty('context.at', at);
@@ -126,10 +128,10 @@ it('asks about reciprocal help using the actual earlier food question without cr
   step(g, 1110);
   const choice = required(dialogueChoices(g.valley).find((c) => c.line === 'reciprocal-help'));
   const source = structuredClone(required(g.valley.notes.find((n) => n.id === choice.prior)));
-  const people = structuredClone(g.valley.people),
+  const people = actors(g),
     stores = structuredClone(g.valley.households);
   expect(act(g, choice)).toBe(true);
-  expect(g.valley.people).toEqual(people);
+  expect(actors(g)).toEqual(people);
   expect(g.valley.households).toEqual(stores);
   const e = required(g.valley.dialogue?.exchanges[0]);
   expect(e).toHaveProperty('context.source.note', source);
@@ -184,10 +186,10 @@ it('completes the public Tepe contextual answer through ordinary HF choice and e
   expect(act(g, { verb: 'turn-away', knock: invitation.id })).toBe(true);
   const source = required(g.valley.households.find((h) => h.id === 'tepe')).looks;
   const choice = required(dialogueChoices(g.valley).find((c) => c.line === 'son'));
-  const beforePeople = structuredClone(g.valley.people),
+  const beforePeople = actors(g),
     beforeHouses = structuredClone(g.valley.households);
   expect(act(g, choice)).toBe(true);
-  expect(g.valley.people).toEqual(beforePeople);
+  expect(actors(g)).toEqual(beforePeople);
   expect(g.valley.households).toEqual(beforeHouses);
   const e = required(g.valley.dialogue?.exchanges[0]);
   expect(e).toHaveProperty('context.input', 3);

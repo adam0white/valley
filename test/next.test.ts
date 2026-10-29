@@ -1,34 +1,28 @@
-import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { DAY, HOUR, yearOf } from '../src/sim/calendar.ts';
-import { act, compactRun, load, newGame, replay, save, stateJson, step } from '../src/sim/game.ts';
+import { act, compactRun, load, newGame, save, stateJson, step } from '../src/sim/game.ts';
+import { inspect, type Person, personRun } from '../src/sim/hf.ts';
 import { underSeal } from '../src/sim/valley.ts';
 import { callUnavailable, currentJob, loanReturnWords } from '../src/ui/presentation.ts';
 
-it('keeps entire raw old-edition continuations equal to the pre-change source', () => {
-  const rows = [
-    { rules: undefined, sha: '0078dc96765a69d70ea40a30811126ea5c0067bdc3a22402c7170c89b4433534' },
-    {
-      rules: 'valley-2026-10' as const,
-      sha: '89b4bad4c23fe63376efa572c27cf17265329b586b95dfdfd9d34faaf17395f3',
+/** Self inspection exposes this person's held partnering record without a private actor read. */
+function heldCourtships(person: Person, other: string) {
+  const run = personRun(person);
+  if (!run) throw new Error('Expected an admitted person');
+  const result = inspect(run, {
+    perspective: { kind: 'person', observer: person.id },
+    people: [person.id],
+    select: [],
+    lifecycle: {
+      kind: 'person',
+      query: { kind: 'held-partnering', person: person.id, other: { kind: 'entity', id: other } },
     },
-  ];
-  for (const row of rows) {
-    const g = replay(
-      7,
-      [{ at: 420, verb: 'call', job: 'reap-agha', houses: ['kavak', 'coban'], wage: true }],
-      4320,
-      undefined,
-      true,
-      row.rules,
-    );
-    expect(
-      createHash('sha256')
-        .update(JSON.stringify(stateJson(g.valley)))
-        .digest('hex'),
-    ).toBe(row.sha);
-  }
-});
+  });
+  if (!result.ok) throw new Error(result.error.message);
+  const view = result.value.lifecycle;
+  if (!view || !('courtships' in view)) throw new Error('Expected the actual self partnering view');
+  return view.courtships;
+}
 
 it('visits a real neighbouring quarry, pays for provisions and stone, and returns through normal time', () => {
   const g = newGame(7, undefined, false, true, 'valley-pass-2026-10');
@@ -81,8 +75,11 @@ it('offers a supervised eligible introduction and reports actual choices without
   expect(g.valley.introduction?.status).toBe('met');
   for (const id of ['ali', 'esma', 'omer'])
     expect(g.valley.introduction?.choices[id]?.verdict).toBe('assented');
-  expect(g.valley.people.find((p) => p.id === 'ali')?.bonds?.courtships[0]?.withId).toBe('esma');
-  expect(g.valley.people.find((p) => p.id === 'esma')?.bonds?.courtships[0]?.withId).toBe('ali');
+  const man = g.valley.people.find((p) => p.id === 'ali'),
+    woman = g.valley.people.find((p) => p.id === 'esma');
+  if (!man || !woman) throw new Error('Missing the actual introduction participants');
+  expect(heldCourtships(man, woman.id)[0]?.withId).toBe(woman.id);
+  expect(heldCourtships(woman, man.id)[0]?.withId).toBe(man.id);
   expect(g.valley.notes.some((n) => /message from Kuyucu|supervised meeting/.test(n.text))).toBe(true);
   const compact = load(compactRun(g));
   const full = load(save(g));

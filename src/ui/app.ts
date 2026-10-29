@@ -1,4 +1,3 @@
-import { ageYears } from '@adam0white/human-framework';
 import { dialogueChoices, dialogueStatus, dialogueWords } from '../sim/dialogue.ts';
 import {
   allianceEdition,
@@ -9,6 +8,7 @@ import {
   rulesOf,
   type TermDecision,
 } from '../sim/edition.ts';
+import { ageYears } from '../sim/hf.ts';
 import {
   copyReason,
   deliveryAway,
@@ -699,6 +699,7 @@ function fileTitle() {
         'plainEnglish',
         'castHeads',
         'castSources',
+        'castSourceRefs',
         'cast',
         'game',
         'version',
@@ -754,7 +755,7 @@ function title() {
   const where = storedLogProblem
     ? 'This browser’s saved ledger is malformed or incompatible. It is kept here. Starting a new game will replace it.'
     : log && log.version !== GAME_VERSION
-      ? 'This saved game uses an older Valley version. Start a new game to play with the new people. Your old saved game stays here until you start.'
+      ? 'This saved game uses an older Valley version. Download the old game if you want to keep it, then start fresh. Your old saved game stays here until you start.'
       : log
         ? `Your saved place is kept at ${dateWords(dayOfMinute(log.minute))} of year ${yearWord(yearOf(dayOfMinute(log.minute)))}. Resume continues from there.`
         : '';
@@ -766,7 +767,7 @@ function title() {
     ${topbar(`<a href="${HUB}/games/" target="_top">All games</a>`)}
     <section class="title-premise"><h1>The Valley</h1><p class="purpose">${esc(PURPOSE)}</p><p class="soft">People can refuse you, and they remember how you answer.</p></section>
     <div class="vignette" aria-hidden="true"><svg viewBox="0 0 360 140"><path d="M0 95Q80 15 160 90T360 70M0 130Q90 50 180 120T360 95M250 0Q200 70 260 140" fill="none" stroke="currentColor"/><g fill="none" stroke="currentColor" stroke-width="2"><path d="M70 95v-18l12-12 12 12v18zM130 105V87l12-12 12 12v18zM190 90V72l12-12 12 12v18zM280 100V82l12-12 12 12v18z"/></g></svg></div>
-    <footer class="title-actions"><p class="term-description">Visit a household and choose what to say. Grain wages, winter loans, inspections, pass journeys and family arrangements are part of this term. The steward needs food and rest between walks. People stay local to this valley.</p>${where ? `<p class="hand">${esc(where)}</p>` : ''}
+    <footer class="title-actions"><p class="term-description">Visit a household and choose what to say. Grain wages, winter loans, inspections, pass journeys and family arrangements are part of this term. The steward needs food and rest between walks.</p>${where ? `<p class="hand">${esc(where)}</p>` : ''}
     ${hasSave ? `${log && log.version === GAME_VERSION ? '<button class="primary" data-go="open">Resume</button>' : ''}<button data-go="new" class="hold">New game<span class="fill"></span></button><p class="soft">This replaces your saved game.</p>` : '<button class="primary" data-go="new">New game</button>'}${mark()}</footer>
     <dialog class="ways-panel" aria-label="Other ways to start"><header><h2>Other ways to start</h2><button data-ways-close aria-label="Close other ways to start">×</button></header><label for="valley-name">A named valley</label><input id="valley-name" placeholder="Kuyulu" maxlength="80"><p>The same name gives the same valley.</p><button data-seed${log ? ' class="hold"' : ''}>Begin this valley${log ? '<span class="fill"></span>' : ''}</button>${log ? '<p class="soft">This replaces your saved game.</p>' : ''}</dialog>
   </div>`;
@@ -2360,6 +2361,7 @@ const REASON: [RegExp, string][] = [
 
 function hunchLine(hc: Hunch | undefined, who: string): string {
   if (!hc) return '';
+  if (!hc.verdict) return `You can’t tell how ${who} would answer from what you have seen.`;
   const sure =
     hc.confidence < 0.15 ? 'You can’t tell yet' : hc.confidence < 0.45 ? 'You think' : 'You are fairly sure';
   if (hc.confidence < 0.15) return `${sure} how ${who} would answer.`;

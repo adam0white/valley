@@ -1,5 +1,5 @@
-import { ageYears, spousesOf } from '@adam0white/human-framework';
 import { describe, expect, it } from 'vitest';
+import { ageYears, spousesOf } from '../src/sim/hf.ts';
 import { foundValley } from '../src/sim/people.ts';
 
 describe('canonical historical Valley opening', () => {
@@ -93,10 +93,15 @@ it('never assigns incidental Muslim prayer prose to Christian Danyal', () => {
 });
 
 it('opens visits and insisting from an actual deferred reply, regardless of prose case', () => {
-  const g = newGame(42);
-  step(g, 750);
-  act(g, { verb: 'call', job: 'reap-agha', houses: ['coban'] });
-  step(g, 1020);
+  const g = newGame(42, undefined, false, true, 'valley-public-2026-10');
+  expect(
+    act(g, {
+      verb: 'call',
+      job: 'reap-agha',
+      houses: ['kavak', 'ak', 'coban', 'dere', 'kara', 'demirci', 'kuyucu', 'tepe'],
+    }),
+  ).toBe(true);
+  step(g, 720);
   expect(Object.values(g.valley.asks[0]?.replies ?? {}).some((r) => r.verdict === 'deferred')).toBe(true);
   expect(g.valley.flags.verbs).toContain('visit');
   expect(g.valley.flags.verbs).toContain('insist');
@@ -125,7 +130,7 @@ it('keeps a foreign file session without a Shelf, ownership publication or new g
     },
     null,
   );
-  const game = newGame(7);
+  const game = newGame(7, undefined, false, true, 'valley-public-2026-10');
   await session.loaded(game, undefined, true, { castHeads: {}, castSources: {} });
   expect(session.fileOrigin).toBe(true);
   expect(session.heads).toEqual({});
@@ -134,5 +139,5 @@ it('keeps a foreign file session without a Shelf, ownership publication or new g
   await session.alternative('hf.cast.yusuf.well');
   expect(session.heads).toEqual({});
   expect(session.exportRun(save(game)).state).toEqual(save(game).state);
-  expect(session.exportRun(save(game)).castSources).toEqual({});
-});
+  expect(session.exportRun(save(game)).castSourceRefs).toEqual({});
+}, 60_000);

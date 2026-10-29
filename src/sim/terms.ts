@@ -3,6 +3,9 @@
  * No fields or transitions exist before a valid public input; words alone activate no person.
  * 0.15/hour reuses mill pay;120 minutes/0.3/one attempt/60-minute delivery are host conventions.
  */
+
+import { DAY, daylight, dayOfMinute, doyOf, minuteOfDay, weatherOf } from './calendar.ts';
+import { PUBLIC_EDITION } from './edition.ts';
 import {
   type Activity,
   type Affordance,
@@ -10,14 +13,13 @@ import {
   adoptGoal,
   ageYears,
   type DecisionRecord,
+  lastPlace,
   type Outcome,
   type Percept,
   type Person,
   perceive,
   type Suggestion,
-} from '@adam0white/human-framework';
-import { DAY, daylight, dayOfMinute, doyOf, minuteOfDay, weatherOf } from './calendar.ts';
-import { PUBLIC_EDITION } from './edition.ts';
+} from './hf.ts';
 import { KAHYA, personLabel } from './people.ts';
 import {
   houseOf,
@@ -122,6 +124,7 @@ function atHome(s: ValleyState, p: Person, h: string, at: number, help?: Help): 
     v.house === h &&
     at >= v.arrive &&
     at < v.leave &&
+    (!s.stewardCare || lastPlace(s.kahya) === `house:${h}`) &&
     p.body.alive &&
     p.activity?.mode !== 'sleep' &&
     houseOf(s, h)?.members.includes(p.id) === true &&

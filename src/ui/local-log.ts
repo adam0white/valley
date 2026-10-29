@@ -18,6 +18,13 @@ const object = (x: unknown): x is Record<string, unknown> =>
   !!x && typeof x === 'object' && !Array.isArray(x);
 const integer = (x: unknown, max: number) =>
   typeof x === 'number' && Number.isSafeInteger(x) && x >= 0 && x <= max;
+// HF visit anchors use exact integer milliseconds projected into game minutes.
+const instant = (x: unknown, max: number) =>
+  typeof x === 'number' &&
+  x >= 0 &&
+  x <= max &&
+  Number.isSafeInteger(Math.round(x * 60000)) &&
+  Math.round(x * 60000) / 60000 === x;
 const name = (x: unknown) => typeof x === 'string' && /^[\p{L}\p{N}_-]{1,100}$/u.test(x);
 export function validLocalLog(value: unknown): boolean {
   if (!object(value)) return false;
@@ -73,7 +80,7 @@ export function validLocalLog(value: unknown): boolean {
               ? !name(input.person) ||
                 !name(input.house) ||
                 !name(input.ask) ||
-                !integer(input.visit, input.at as number)
+                !instant(input.visit, input.at as number)
               : !name(input.contract)
         )
           return false;
@@ -99,7 +106,7 @@ export function validLocalLog(value: unknown): boolean {
                   'after-cut': 'zehra',
                 } as Record<string, string>
               )[input.line as string] ||
-            !integer(input.visit, input.at as number) ||
+            !instant(input.visit, input.at as number) ||
             !integer(input.prior, Number.MAX_SAFE_INTEGER))
         )
           return false;

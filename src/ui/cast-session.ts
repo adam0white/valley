@@ -2,7 +2,7 @@
  * A local receipt is authority to try its exact parent again, never to refresh a live run.
  * File imports always lose ownership and stay file-origin through subsequent local saves.
  */
-import { ENGINE_VERSION, type Person, snapshot } from '@adam0white/human-framework';
+import { exportRun } from '@adam0white/human-framework';
 import {
   anchorPersonaLife,
   canonicalCast,
@@ -12,25 +12,42 @@ import {
   createPersona,
   initialPersonaLife,
   type Lab,
+  PERSONA_ORIGINS,
   type PersonaEnvelope,
   type PersonaLife,
   type PersonaRequest,
   personaChannel,
+  portablePersonRole,
   validatePersona,
   watchPersonaCheckpoint,
 } from '@adam0white/lab-client';
 import { ALLOCATION, localRole } from '../sim/cast.ts';
-import { dialogueEdition, localEdition, type RulesEdition, rulesOf } from '../sim/edition.ts';
+import { departureObligations } from '../sim/departure.ts';
+import { type RulesEdition, rulesOf } from '../sim/edition.ts';
 import { act, type Game, load, newGame, type SavedGame, save } from '../sim/game.ts';
-import { calendarPassport, checkpointReceipt, HOST_RULES, prepareCastStart } from '../sim/passport.ts';
+import { FRAMEWORK_VERSION as ENGINE_VERSION, type Person, personRun } from '../sim/hf.ts';
+import {
+  checkpointTransfer,
+  HOST_RULES,
+  type NativeCastSource,
+  prepareCastStart,
+  validateCheckpointLineage,
+  validateCheckpointSource,
+  validateTerminalSource,
+} from '../sim/passport.ts';
 import { foundValley } from '../sim/people.ts';
-import { termsVerb } from '../sim/terms.ts';
+export interface CastSourceRef {
+  revision: string;
+  actorId: string;
+  fullHash: string;
+}
 export interface LocalCastReceipt {
   runId: string;
   fileOrigin: boolean;
   localOnly: boolean;
   heads: Record<string, PersonaEnvelope>;
-  sources: Record<string, { revision: string; person: Person }>;
+  sources: Record<string, { revision: string; person: NativeCastSource }>;
+  sourceRefs?: Record<string, CastSourceRef>;
   archiveHeads?: Record<string, PersonaEnvelope>;
 }
 export interface Shelf {
@@ -38,6 +55,12 @@ export interface Shelf {
   readonly enabled: boolean;
   setEnabled(value: boolean): void;
   request<T>(request: PersonaRequest): Promise<T>;
+}
+// Client 0.5.5 cannot certify the shared-write capability introduced in 0.5.6.
+const sharedWriteRefusal =
+  'This version cannot move continuing people between games. Keep or download this game.';
+function requireSharedWriteCapability(): void {
+  throw new Error(sharedWriteRefusal);
 }
 export class CastSession {
   generation = 0;
@@ -72,14 +95,14 @@ export class CastSession {
   }
   async fresh(seed: number, localOnly = false, rules?: RulesEdition): Promise<Game> {
     if (!this.shelf) throw new Error('Open a Valley file in this file session.');
-    if (localEdition(rules)) localOnly = true; // No reviewed portable dialect for this edition.
+    if (typeof location !== 'undefined' && !PERSONA_ORIGINS.has(location.origin)) localOnly = true;
     this.invalidate();
     const generation = this.generation;
     await this.shelf.ready;
     if (generation !== this.generation) throw new Error('Run or identity changed before startup.');
     let header = prepareCastStart(foundValley(seed, 0).people, []);
     let heads: Record<string, PersonaEnvelope> = {};
-    // Automatic carryover for compatible worlds. Local editions keep their region exclusion.
+    // Incoming people are pinned before the one batch ownership change.
     if (!localOnly && !this.shelf.enabled) {
       this.shelf.setEnabled(true);
       await this.shelf.ready;
@@ -87,8 +110,24 @@ export class CastSession {
     }
     if (this.shelf.enabled && !localOnly) {
       const opening = foundValley(seed, 0).people;
+      const shelf = this.shelf;
+      const guardedShelf: Shelf = {
+        get ready() {
+          return shelf.ready;
+        },
+        get enabled() {
+          return shelf.enabled;
+        },
+        setEnabled(value) {
+          shelf.setEnabled(value);
+        },
+        request<T>(request: PersonaRequest): Promise<T> {
+          if (request.action === 'putBatch' && request.envelopes?.length) requireSharedWriteCapability();
+          return shelf.request<T>(request);
+        },
+      };
       const chapter = await claimCastChapterBatch(
-        this.shelf,
+        guardedShelf,
         ALLOCATION.map((p) => p.castId),
         this.stamps(rules ?? null),
         async (inputs) => {
@@ -114,7 +153,7 @@ export class CastSession {
     this.fileOrigin = false;
     this.localOnly = localOnly;
     this.status = header.inputs.length
-      ? `Loaded ${header.inputs.length} matching histories together. All six people keep the versions loaded at the start. ${header.inputs.map((i) => canonicalCast(i.parent.castId).name).join(', ')}. Details left out of this game remain in the source archive.`
+      ? `Loaded ${header.inputs.length} matching histories together. All six people keep the versions loaded at the start. ${header.inputs.map((i) => canonicalCast(i.parent.castId).name).join(', ')}. The source file keeps the original run.`
       : 'The people start fresh in this game. No other history was loaded.';
     this.render();
     return g;
@@ -128,7 +167,7 @@ export class CastSession {
     g: Game,
     meta?: LocalCastReceipt,
     fromFile = false,
-    fileArchive?: Pick<SavedGame, 'castHeads' | 'castSources'>,
+    fileArchive?: Pick<SavedGame, 'castHeads' | 'castSources' | 'castSourceRefs'>,
   ): Promise<void> {
     this.invalidate();
     const generation = this.generation;
@@ -153,7 +192,7 @@ export class CastSession {
       // Only a locally accepted native source receipt can own a file-origin alternative.
       const nativeOwned =
         head.transfer.hostRun === runId &&
-        head.transfer.castPassport === 'valley-cast/1' &&
+        head.transfer.castPassport === 'hf-portable-person/2' &&
         head.source.rules === HOST_RULES;
       if ((fileOrigin || meta?.localOnly) && !nativeOwned)
         throw new Error('Imported receipts do not grant alternative ownership.');
@@ -161,7 +200,7 @@ export class CastSession {
       const initialClaim = initial?.revision === head.revision;
       const terminalOfClaim = !!head.terminal && initial?.revision === head.parentRevision;
       if (
-        head.source.game !== 'valley' ||
+        (!initialClaim && head.source.game !== 'valley') ||
         (!initialClaim && !terminalOfClaim && head.transfer.hostRun !== runId) ||
         (initial && head.branchId !== initial.branchId && !nativeOwned)
       )
@@ -169,29 +208,47 @@ export class CastSession {
       heads[id] = head;
     }
     const sources = structuredClone(fileArchive?.castSources ?? meta?.sources ?? {});
-    if (canonicalPersona(sources).length > 1024 * 1024 || Object.keys(sources).length > 6)
-      throw new Error('Source archive exceeds its local bound.');
+    const refs = fileArchive?.castSourceRefs ?? meta?.sourceRefs ?? {};
+    if (Object.keys(sources).length > 6 || Object.keys(refs).length > 6)
+      throw new Error('Too many source receipts.');
+    for (const [id, ref] of Object.entries(refs)) {
+      if (
+        !ALLOCATION.some((c) => c.castId === id) ||
+        Object.keys(ref).sort().join(',') !== 'actorId,fullHash,revision' ||
+        ref.actorId !== localRole(id) ||
+        typeof ref.revision !== 'string' ||
+        typeof ref.fullHash !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(ref.fullHash)
+      )
+        throw new Error('Invalid source reference.');
+      const person = g.valley.castReleased?.[ref.actorId] ?? g.valley.castDeaths?.[ref.actorId];
+      if (!person) throw new Error('The game has no frozen source for this receipt.');
+      const source = nativeSource(person);
+      if (source.archive.hashes.full !== ref.fullHash)
+        throw new Error('The source reference differs from the played game.');
+      if (
+        sources[id] &&
+        (sources[id].revision !== ref.revision ||
+          canonicalPersona(sources[id].person) !== canonicalPersona(source))
+      )
+        throw new Error('Conflicting source receipts.');
+      sources[id] = { revision: ref.revision, person: source };
+    }
     for (const [id, source] of Object.entries(sources)) {
-      if (!ALLOCATION.some((c) => c.castId === id) || source.person.id !== localRole(id))
+      if (!ALLOCATION.some((c) => c.castId === id) || source.person.actorId !== localRole(id))
         throw new Error('Invalid source archive identity.');
       const head = archiveHeads[id];
       if (!head || head.revision !== source.revision)
         throw new Error('Source archive lacks its exact receipt.');
-      if (head.terminal) {
-        if (source.person.body.alive || source.person.now !== head.terminal.at)
-          throw new Error('Invalid death archive.');
-      } else if (
-        canonicalPersona(await checkpointReceipt(source.person)) !==
-        canonicalPersona(head.transfer.checkpoint)
-      )
-        throw new Error('Source archive digest differs.');
+      if (head.terminal) await validateTerminalSource(source.person, head);
+      else await validateCheckpointSource(source.person, head);
     }
     if (generation !== this.generation) throw new Error('Run or identity changed during local load.');
     this.game = g;
     this.failedCheckpoint = false;
     this.runId = runId;
     this.fileOrigin = fileOrigin;
-    this.localOnly = localEdition(rulesOf(g.valley)) || (meta?.localOnly ?? false);
+    this.localOnly = meta?.localOnly ?? false;
     this.heads = heads;
     this.archiveHeads = archiveHeads;
     this.sources = sources;
@@ -203,28 +260,37 @@ export class CastSession {
       : 'The saved game and its local receipts have been checked and loaded. The people keep their saved versions. The latest versions in browser storage were not read.';
     this.render();
   }
+  private sourceRefs(): Record<string, CastSourceRef> {
+    return Object.fromEntries(
+      Object.entries(this.sources).map(([id, source]) => [
+        id,
+        {
+          revision: source.revision,
+          actorId: source.person.actorId,
+          fullHash: source.person.archive.hashes.full,
+        },
+      ]),
+    );
+  }
   metadata(): LocalCastReceipt {
     return structuredClone({
       runId: this.runId,
       fileOrigin: this.fileOrigin,
       localOnly: this.localOnly,
       heads: this.heads,
-      sources: this.sources,
+      sources: {},
+      sourceRefs: this.sourceRefs(),
       archiveHeads: this.archiveHeads,
     });
   }
   exportRun(run: SavedGame) {
     return {
       ...run,
-      castSources: structuredClone(this.sources),
+      castSourceRefs: this.sourceRefs(),
       castHeads: structuredClone({ ...this.archiveHeads, ...this.heads }),
     };
   }
-  private stamps(rules: RulesEdition | null = (this.game ? rulesOf(this.game.valley) : undefined) ?? null) {
-    if (localEdition(rules))
-      throw new Error(
-        'This local edition has no reviewed continuing-person mapping. Download its native ledger instead.',
-      );
+  private stamps(_rules: RulesEdition | null = (this.game ? rulesOf(this.game.valley) : undefined) ?? null) {
     return {
       game: 'valley',
       build: this.lab.build().c ?? 'development',
@@ -232,19 +298,14 @@ export class CastSession {
       rules: HOST_RULES,
     };
   }
-  /** Valley owns this finite publication boundary, not HF or the generic shelf. The
-   * old passport has no mapping for this new host contract/kept archive. Native full
-   * source regeneration remains authority even if both new input/state copies vanish. */
+  /** The complete game log verifies the physical world before publication.
+   * A passport cannot remove the host’s unfinished food or work responsibilities. */
   private publicationGuard(g: Game): () => void {
     const source = () => {
       const { savedAt: _savedAt, ...run } = save(g);
       return canonicalPersona({ run, metadata: this.metadata() });
     };
-    if (dialogueEdition(rulesOf(g.valley))) load(save(g));
-    if (g.valley.receivedTerms || g.inputs.some((i) => termsVerb(i.verb)))
-      throw new Error(
-        'These received words and food/work terms have no reviewed continuing-person mapping. Download the complete native game instead.',
-      );
+    load(save(g));
     const captured = source();
     const generation = this.generation;
     return () => {
@@ -260,7 +321,7 @@ export class CastSession {
     if (!this.shelf) return;
     // Public native/source authority is checked even when the older edition gate
     // will also refuse publication. Stripping both new copies is not a bypass.
-    if (this.game && dialogueEdition(rulesOf(this.game.valley))) {
+    if (this.game && manual) {
       try {
         this.publicationGuard(this.game);
       } catch (error) {
@@ -270,19 +331,12 @@ export class CastSession {
         return;
       }
     }
-    if (localEdition(this.game ? rulesOf(this.game.valley) : undefined)) {
-      if (manual) {
-        this.status =
-          'This local edition has no reviewed continuing-person mapping. Download its native ledger instead.';
-        this.render();
-      }
-      return;
-    }
     if ((this.failedCheckpoint && !manual) || this.busy || !this.game || !this.shelf.enabled) return;
     this.busy = true;
     const generation = this.generation;
     const g = this.game;
     try {
+      requireSharedWriteCapability();
       this.publicationGuard(g);
       for (const c of ALLOCATION) {
         const stillCurrent = this.publicationGuard(g);
@@ -292,7 +346,9 @@ export class CastSession {
         const dead = g.valley.castDeaths?.[id];
         if (parent?.terminal) continue;
         if (dead && parent) {
-          const terminal = await closePersonaBranch(parent, this.stamps(), dead.now);
+          const terminal = await closePersonaBranch(parent, this.stamps(), Math.round(dead.now * 60000));
+          const native = nativeSource(dead);
+          await validateTerminalSource(native, terminal);
           if (generation !== this.generation) break;
           stillCurrent();
           await this.shelf.request({ action: 'put', envelope: terminal });
@@ -302,7 +358,7 @@ export class CastSession {
           this.lab.allowPersonaRecording(true);
 
           this.heads[c.castId] = terminal;
-          this.sources[c.castId] = { revision: terminal.revision, person: snapshot(dead) };
+          this.sources[c.castId] = { revision: terminal.revision, person: native };
           this.saveLocal?.();
           await this.queryRecording();
           continue;
@@ -311,11 +367,19 @@ export class CastSession {
         if (!raw) continue;
         if (
           parent?.transfer.hostRun === this.runId &&
-          (parent.transfer.checkpoint as { sourceMinute?: number } | undefined)?.sourceMinute === raw.now
+          (parent.transfer.checkpoint as { at?: number } | undefined)?.at === Math.round(raw.now * 60000)
         )
           continue;
-        const person = calendarPassport(raw); // Actual frozen source; never clone a public profile as history.
-        const checkpoint = await checkpointReceipt(raw);
+        const prepared = await checkpointTransfer(
+          raw,
+          c.castId,
+          this.stamps(),
+          parent,
+          departureObligations(g.valley, id),
+        );
+        const priorSource = this.sources[c.castId];
+        if (priorSource && parent?.revision === priorSource.revision)
+          await validateCheckpointLineage(prepared.source, priorSource.person, c.castId);
         const branchId = parent?.branchId ?? crypto.randomUUID();
         const oldLife = parent?.transfer.life as PersonaLife | undefined;
         const life = oldLife
@@ -328,25 +392,17 @@ export class CastSession {
           branchId,
           parentRevision: parent?.revision ?? null,
           source: this.stamps(),
-          transfer: {
-            castPassport: 'valley-cast/1',
-            sourceRole: id,
-            hostRun: this.runId,
-            person,
-            checkpoint,
-            life,
-          },
+          transfer: { ...prepared.transfer, hostRun: this.runId, life },
           limitations: [
-            ...person.person.limitations,
-            'Private source episodes, social context, household stores and unsupported skills stay in the full source archive. Closing this chapter is not simulated travel home.',
+            'Supported retained history continues. The complete source Run and host world stay in the native game file.',
           ],
         });
+        if (portablePersonRole(envelope, 'valley') !== raw.id)
+          throw new Error('Checkpoint identity differs.');
         const nextSources = {
           ...this.sources,
-          [c.castId]: { revision: envelope.revision, person: snapshot(raw) },
+          [c.castId]: { revision: envelope.revision, person: prepared.source },
         };
-        if (canonicalPersona(nextSources).length > 1024 * 1024)
-          throw new Error('Export the source archive before another checkpoint.');
         const authored = !parent && !g.cast?.inputs.length && !this.fileOrigin;
         if (generation !== this.generation) break;
         stillCurrent();
@@ -362,8 +418,6 @@ export class CastSession {
 
         this.heads[c.castId] = envelope;
         this.sources = nextSources;
-        if (canonicalPersona(this.sources).length > 1024 * 1024)
-          throw new Error('Export the source archive before another checkpoint.');
         this.status = `${c.name}: the saved checkpoint was accepted. Details this game cannot use remain in the local archive.`;
         this.saveLocal?.();
         await this.queryRecording();
@@ -389,16 +443,22 @@ export class CastSession {
       const c = ALLOCATION.find((p) => p.castId === castId);
       if (!g || !c || !this.shelf.enabled)
         throw new Error('Open a game you have played and turn on continuing people in this browser first.');
+      requireSharedWriteCapability();
       const stillCurrent = this.publicationGuard(g);
       const raw = g.valley.castReleased?.[localRole(castId)];
       if (!raw?.body.alive || raw.activity)
         throw new Error(
           'This person must finish their current work and pause first. This action does not remove any activity, care or goal.',
         );
-      const person = calendarPassport(raw);
-      const checkpoint = await checkpointReceipt(raw);
       const previous =
         this.heads[castId] ?? this.archiveHeads[castId] ?? g.cast?.claims.find((p) => p.castId === castId);
+      const prepared = await checkpointTransfer(
+        raw,
+        castId,
+        this.stamps(),
+        previous,
+        departureObligations(g.valley, raw.id),
+      );
       const branchId = crypto.randomUUID();
       const envelope = await createPersona({
         format: 'hf-persona/1',
@@ -408,11 +468,8 @@ export class CastSession {
         parentRevision: null,
         source: this.stamps(),
         transfer: {
-          castPassport: 'valley-cast/1',
-          sourceRole: raw.id,
+          ...prepared.transfer,
           hostRun: runId,
-          person,
-          checkpoint,
           life: initialPersonaLife(castId, branchId, Date.now()),
           alternativeSource: {
             version: 'valley-explicit-alternative/1',
@@ -423,13 +480,11 @@ export class CastSession {
           },
         },
         limitations: [
-          ...person.person.limitations,
           'Explicit alternative from a played Valley chapter. Prior receipts remain history and grant no ownership of this new root. Full source state stays in the source export.',
         ],
       });
-      const sources = { ...this.sources, [castId]: { revision: envelope.revision, person: snapshot(raw) } };
-      if (canonicalPersona(sources).length > 1024 * 1024)
-        throw new Error('Export the source archive before another checkpoint.');
+      if (portablePersonRole(envelope, 'valley') !== raw.id) throw new Error('Checkpoint identity differs.');
+      const sources = { ...this.sources, [castId]: { revision: envelope.revision, person: prepared.source } };
       await this.shelf.ready;
       if (generation !== this.generation || this.game !== g || this.runId !== runId) return;
       stillCurrent();
@@ -459,7 +514,12 @@ export class CastSession {
       watchPersonaCheckpoint(() => {
         // Local editions cannot publish. Keep complete source validation on explicit
         // checkpoint/alternative actions rather than replaying on document exit.
-        if (this.game && localEdition(rulesOf(this.game.valley))) return;
+        if (
+          !this.game ||
+          (!Object.keys(this.game.valley.castReleased ?? {}).length &&
+            !Object.keys(this.game.valley.castDeaths ?? {}).length)
+        )
+          return;
         return this.checkpoint();
       });
   }
@@ -515,7 +575,7 @@ export class CastSession {
     this.panel.querySelector('[data-cast-download]')?.addEventListener('click', () => {
       const id = this.panel?.querySelector<HTMLSelectElement>('[data-cast-person]')?.value;
       const head = id ? this.heads[id] : undefined;
-      if (head?.transfer.castPassport !== 'valley-cast/1') return;
+      if (head?.transfer.castPassport !== 'hf-portable-person/2') return;
       const url = URL.createObjectURL(
         new Blob([JSON.stringify(head, null, 2)], { type: 'application/json' }),
       );
@@ -539,8 +599,14 @@ export class CastSession {
     if (!this.panel) return;
     const status = this.panel.querySelector('[data-cast-status]');
     if (status)
-      status.textContent = `${localEdition(this.game ? rulesOf(this.game.valley) : undefined) ? 'People in this edition stay in its local ledger. No reviewed mapping permits publishing them to another chapter. ' : ''}${this.status} Recorded play links across games on this device when recording is on. Change recording in the menu.`;
+      status.textContent = `${this.status} Recorded play links across games on this device when recording is on. Change recording in the menu.`;
     const box = this.panel.querySelector<HTMLInputElement>('[data-continuity]');
     if (box) box.checked = this.shelf?.enabled ?? false;
   }
+}
+
+function nativeSource(person: Person): NativeCastSource {
+  const run = personRun(person);
+  if (!run) throw new Error('The current person has no native Run.');
+  return { actorId: person.id, archive: structuredClone(exportRun(run)) as NativeCastSource['archive'] };
 }

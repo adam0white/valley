@@ -1,47 +1,36 @@
-import { ENGINE_VERSION, FRAMEWORK_VERSION, linesFor } from '@adam0white/human-framework';
+import { exportRun, replay as replayRun } from '@adam0white/human-framework';
 import { expect, it } from 'vitest';
 import { compactRun, fingerprint, load, newGame, save, step } from '../src/sim/game.ts';
+import { personRun } from '../src/sim/hf.ts';
 
-it('pins published HF and enables persisted plain narration for every fresh actor and newborn', () => {
-  expect(FRAMEWORK_VERSION).toBe('3.0.0');
-  expect(ENGINE_VERSION).toBe('2.23.0');
-  const g = newGame(7);
-  for (const p of [...g.valley.people, g.valley.kahya]) expect(p.lexicon?.plainEnglish).toBe(true);
-  const initial = new Set(g.valley.people.map((p) => p.id));
-  step(g, 20 * 1440);
-  const children = g.valley.people.filter((p) => !initial.has(p.id));
-  expect(children.length).toBeGreaterThan(0);
-  for (const p of children) expect(p.lexicon?.plainEnglish).toBe(true);
-  const fp = fingerprint(g.valley);
-  expect(fingerprint(load(save(g)).valley)).toBe(fp);
-  expect(fingerprint(load(compactRun(g)).valley)).toBe(fp);
-  expect(linesFor('voice.assented.trusted', g.valley.kahya.lexicon)).toEqual([
-    'I trust you, so I will go.',
-    'That is a good idea. I will do it.',
-  ]);
-  expect(linesFor('voice.complied', g.valley.kahya.lexicon)).toEqual([
-    'I will do it since you insist.',
-    'I will do it if you insist, but I would rather not.',
-  ]);
-  expect(linesFor('voice.commanded', g.valley.kahya.lexicon)).toEqual([
-    'I will do it.',
-    'I will do what you say.',
-  ]);
+it('pins the complete community to published HF4 and retains authored names in its archive', () => {
+  const game = newGame(7);
+  const run = personRun(game.valley.kahya);
+  if (!run) throw new Error('The steward must share the community Run.');
+  for (const person of game.valley.people) expect(personRun(person)).toBe(run);
+  const archive = exportRun(run);
+  expect(archive.engine.package).toBe('@adam0white/human-framework@4.8.0');
+  expect(archive.initial.spec.definitions.lexicon.names.yusuf).toBe('Yusuf');
+  expect(archive.initial.spec.definitions.lexicon.roles.kahya).toBe('the steward');
+  const verified = replayRun(archive);
+  expect(verified.ok && verified.value.verified).toBe(true);
+  if (!verified.ok) throw new Error(verified.error.message);
+  expect(verified.value.fullHash).toBe(archive.hashes.full);
 });
 
-it('restores a saved narration choice without silently opting in', () => {
-  const g = newGame(7, undefined, false, false);
-  const file = save(g);
-  const loaded = load(file);
-  for (const p of [...loaded.valley.people, loaded.valley.kahya]) expect(p.lexicon?.plainEnglish).toBe(false);
-  expect(fingerprint(loaded.valley)).toBe(file.fingerprint);
-  expect(fingerprint(load(compactRun(loaded)).valley)).toBe(file.fingerprint);
-  expect(fingerprint(load(compactRun(file)).valley)).toBe(file.fingerprint);
-  for (const p of loaded.valley.people)
-    if (p.family?.pregnancy) p.lexicon = { ...p.lexicon, names: { unrelated: 'Custom name' } };
-  const initial = new Set(loaded.valley.people.map((p) => p.id));
-  step(loaded, 20 * 1440);
-  const children = loaded.valley.people.filter((p) => !initial.has(p.id));
-  expect(children.length).toBeGreaterThan(0);
-  for (const p of children) expect(p.lexicon).toEqual({ plainEnglish: false });
+it('retains the exact new-pin archive through native and playtest exports', () => {
+  const game = newGame(7);
+  step(game, 480);
+  const file = save(game);
+  const full = load(JSON.parse(JSON.stringify(file)));
+  const compact = load(JSON.parse(JSON.stringify(compactRun(game))));
+  expect(fingerprint(full.valley)).toBe(file.fingerprint);
+  expect(fingerprint(compact.valley)).toBe(file.fingerprint);
+  const archiveOf = (g: typeof game) => {
+    const run = personRun(g.valley.kahya);
+    if (!run) throw new Error('Missing Run');
+    return exportRun(run);
+  };
+  expect(archiveOf(full)).toEqual(archiveOf(game));
+  expect(archiveOf(compact)).toEqual(archiveOf(game));
 });

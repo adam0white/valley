@@ -1,11 +1,28 @@
-import { courtshipStage, finish } from '@adam0white/human-framework';
+import { inspect } from '@adam0white/human-framework';
 import { expect, it } from 'vitest';
 import { brokerReady, brokerUnavailable } from '../src/sim/brokering.ts';
 import { DAY, HOUR } from '../src/sim/calendar.ts';
 import { act, compactRun, load, newGame, save, stateJson, step } from '../src/sim/game.ts';
+import { courtshipStage, finish, type Person, personRun } from '../src/sim/hf.ts';
 import { makeWorld, personOf, underSeal } from '../src/sim/valley.ts';
 import { callUnavailable, currentJob, loanReturnWords } from '../src/ui/presentation.ts';
 import { required } from './required.ts';
+
+function meetings(person: Person, otherId = 'esma'): number {
+  const result = inspect(required(personRun(person)), {
+    perspective: { kind: 'person', observer: person.id },
+    people: [person.id],
+    select: [],
+    lifecycle: {
+      kind: 'person',
+      query: { kind: 'held-partnering', person: person.id, other: { kind: 'entity', id: otherId } },
+    },
+  });
+  if (!result.ok) throw new Error(result.error.message);
+  const value = result.value.lifecycle;
+  if (!value || !('courtships' in value)) throw new Error('Missing held courtship evidence');
+  return value.courtships.find((c) => c.withId === otherId)?.meetings ?? 0;
+}
 
 // Catch a host that reuses one attendance as continuing consent or makes repeat meetings free.
 it('costs repeated voluntary meetings and keeps the entire native history without promising marriage', () => {
@@ -14,14 +31,14 @@ it('costs repeated voluntary meetings and keeps the entire native history withou
   step(g, 3 * DAY);
   const a = personOf(g.valley, 'ali');
   if (!a) throw Error('Missing adult');
-  const before = a.bonds?.courtships[0]?.meetings ?? 0;
+  const before = meetings(a);
   expect(act(g, { verb: 'turn-away', knock: 'k10' })).toBe(true);
   const grain = g.valley.agha.granary;
   expect(act(g, { verb: 'broker', choice: 'meeting' })).toBe(true);
   expect(g.valley.agha.granary).toBe(grain - 1);
   expect(act(g, { verb: 'broker', choice: 'meeting' })).toBe(false);
   step(g, 6 * DAY);
-  expect(a.bonds?.courtships[0]?.meetings).toBeGreaterThan(before);
+  expect(meetings(a)).toBeGreaterThan(before);
   expect(courtshipStage(a, 'esma')).toBe('courting');
   expect(act(g, { verb: 'broker', choice: 'ceremony' })).toBe(false);
   expect(stateJson(load(save(g)).valley)).toEqual(stateJson(g.valley));
@@ -89,7 +106,7 @@ it('progresses real repeated attendance to independent guardian and adult propos
       intro: g.valley.introduction,
       phase: g.valley.brokering?.phase,
       grain: g.valley.agha.granary,
-      meetings: personOf(g.valley, 'ali')?.bonds?.courtships[0]?.meetings,
+      meetings: meetings(required(personOf(g.valley, 'ali'))),
       stage: courtshipStage(required(personOf(g.valley, 'ali')), 'esma', g.valley.minute),
     }),
   );

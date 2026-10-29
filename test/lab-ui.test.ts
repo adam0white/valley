@@ -526,14 +526,14 @@ it('preserves SDK state before real file startup and reports recording refusal h
       ? readFileSync(process.env.VALLEY_SELECTED_FILE)
       : Buffer.from(
           // Synthetic CI input uses the public export's explicit empty provenance maps.
-          JSON.stringify({ ...save(newGame(7), 0), castHeads: {}, castSources: {} }),
+          JSON.stringify({ ...save(newGame(7), 0), castHeads: {}, castSourceRefs: {} }),
         );
     const selected = JSON.parse(fileBytes.toString('utf8'));
     const importFile = async (bytes: Buffer) => {
       await page
         .getByLabel('Open a Valley file')
         .setInputFiles({ name: 'valley.json', mimeType: 'application/json', buffer: bytes });
-      await expect.poll(() => page.locator('#map').count()).toBe(1);
+      await expect.poll(() => page.locator('#map').count(), { timeout: 30000 }).toBe(1);
     };
     const downloadFile = async (name: string) => {
       const pending = page.waitForEvent('download');

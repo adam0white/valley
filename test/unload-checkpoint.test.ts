@@ -46,6 +46,7 @@ it('skips local exit checkpoints while keeping eligible exits and manual source 
       local.connect(()=>{});
       const eligible = new CastSession(lab,{...shelf,enabled:false});
       eligible.game = newGame(7);
+      eligible.game.valley.castReleased = {samira: eligible.game.valley.people.find(p => p.id === 'samira')}; // Component fixture: an outgoing source exists; the disabled shelf still prevents publication.
       const originalEligible=eligible.checkpoint.bind(eligible); let eligibleCalls=0;
       eligible.checkpoint=(...args)=>{eligibleCalls++;return originalEligible(...args)};
       eligible.connect(()=>{});

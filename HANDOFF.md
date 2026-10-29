@@ -1,6 +1,6 @@
 # HF4 port handoff — 2026-10-28
 
-Remaining: published client Valley bindings (G2, review 2026-11-03), then the Run bridge and exact new-pin game export/replay, CI, deployment and acceptance. HF stays at 3.0.0; see [the concrete refusal receipt](docs/hf4-port-status.md). PR9 merged the exact causal tree 7005dd2 as 2e992a1. The bounded follow-up adopts kit 0.5.22 and its shelf-label constant; no simulation change is claimed.
+Remaining: clear the G6/G7 runtime/archive workload gate and compatible shared-write client/kit dependency, then complete whole-game proofs, lane, the PR’s single hosted review, exact merged CI and clean deployment. Recheck dependencies2026-11-03. Candidate pins HF4.8.0/client0.5.5/kit0.5.23. G2 roles released; see [the receipt](docs/hf4-port-status.md) and [port plan](docs/hf4-port-plan.md). Old saves may be explicitly refused. Complete native and game-log replay remain required. Adam accepts feel separately. The previous HF3 release remains production until delivery.
 
 # Valley handoff
 

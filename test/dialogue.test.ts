@@ -1,17 +1,21 @@
 import { expect, it } from 'vitest';
 import { dialogueChoices, dialogueWords, resolveDialogue } from '../src/sim/dialogue.ts';
-import { DIALOGUE_EDITION } from '../src/sim/edition.ts';
 import { act, compactRun, load, newGame, save, step } from '../src/sim/game.ts';
+import { exportRun, personRun } from '../src/sim/hf.ts';
 import { CastSession } from '../src/ui/cast-session.ts';
 import { validLocalLog } from '../src/ui/local-log.ts';
 import { required } from './required.ts';
 
 function scene() {
-  const g = newGame(7, undefined, false, true, DIALOGUE_EDITION);
+  const g = newGame(7, undefined, false, true, 'valley-public-2026-10');
   expect(act(g, { verb: 'call', job: 'reap-agha', houses: ['coban'] })).toBe(true);
-  step(g, 1080);
+  step(g, 570);
   expect(act(g, { verb: 'visit', house: 'coban' })).toBe(true);
-  step(g, 1110);
+  step(g, 600);
+  expect(dialogueChoices(g.valley)).toEqual([]);
+  step(g, 840);
+  expect(act(g, { verb: 'visit', house: 'coban' })).toBe(true);
+  step(g, 870);
   return g;
 }
 function native(g: ReturnType<typeof newGame>) {
@@ -25,63 +29,42 @@ function roundTrip(g: ReturnType<typeof newGame>) {
   expect(native(compact)).toEqual(native(g));
   return [full, compact];
 }
-it('binds two authored lines to actual Zehra and retains an ordinary withheld answer without rerolling', () => {
+it('binds actual source words to a voluntary HF talk and replays pending and completed boundaries', () => {
   const g = scene();
   const choices = dialogueChoices(g.valley);
   expect(choices.map((c) => c.line)).toEqual(['follow-up', 'work-need']);
   const follow = required(choices[0]);
-  expect(g.valley.households.find((h) => h.id === follow.house)?.members).toContain('zehra');
-  expect(follow.person).toBe('zehra');
   const prior = required(g.valley.notes.find((n) => n.id === follow.prior));
+  expect(follow.person).toBe('zehra');
   expect(prior.who).toBe('zehra');
-  expect(prior.at).toBeLessThanOrEqual(g.valley.minute);
-  expect(dialogueWords(g.valley, follow)).toContain(prior.words);
-  expect(dialogueWords(g.valley, required(choices[1]))).toContain('20 July');
-  const workFork = load(save(g));
-  const workChoice = required(dialogueChoices(workFork.valley)[1]);
-  const people = structuredClone(g.valley.people);
+  expect(dialogueWords(g.valley, follow)).toContain(required(prior.words));
+  const before = exportRun(required(personRun(g.valley.kahya)));
   expect(act(g, follow)).toBe(true);
-  expect(g.valley.people).toEqual(people); // speech is not perception, a forced decision or work
+  // Host speech alone is not an actor mutation or a forced decision.
+  expect(exportRun(required(personRun(g.valley.kahya)))).toEqual(before);
   expect(act(g, follow)).toBe(false);
-  expect(g.valley.dialogue?.exchanges[0]?.status).toBe('pending');
   const forks = roundTrip(g);
-  step(g, 1140);
+  const cancelled = load(save(g));
+  expect(act(cancelled, { verb: 'dialogue-cancel', turn: follow.turn })).toBe(true);
+  step(cancelled, 990);
+  expect(cancelled.valley.dialogue?.exchanges[0]?.status).toBe('cancelled');
+  expect(cancelled.valley.dialogue?.exchanges[0]?.answer).toBeUndefined();
+  step(g, 990);
   for (const fork of forks) {
-    step(fork, 1140);
+    step(fork, 990);
     expect(native(fork)).toEqual(native(g));
   }
-  const e = required(required(g.valley.dialogue).exchanges[0]);
-  expect(e.hearing?.deliveredAt).toBe(1110);
-  expect(e.hearing?.percept.at).toBe(e.hearing?.deliveredAt);
+  const e = required(g.valley.dialogue?.exchanges[0]);
+  expect(e.status).toBe('completed');
   expect(e.hearing?.attended).toHaveLength(1);
-  expect(e.hearing?.memoryTimes).toEqual([1110]);
-  expect(e.status).toBe('withheld');
-  expect(e.decisions[0]?.at).toBe(1114);
-  expect(e.decisions[0]?.offer.action).not.toBe('valley-hearth-talk');
-  expect(e.answerNote).toBeUndefined();
-  expect(e.activity).toBeUndefined();
+  expect(e.hearing?.deliveredAt).toBeGreaterThanOrEqual(e.saidAt);
+  expect(e.activity?.action).toBe('valley-hearth-talk');
+  expect(e.endedAt).toBe(e.activity?.endsAt);
+  expect(e.decisions.some((d) => d.offer.id === e.activity?.affordanceId)).toBe(true);
+  expect(e.answer?.words).toContain(required(prior.words));
+  expect(e.answerNote).toBeDefined();
   roundTrip(g);
-  expect(dialogueChoices(g.valley)).toEqual([]); // her actual next activity is sleep
-  expect(act(g, follow)).toBe(false);
-  expect(act(workFork, workChoice)).toBe(true);
-  const pending = roundTrip(workFork);
-  const cancelled = load(save(workFork));
-  expect(act(cancelled, { verb: 'dialogue-cancel', turn: 0 })).toBe(true);
-  expect(act(cancelled, { verb: 'dialogue-cancel', turn: 0 })).toBe(false);
-  step(cancelled, 1230);
-  expect(cancelled.valley.minute).toBe(1230);
-  expect(required(cancelled.valley.dialogue).exchanges[0]?.status).toBe('cancelled');
-  expect(required(cancelled.valley.dialogue).exchanges[0]?.answerNote).toBeUndefined();
-  expect(cancelled.inputs.filter((i) => i.verb === 'dialogue')).toHaveLength(1);
-  roundTrip(cancelled);
-  step(workFork, 1230);
-  for (const fork of pending) {
-    step(fork, 1230);
-    expect(native(fork)).toEqual(native(workFork));
-  }
-  expect(required(workFork.valley.dialogue).exchanges[0]?.answerNote).toBeUndefined();
-  expect(required(workFork.valley.dialogue).exchanges[0]?.existingWork?.says).toBeDefined();
-  roundTrip(workFork);
+  expect(dialogueChoices(g.valley)).toEqual([]);
 });
 
 it('rejects stale, extra, unknown and absent-scene commands without side effects', () => {
@@ -127,9 +110,9 @@ it('records a prospective completed-cut question and completes only its real HF 
   const choice = required(dialogueChoices(g.valley).find((c) => String(c.line) === 'after-cut'));
   const prior = required(g.valley.notes.find((n) => n.id === choice.prior));
   expect(prior.words).toBe('Who will feed my family while I cut his barley?');
-  const beforePeople = structuredClone(g.valley.people);
+  const beforePeople = exportRun(required(personRun(g.valley.kahya)));
   expect(act(g, choice)).toBe(true);
-  expect(g.valley.people).toEqual(beforePeople);
+  expect(exportRun(required(personRun(g.valley.kahya)))).toEqual(beforePeople);
   const e = required(g.valley.dialogue?.exchanges.at(-1));
   expect(e).toHaveProperty('cut.input', 2);
   expect(e).toHaveProperty('cut.at', 6240);
@@ -248,7 +231,7 @@ it('regenerates the source anchor from actual inputs and refuses edited history 
   roundTrip(g); // A rejection never destroys the original.
   const log = {
     game: 'valley',
-    version: '0.3.1',
+    version: '0.4.0',
     seed: 7,
     minute: 6330,
     volume: 0,

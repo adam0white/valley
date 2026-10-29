@@ -1,6 +1,6 @@
 {
   "name": "valley",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "The Valley: steward a valley over years. Every household can say no.",
@@ -19,13 +19,13 @@
     "measure": "node scripts/measure.ts",
     "check": "pnpm run lint && pnpm run typecheck && pnpm test",
     "deploy": "pnpm run build && pnpm exec wrangler deploy",
-    "check:lane": "pnpm run lint && pnpm run typecheck && pnpm exec vitest run test/game.test.ts test/export.test.ts test/unload-checkpoint.test.ts test/lab-ui.test.ts --testTimeout=120000",
+    "check:lane": "pnpm run lint && pnpm run typecheck && pnpm exec vitest run test/game.test.ts test/export.test.ts test/hf-person.test.ts test/hf-run.test.ts test/hf-replay-hash.test.ts test/hf-lifecycle.test.ts test/hf-narration.test.ts test/passport.test.ts test/cast-ownership.test.ts test/hf-public-ui.test.ts test/unload-checkpoint.test.ts test/lab-ui.test.ts --maxWorkers=2 --testTimeout=120000",
     "check:unused": "knip"
   },
   "dependencies": {
-    "@adam0white/human-framework": "3.0.0",
-    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.4.15.tgz",
-    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.22.tgz"
+    "@adam0white/human-framework": "4.8.0",
+    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.5.5.tgz",
+    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.23.tgz"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",

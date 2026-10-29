@@ -3,10 +3,11 @@
  * private knowledge or portable identity mapping. Costs (1 provision, 6 barter,
  * 8 hours each way, two days away, 12 mill-hours/load) are authored conventions.
  */
-import { type Affordance, begin, decide } from '@adam0white/human-framework';
+
 import type { AllianceState } from './alliance.ts';
 import { DAY, HOUR } from './calendar.ts';
 import { allianceEdition, passEdition } from './edition.ts';
+import { type Affordance, begin, decide } from './hf.ts';
 import { interruptStewardRoutine, stewardBusy } from './steward.ts';
 import { deliveryTripReserved } from './terms.ts';
 import { hasOfficeCard, note, V, type ValleyState } from './valley.ts';
