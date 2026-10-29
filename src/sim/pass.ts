@@ -23,6 +23,8 @@ export interface PassState {
     leave: number;
     back: number;
     seen?: boolean;
+    outwardArrived?: boolean;
+    homeArrived?: boolean;
     cargo: number;
     grain: number;
     returned?: boolean;
@@ -124,7 +126,7 @@ export function passTick(s: ValleyState) {
   const p = s.pass;
   const j = p?.journey;
   if (!p || !j || j.returned) return;
-  if (!j.failed && !j.seen && s.minute >= j.arrive) {
+  if (!j.failed && !j.seen && (s.stewardCare ? j.outwardArrived : s.minute >= j.arrive)) {
     j.seen = true;
     note(s, {
       at: s.minute,
@@ -133,7 +135,7 @@ export function passTick(s: ValleyState) {
       weight: 3,
     });
   }
-  if (s.minute >= j.back) {
+  if (s.stewardCare ? j.homeArrived : s.minute >= j.back) {
     if (j.failed) {
       j.returned = true;
       note(s, {

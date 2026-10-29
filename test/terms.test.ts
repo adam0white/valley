@@ -72,6 +72,7 @@ it('pays only useful interrupted work once and refunds the unearned reservation'
     advanceTo(f.s, f.s.minute + 30);
   expect(f.person.activity?.affordanceId).toBe(`terms-help-work:${before.id}`);
   advanceTo(f.s, f.s.minute + 30);
+  const activeId = required(f.c.active[f.person.id]).id;
   expect(act(f.game, { verb: 'help-end', contract: before.id })).toBe(true);
   advanceTo(f.s, f.s.minute + 30);
   const h = required(helpOf(f.s));
@@ -82,6 +83,19 @@ it('pays only useful interrupted work once and refunds the unearned reservation'
   expect(h.earned).toBeGreaterThan(0);
   expect(h.earned + h.returned).toBeCloseTo(TERMS.max);
   const archive = exportRun(required(personRun(f.person)));
+  const inputs = archive.history.flatMap((entry) => entry.inputs);
+  const interruption = required(
+    inputs.find((entry) => entry.kind === 'activity.interrupted' && entry.payload.activityId === activeId),
+  );
+  expect(interruption.at - Math.round(required(h.stopAt) * 60000)).toBe(1);
+  expect(
+    inputs.find(
+      (entry) =>
+        entry.kind === 'action.resolved' &&
+        entry.payload.stage === 'interrupt' &&
+        entry.payload.activityId === activeId,
+    ),
+  ).toMatchObject({ payload: { outcome: { status: 'interrupted', end: interruption.at } } });
   const crop = f.s.agha.reaped,
     earned = h.earned;
   const receipt = required(h.work[0]);

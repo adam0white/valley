@@ -211,6 +211,70 @@ it('does not publish a physical result when HF rejects its receipt', () => {
   expect(a.community.active.worker?.activity.action).toBe('reap');
 });
 
+it('forwards a queued interruption at its real boundary and settles partial work once', () => {
+  const a = opening();
+  stepCommunity(a.community, a.world, 1);
+  const interruptedId = a.community.active.worker?.id;
+  let now = 1;
+  let useful = 0;
+  const world: World = {
+    ...a.world,
+    now: () => now,
+    stage: () => {
+      let candidate = useful;
+      return {
+        world: {
+          ...a.world,
+          resolve: (p, activity, reason) => {
+            candidate += p.now - activity.startedAt;
+            return {
+              at: p.now,
+              action: activity.action,
+              affordanceId: activity.affordanceId,
+              status: reason === 'interrupted' ? 'interrupted' : 'completed',
+            };
+          },
+        },
+        publish: () => {
+          useful = candidate;
+        },
+      };
+    },
+  };
+  const queued = { at: 30, reason: 'the remaining request ended' };
+  a.community.interrupts.worker = queued;
+  stepCommunity(a.community, world, 15);
+  expect(a.community.interrupts.worker).toEqual(queued);
+  expect(useful).toBe(0);
+  now = 15;
+  stepCommunity(a.community, world, 31);
+  expect(a.community.interrupts.worker).toBeUndefined();
+  expect(useful).toBe(30);
+  expect(a.community.active.worker?.id).not.toBe(interruptedId);
+  const archive = exportRun(required(a.community.run));
+  const inputs = archive.history.flatMap((entry) => entry.inputs);
+  const interrupted = inputs.filter((entry) => entry.kind === 'activity.interrupted');
+  expect(interrupted).toHaveLength(1);
+  expect(interrupted[0]?.at).toBe(30 * 60000);
+  expect(
+    inputs.find((entry) => entry.kind === 'action.resolved' && entry.payload.stage === 'interrupt'),
+  ).toMatchObject({ payload: { outcome: { status: 'interrupted', end: 30 * 60000 } } });
+  expect(need(replay(archive)).fullHash).toBe(archive.hashes.full);
+});
+
+it('keeps a queued interruption and active work when native admission refuses the input', () => {
+  const a = opening();
+  stepCommunity(a.community, a.world, 1);
+  const queued = { at: 1, reason: 42 as unknown as string };
+  a.community.interrupts.worker = queued;
+  const before = exportRun(required(a.community.run));
+  expect(() => stepCommunity(a.community, { ...a.world, now: () => 1 }, 2)).toThrow();
+  expect(a.community.interrupts.worker).toEqual(queued);
+  expect(a.community.active.worker?.activity.action).toBe('reap');
+  expect(exportRun(required(a.community.run))).toEqual(before);
+  expect(a.grain()).toBe(0);
+});
+
 it('does not publish a family completion when HF rejects its receipt', () => {
   const a = opening();
   const guardian = createPerson({ id: 'omer', name: 'Omer', seed: 7, sex: 'male', bornAt: -30 * 525600 });

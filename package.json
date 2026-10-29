@@ -19,7 +19,7 @@
     "measure": "node scripts/measure.ts",
     "check": "pnpm run lint && pnpm run typecheck && pnpm test",
     "deploy": "pnpm run build && pnpm exec wrangler deploy",
-    "check:lane": "pnpm run lint && pnpm run typecheck && pnpm exec vitest run test/game.test.ts test/export.test.ts test/hf-person.test.ts test/hf-run.test.ts test/hf-replay-hash.test.ts test/hf-lifecycle.test.ts test/hf-narration.test.ts test/passport.test.ts test/cast-ownership.test.ts test/hf-public-ui.test.ts test/unload-checkpoint.test.ts test/lab-ui.test.ts --maxWorkers=2 --testTimeout=120000",
+    "check:lane": "pnpm run lint && pnpm run typecheck && pnpm exec vitest run test/game.test.ts test/export.test.ts test/hf-person.test.ts test/hf-run.test.ts test/terms.test.ts test/steward-return.test.ts test/hf-replay-hash.test.ts test/hf-lifecycle.test.ts test/hf-narration.test.ts test/passport.test.ts test/cast-ownership.test.ts test/hf-public-ui.test.ts test/unload-checkpoint.test.ts test/lab-ui.test.ts --maxWorkers=2 --testTimeout=120000",
     "check:unused": "knip"
   },
   "dependencies": {

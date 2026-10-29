@@ -743,3 +743,12 @@ qualified. Root's independent review, signed source, exact CI and delivery remai
 Adam accepts feel on2026-11-03. No player/panel/retest/model/provider call is evidence.
 
 Received words and food/work terms have no reviewed continuing-person mapping in valley-cast/1. Native full source regeneration remains authority. Publishing either kind refuses before any envelope/shelf/source/head write, including an explicit alternative. The complete native game remains downloadable. Source/ownership/file-origin changes during publication awaits also refuse. This is a host-specific unsupported-dialect boundary, not a feature switch or a new HF faculty.
+
+
+## HF4 workload gate — 2026-10-29
+
+The HF4.8.0 port remains a draft until the complete public term and exact day-12 export replay pass. The relevant existing framework needs are G6 (step cost/archive) and G7 (cheaper larger daily step) in human-framework docs/hf4-game-needs.md. Recheck published runtime changes and the actual Valley workload on2026-11-03. G16 semantic household-history retention is a separate need.
+
+The game-side repeated family-history export was found and removed; its causal regression now records zero exports for repeated missing eligibility queries. Historical post-fix daily controls still exceeded the existing120-second day-12 budget, reaching minute2880 of17550 with21,897,901 native bytes at104.443s. Those measurements predate the hosted interruption/travel corrections and do not establish a framework-only cause or a whole-term impossibility. Current-source measurement and complete replay remain required; [port status](hf4-port-status.md) records their scope. Do not shorten the term, drop people or faculties, or raise the deadline to claim readiness. No HF source changes belong in this game port.
+
+After both hosted fixes, the same complete day-12 control again exceeded120seconds: last complete minute1440 at33.924s with11,134,499native bytes; stopped120.152s. Source hashes matched and no concurrent Valley tests ran. This confirms the existing budget gate remains open on the corrected source; it does not isolate a framework-only cause.

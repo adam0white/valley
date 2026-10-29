@@ -1,6 +1,6 @@
 # Valley HF4 port status — 2026-10-29
 
-Remaining: clear the runtime/archive gate after the family-receipt fix, then finish whole-game proofs, lane, hosted review, exact merged CI and clean deployment. Candidate pins are HF4.8.0/client0.5.6/kit0.5.24. Production remains the earlier HF3 release until delivery. Adam accepts feel separately.
+Remaining: clear the runtime/archive workload gate, finish whole-game replay proofs and exact green CI, then merge and deploy clean source. The single hosted review answered; both findings are fixed in this candidate. Final check:lane passes66tests/14files, including their regressions, plus lint/types in202.57s. Build passes. Candidate pins are HF4.8.0/client0.5.6/kit0.5.24. Production remains the earlier HF3 release until delivery. Adam accepts feel separately.
 
 ## G2: role dependency closed on2026-10-28
 
@@ -64,3 +64,16 @@ Correction2026-10-29: a later source audit found that a missing family-completio
 After the persisted family-receipt fix, the same seed406153184/day12 daily workload again reached the120-second bound: minute1440 at23.677s/11,134,499nativebytes; minute2880 at104.443s/21,897,901bytes/one accepted input. No concurrent Valley tests or package installation ran; all recorded source hashes stayed equal. Other repositories shared the machine. The workload used client0.5.5 before the compatible pair was published; HF4.8/core source are unchanged by the subsequent client/kit adoption. This is a source-bound prefix, not an isolated before/after speed ratio, day-12 fingerprint or881-day-term result. The host cold-export regression is closed (three missing queries: three exports before, zero after); remaining workload/archive readiness still needs the G6/G7 gate.
 
 Final current-pair check:lane passes58tests/12files plus lint/types in170.09s, with two local workers and unchanged120s test deadlines. Build passes. Native replay and its pinned hash remain exact. Actual five-visitor release/day1, SDK projector refusal with unchanged frozen source, and a separate actual manual checkpoint/no-write control pass. A real accepted-HF-death component verifies terminal gating with a stubbed whole-game publication guard; it is not a complete played Valley death result. Automatic blocked checkpoints perform zero whole-game replay validations; manual source refusal remains covered.
+
+
+## Hosted review fixes — 2026-10-29
+
+The sole hosted review of PR11 answered with two findings. Queued host interruptions now enter the native Run as activity.interrupted inputs and request the next decision at that accepted time. A rejected input batch keeps the host queue; acceptance transfers ownership to the native queue before host removal. The regressions check a future interruption, exact native interrupted resolution, replay, and rejected admission. The actual help-end control checks the native activity ID and stop time rather than only capped pay.
+
+A steward whose care activity overruns a visit still has to walk home. Granary access and quarry cargo settlement wait for completed travel receipts. Stable direction/place offer IDs preserve an active walk across native reviews. Authored component controls exercise late sleep, a return crossing a review boundary, interruption without settlement, retry, and completed cargo delivery. They do not claim a played whole-game journey.
+
+Full CI40797790914 on the previous7eb682f source reached its20-minute job limit and was cancelled. Lint/types completed. Six Lab UI failures and two native-game failures were reported before cancellation; no final failure stacks were printed. The native-game cases took192.6s and140.4s against explicit120s limits. These observations do not isolate their causes. No merge or deployment is authorized by a partial CI result. Earlier workload measurements predate these review fixes; they remain historical source-specific evidence.
+
+Final review-fix lane:66tests/14files plus lint/types PASS202.57s; build PASS. The pinned native replay hash remains unchanged and exact. The lane now includes food/work terms and delayed-return controls. No deadline, actor or faculty reduction was used.
+
+Current corrected-source control (including both hosted fixes) again exceeded120seconds. The actual seed406153184 owner schedule, all53 actors/faculties, daily fidelity and target17550 reached its last complete checkpoint at1440 in33.924s with11,134,499native bytes (6,922,237history;3,883,707current). The exact process was terminated at120.152s before the next daily checkpoint. All seven recorded source/lock hashes matched before and after; no concurrent Valley tests or installs ran. Other repositories shared the machine. This is a source-bound failed budget control, not a day-12 replay, whole-term result, isolated speed ratio or framework-only causal attribution. Raw script/log/JSON and the source-bound manifest are retained in the coordinator report. G6/G7 recheck2026-11-03 remains open.

@@ -704,7 +704,12 @@ function changed(c: Community): HF.WorldChange {
     hostState: { schema: 'valley-run-1', activeCount: Object.keys(c.active).length },
   };
 }
-export function serve(c: Community, until: number, inputs: HF.Input[] = []): HF.DeepReadonly<HF.StepResult> {
+export function serve(
+  c: Community,
+  until: number,
+  inputs: HF.Input[] = [],
+  accepted?: () => void,
+): HF.DeepReadonly<HF.StepResult> {
   if (!c.run) throw new Error('No run');
   if (c.staging) throw new Error('Cannot recursively advance a pending HF boundary');
   let batch = inputs;
@@ -718,6 +723,8 @@ export function serve(c: Community, until: number, inputs: HF.Input[] = []): HF.
       result = need(
         HF.step(c.run, { until: batchUntil, inputs: batch, ...(c.fidelity ? { fidelity: c.fidelity } : {}) }),
       );
+      accepted?.();
+      accepted = undefined;
       invalidatePersonReads(c.run);
       if (
         batch.some(
@@ -835,7 +842,9 @@ export function stepCommunity(
 ): SimEvent[] {
   c.world = w;
   const time = at(c, w.now());
+  const target = Math.max(time, Math.round(to * MS));
   const inputs: HF.Input[] = [];
+  const draining = new Map<string, Community['interrupts'][string]>();
   for (const p of c.people) {
     const percepts = w.perceptsFor(p, p.now, w.now()).map((pc) => publicPercept(c, pc));
     if (percepts.length)
@@ -898,7 +907,27 @@ export function stepCommunity(
         ),
       );
     }
-    if (!p.activity && p.body.alive && offers.length)
+    const queued = c.interrupts[p.id];
+    const interruptAt =
+      queued && Math.round(queued.at * MS) <= target ? Math.max(time, Math.round(queued.at * MS)) : undefined;
+    const active = c.active[p.id];
+    if (queued && interruptAt !== undefined) {
+      draining.set(p.id, queued);
+      if (active)
+        inputs.push(
+          input(
+            c,
+            'activity.interrupted',
+            {
+              person: p.id,
+              activityId: active.id,
+              reason: queued.reason,
+            },
+            interruptAt,
+          ),
+        );
+    }
+    if ((!p.activity || (active && interruptAt !== undefined)) && p.body.alive && offers.length)
       inputs.push(
         input(
           c,
@@ -909,11 +938,15 @@ export function stepCommunity(
             treatment: 'ordinary',
             offerRevision: revision,
           },
-          time,
+          interruptAt ?? time,
         ),
       );
   }
-  const result = serve(c, Math.max(time, Math.round(to * MS)), inputs);
+  const result = serve(c, target, inputs, () => {
+    // The Run now owns these inputs, including any future timestamp in this batch.
+    // A rejected batch leaves the host queue intact; newer requests are not removed.
+    for (const [person, queued] of draining) if (c.interrupts[person] === queued) delete c.interrupts[person];
+  });
   const due = c.glimpses?.filter((g) => g.at <= to) ?? [];
   c.glimpses = c.glimpses?.filter((g) => g.at > to) ?? [];
   for (const glimpse of due) {

@@ -42,12 +42,12 @@ export function stewardOffers(s: ValleyState, at = s.kahya.now): Affordance[] {
   const delivery = deliveryLive(s),
     j = s.pass?.journey,
     v = s.kahyaState.visit;
-  const passWalking = !!(j && !j.returned && !j.failed && (at < j.arrive || (at >= j.leave && at < j.back)));
+  const passWalking = !!(j?.outwardArrived && !j.returned && !j.failed && !j.homeArrived && at >= j.leave);
   const localWalking = !!(
     v &&
     v.house !== 'cam' &&
     !care.travelFailed &&
-    (at < v.arrive || (at >= v.leave && at < v.back))
+    (at < v.arrive || (at >= v.leave && s.kahyaState.place !== 'residence'))
   );
   if (passWalking || localWalking) {
     const end =
@@ -62,7 +62,9 @@ export function stewardOffers(s: ValleyState, at = s.kahya.now): Affordance[] {
           : at + 30;
     return [
       {
-        id: `care:walk:${end}`,
+        id: passWalking
+          ? 'care:walk:pass-return'
+          : `care:walk:lane:${v?.house}:${s.kahyaState.place === 'residence' ? 'out' : 'return'}`,
         action: 'walk',
         label: passWalking ? 'walk over the pass' : 'walk along the lane',
         duration: passWalking ? 8 * HOUR : (v?.walk ?? Math.max(1, end - at)),
@@ -73,7 +75,10 @@ export function stewardOffers(s: ValleyState, at = s.kahya.now): Affordance[] {
       },
     ];
   }
-  const away = deliveryAway(s) || !!(v && v.back > at),
+  const away =
+      deliveryAway(s) ||
+      !!(j && !j.returned && !j.homeArrived) ||
+      !!(v && (v.back > at || (v.house !== 'cam' && s.kahyaState.place !== 'residence'))),
     food = away ? care.grain : care.grain + s.agha.granary;
   const home = delivery ? termsStewardPlace(s) : away ? `house:${v?.house}` : 'residence';
   const mod = minuteOfDay(at);
@@ -152,6 +157,12 @@ export function captureSteward(
 ): void {
   captureTermsSteward(s, offer, record);
   const v = s.kahyaState.visit;
+  const j = s.pass?.journey;
+  if (j && v?.house === 'cam' && offer.id.startsWith('care:walk:') && offer.placeId === 'pass') {
+    v.returnStarted = true;
+    j.back = s.kahya.now + offer.duration;
+    v.back = j.back;
+  }
   if (v && offer.id.startsWith('care:walk:') && offer.placeId === 'lane') {
     if (!v.outboundStarted) {
       const delta = s.kahya.now + offer.duration - v.arrive;
@@ -175,6 +186,32 @@ export function resolveSteward(
   const terms = resolveTermsSteward(s, a, reason);
   if (terms) return terms;
   const v = s.kahyaState.visit;
+  const j = s.pass?.journey;
+  if (j && a.affordanceId === 'cam-journey') {
+    if (reason === 'ended') {
+      const delay = Math.max(0, p.now - j.arrive);
+      j.arrive = p.now;
+      j.leave += delay;
+      j.back += delay;
+      j.outwardArrived = true;
+      if (v?.house === 'cam') {
+        v.arrive = j.arrive;
+        v.leave = j.leave;
+        v.back = j.back;
+      }
+      s.kahyaState.place = 'house:cam';
+    } else j.failed = true;
+  }
+  if (
+    j &&
+    v?.house === 'cam' &&
+    a.affordanceId.startsWith('care:walk:') &&
+    a.affordance.placeId === 'pass' &&
+    reason === 'ended'
+  ) {
+    j.homeArrived = true;
+    s.kahyaState.place = 'residence';
+  }
   if (reason === 'ended' && a.action === 'walk' && a.affordance.placeId === 'lane' && v) {
     if (!v.returnStarted) {
       s.kahyaState.place = `house:${v.house}`;
@@ -185,7 +222,11 @@ export function resolveSteward(
   if (care && a.affordanceId === 'care:eat' && reason === 'ended') {
     const packed = Math.min(care.grain, 0.01);
     care.grain -= packed;
-    const away = deliveryAway(s) || !!(s.kahyaState.visit && s.kahyaState.visit.back > p.now);
+    const visit = s.kahyaState.visit;
+    const away =
+      deliveryAway(s) ||
+      !!(s.pass?.journey && !s.pass.journey.returned && !s.pass.journey.homeArrived) ||
+      !!(visit && (visit.back > p.now || (visit.house !== 'cam' && s.kahyaState.place !== 'residence')));
     const store = away ? 0 : Math.min(Math.max(0, 0.01 - packed), s.agha.granary);
     s.agha.granary -= store;
     care.eaten += packed + store;
